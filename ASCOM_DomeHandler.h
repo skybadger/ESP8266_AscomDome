@@ -2,16 +2,19 @@
 File to be included into relevant device REST setup 
 */
 //Assumes Use of ARDUINO ESP8266WebServer for entry handlers
-#if !defined _ASCOM_Dome 
-#define _ASCOM_Dome
+#if !defined _ESP8266_DomeHandler_h_ 
+#define _ESP8266_DomeHandler_h_
+#include "ESP8266_AscomDome.h"
+#include "ASCOMAPIDOME_rest.h"     //Definitions for functions
 #include "JSONHelperFunctions.h"
 #include <LinkedList.h>
+
 /* 
 extern int azimuth;
 extern int altitude;
 extern int parkPosition;
 extern int homePosition;
-extern bool canSyncAzimuth;
+extern bool canSyncAzimuth; 
 extern bool canSetAltitude, canSetAzimuth;
 extern bool atHome, atPark, canFindHome, canPark, canSetPark;
 extern bool canSetShutter;
@@ -23,64 +26,27 @@ extern cmdItem_t* addDomeCmd( int, int, enum domeCmd, int );
 extern cmdItem_t* addShutterCmd( int, int, enum shutterCmd, int ); 
 */
 
-//GET /dome/{device_number}/altitude           The dome altitude
-//GET /dome/{device_number}/athome             Indicates whether the dome is in the home position.
-//GET /dome/{device_number}/atpark             Indicates whether the telescope is at the park position
-//GET /dome/{device_number}/azimuth            The dome azimuth
-//GET /dome/{device_number}/canfindhome        Indicates whether the dome can find the home position.
-//GET /dome/{device_number}/canpark            Indicates whether the dome can be parked.
-//GET /dome/{device_number}/cansetaltitude     Indicates whether the dome altitude can be set
-//GET /dome/{device_number}/cansetazimuth      Indicates whether the dome azimuth can be set
-//GET /dome/{device_number}/cansetpark         Indicates whether the dome park position can be set
-//GET /dome/{device_number}/cansetshutter      Indicates whether the dome shutter can be opened
-//GET /dome/{device_number}/canslave           Indicates whether the dome supports slaving to a telescope
-//GET /dome/{device_number}/cansyncazimuth     Indicates whether the dome azimuth position can be synched
-//GET /dome/{device_number}/shutterstatus      Status of the dome shutter or roll-off roof
-//GET /dome/{device_number}/slaved             Indicates whether the dome is slaved to the telescope
-//PUT /dome/{device_number}/slaved             Sets whether the dome is slaved to the telescope
-//GET /dome/{device_number}/slewing            Indicates whether the any part of the dome is moving
-//PUT /dome/{device_number}/abortslew          Immediately cancel current dome operation.
-//PUT /dome/{device_number}/closeshutter       Close the shutter or otherwise shield telescope from the sky.
-//PUT /dome/{device_number}/findhome           Start operation to search for the dome home position.
-//PUT /dome/{device_number}/openshutter        Open shutter or otherwise expose telescope to the sky.
-//PUT /dome/{device_number}/park               Rotate dome in azimuth to park position.
-//PUT /dome/{device_number}/setpark            Set the current azimuth, altitude position of dome to be the park position
-//PUT /dome/{device_number}/slewtoaltitude     Slew the dome to the given altitude position.
-//PUT /dome/{device_number}/slewtoazimuth      Slew the dome to the given azimuth position.
-//PUT /dome/{device_number}/synctoazimuth      Synchronize the current position of the dome to the given azimuth.
-
-void handleAltitudeGet( void);
-void handleAtHomeGet( void);
-void handleAtParkGet(void);
-void handleAzimuthGet(void);
-void handleCanFindHomeGet(void);
-void handleCanParkGet(void);
-void handleCanSetAltitudeGet(void);
-void handleCanSetAzimuthGet(void);
-void handleCanSetParkGet(void);
-void handleCanSetShutterGet(void);
-void handleCanSlaveGet(void);
-void handleCanSyncAzimuthGet(void);
-void handleShutterStatusGet(void);
-void handleSlavedGet(void);
-void handleSlavedPut(void);
-void handleSlewingGet(void);
-void handleAbortSlewPut(void);
-void handleCloseShutterPut(void);
-void handleFindHomePut(void);
-void handleOpenShutterPut(void);
-void handleParkPut(void);
-void handleSetParkPut(void);
-void handleSlewToAltitudePut(void);
-void handleSlewToAzimuthPut(void);
-void handleSyncToAzimuthPut(void);
+cmdItem_t* addDomeCmd( uint32_t clientId, uint32_t transId, enum domeCmd, int value );
+cmdItem_t* addShutterCmd( uint32_t clientId, uint32_t transId, enum shutterCmd, int value );
+bool hasArgIC( String& check, ESP8266WebServer& ref, bool caseSensitive );
+void onShutterSlew();
+void onShutterIdle();
+void onDomeSlew();
+void onDomeAbort();
+void onDomeIdle();
+int restQuery( String uri, String args, String& response, int method );
+float getAzimuth( float );
+void setupEncoder();
+bool setupCompass( String targetHost );
+int getShutterStatus( String host );
+float getBearing( void );
 
 void handleAltitudeGet(void)
 {
     String message;
     uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-
+    DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
     jsonResponseBuilder( root, clientID, transID, "AltitudeGet", 0, "" );    
 
@@ -111,7 +77,7 @@ void handleAtHomeGet( void)
     String message;
     uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-
+    DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
     jsonResponseBuilder( root, clientID, transID, "AtHome", 0, "" );    
     root["Value"] = atHome;
@@ -126,7 +92,7 @@ void handleAtParkGet(void)
     String message;
     uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-
+    DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
     jsonResponseBuilder( root, clientID, transID, "AtPark", 0, "" );    
     root["Value"] = atPark;
@@ -142,10 +108,10 @@ void handleAzimuthGet(void)
     String message;
     uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-
+    DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
     jsonResponseBuilder( root, clientID, transID, "Azimuth", 0, "" );    
-    root["Value"] = azimuth;
+    root["Value"] = currentAzimuth;
     //JsonArray& offsets = root.createNestedArray("Value");
     root.printTo(message);
     server.send(200, "text/json", message);
@@ -157,7 +123,7 @@ void handleCanFindHomeGet(void)
     String message;
     uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-
+    DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
     jsonResponseBuilder( root, clientID, transID, "CanFindHome", 0, "" );    
     root["Value"] = canFindHome;
@@ -165,7 +131,6 @@ void handleCanFindHomeGet(void)
     root.printTo(message);
     server.send(200, "text/json", message);
     return ;
-   
 }
 
 void handleCanParkGet(void)
@@ -188,7 +153,7 @@ void handleCanSetAltitudeGet(void)
     String message;
     uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-
+    DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
     jsonResponseBuilder( root, clientID, transID, "CanSetAltitude", 0, "" );    
     root["Value"] = canSetAltitude;
@@ -203,7 +168,7 @@ void handleCanSetAzimuthGet(void)
     String message;
     uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-
+    DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
     jsonResponseBuilder( root, clientID, transID, "CanSetAzimuth", 0, "" );    
     root["Value"] = canSetAzimuth;
@@ -218,7 +183,7 @@ void handleCanSetParkGet(void)
     String message;
     uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-
+    DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
     jsonResponseBuilder( root, clientID, transID, "CanSetPark", 0, "" );    
     root["Value"] = canSetPark;
@@ -233,7 +198,7 @@ void handleCanSetShutterGet(void)
     String message;
     uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-
+    DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
     jsonResponseBuilder( root, clientID, transID, "CanSetShutter", 0, "" );    
     root["Value"] = canSetShutter;
@@ -248,7 +213,7 @@ void handleCanSlaveGet(void)
     String message;
     uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-
+    DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
     jsonResponseBuilder( root, clientID, transID, "CanSlave", 0, "" );    
     root["Value"] = canSlave;
@@ -263,7 +228,7 @@ void handleCanSyncAzimuthGet(void)
     String message;
     uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-
+    DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
     jsonResponseBuilder( root, clientID, transID, "CanSyncAzimuth", 0, "" );    
     root["Value"] = canSyncAzimuth;
@@ -279,7 +244,7 @@ void handleSlavedGet(void)
     String message;
     uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-
+    DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
     jsonResponseBuilder( root, clientID, transID, "Slaved", 400, "Not Implemented" );    
     root["Value"] = slaved;
@@ -295,6 +260,7 @@ void handleSlavedPut(void)
     uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
 
+    DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
     jsonResponseBuilder( root, clientID, transID, "Slaved", 400, "Not Implemented" );    
     root["Value"] = false;
@@ -309,7 +275,7 @@ void handleSlewingGet(void)
     String message;
     uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-
+    DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
     jsonResponseBuilder( root, clientID, transID, "Slewing", 0, "" );    
     root["Value"] = ( domeStatus == DOME_SLEWING ) ? true:false;
@@ -324,20 +290,20 @@ void handleAbortSlewPut(void)
   String message;
   uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
   uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-
+  DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
    //in this driver model, each device has a separate ip address ,so can only be one device. hence ignore device-number
    if( domeStatus == DOME_SLEWING  )
     {
       //abort slew
       //Need to use shift not just add 
-      domeCmdList.addCmd( clientID, transID, "CMD_DOME_ABORT", 0 );
-      jsonResponseBuilder( root, clientID, transID, "AbortSlewing", 0, "" );
+      addDomeCmd( clientID, transID, CMD_DOME_ABORT, 0 );
+      jsonResponseBuilder( root, clientID, transID, "AbortSlew", 0, "" );
       abortFlag = true;
     }
     else
     {
-      jsonResponseBuilder( root, clientID, transID, "AbortSlewing", 400, "Not slewing" );       
+      jsonResponseBuilder( root, clientID, transID, "AbortSlew", 400, "Not slewing" );       
     }
     //JsonArray& offsets = root.createNestedArray("Value");
     root.printTo(message);
@@ -350,7 +316,7 @@ void handleShutterStatusGet(void)
   String message;
   uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
   uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-
+  DynamicJsonBuffer jsonBuffer(256);
   JsonObject& root = jsonBuffer.createObject();
   //in this driver model, each device has a separate ip address ,so can only be one device. hence ignore device-number
   jsonResponseBuilder( root, clientID, transID, "ShutterStatus", 0, "" );
@@ -367,7 +333,7 @@ void handleCloseShutterPut(void)
   String message;
   uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
   uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-
+  DynamicJsonBuffer jsonBuffer(256);
   JsonObject& root = jsonBuffer.createObject();
   //in this driver model, each device has a separate ip address ,so can only be one device. hence ignore device-number
   if( shutterStatus == SHUTTER_OPEN ) //&& shutter open detected == !shutterclosed)
@@ -392,7 +358,7 @@ void handleFindHomePut(void)
    String message;
    uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
    uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-
+   DynamicJsonBuffer jsonBuffer(256);
    JsonObject& root = jsonBuffer.createObject();
    //in this driver model, each device has a separate ip address ,so can only be one device. hence ignore device-number
    if( domeStatus == DOME_IDLE )
@@ -416,7 +382,7 @@ void handleOpenShutterPut(void)
    String message;
    uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
    uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-
+   DynamicJsonBuffer jsonBuffer(256);
    JsonObject& root = jsonBuffer.createObject();
    //in this driver model,each device has a separate ip address ,so can only be one device. hence ignore device-number
    if( shutterStatus != SHUTTER_OPEN && shutterStatus != SHUTTER_OPENING )
@@ -427,7 +393,7 @@ void handleOpenShutterPut(void)
    }
    else
    {
-      jsonResponseBuilder( root, clientID, transID, "FindHome", 400, "Dome shutter not idle or not closed" );       
+      jsonResponseBuilder( root, clientID, transID, "OpenShutter", 400, "Dome shutter not idle or not closed" );       
    }
    root.printTo(message);
    server.send( 200, "text/json", message);
@@ -441,7 +407,7 @@ void handleSetParkPut(void)
    uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
    uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
    int location = 0;
-
+   DynamicJsonBuffer jsonBuffer(256);
    JsonObject& root = jsonBuffer.createObject();
    //in this driver model, each device has a separate ip address ,so can only be one device. hence ignore device-number
    if( domeStatus == DOME_IDLE && server.hasArg("location") )
@@ -468,13 +434,13 @@ void handleParkPut(void)
    String message;
    uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
    uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-
+   DynamicJsonBuffer jsonBuffer(256);
    JsonObject& root = jsonBuffer.createObject();
    //in this driver model, each device has a separate ip address ,so can only be one device. Hence ignore device-number
    if( domeStatus == DOME_IDLE )
     {
       addDomeCmd( clientID, transID, CMD_DOME_SLEW, parkPosition );      
-      jsonResponseBuilder( root, clientID, transID, F("SetPark"), 0, "" );    
+      jsonResponseBuilder( root, clientID, transID, F("Park"), 0, "" );    
     }
    else
     {
@@ -491,7 +457,7 @@ void handleSlewToAltitudePut(void)
    uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
    uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
    int location = 0;
-
+   DynamicJsonBuffer jsonBuffer(256);
    JsonObject& root = jsonBuffer.createObject();
    //in this driver model, each device has a separate ip address ,so can only be one device. hence ignore device-number
    if( domeStatus == DOME_IDLE && server.hasArg("altitude") )
@@ -501,11 +467,11 @@ void handleSlewToAltitudePut(void)
       location %= 110;
       //cmdItem_t* pCmd = domeCmdList->add( clientID, transID, CMD_DOMEVAR_SET, location );
       targetAltitude = location;
-      jsonResponseBuilder( root, clientID, transID, F("SetPark"), 0, "" );    
+      jsonResponseBuilder( root, clientID, transID, F("SlewToAzimuth"), 0, "" );    
     }
    else
     {
-      jsonResponseBuilder( root, clientID, transID, F("SetPark"), 400, F("Dome not idle") );       
+      jsonResponseBuilder( root, clientID, transID, F("SlewToAzimuth"), 400, F("Dome not idle") );       
     }
     root.printTo(message);
     server.send(200, "text/json", message);
@@ -518,7 +484,7 @@ void handleSlewToAzimuthPut(void)
    uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
    uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
    int iTargetAzimuth = 0;
-   
+   DynamicJsonBuffer jsonBuffer(256);
    JsonObject& root = jsonBuffer.createObject();
    //in this driver model, each device has a separate ip address ,so can only be one device. hence ignore device-number
    if( domeStatus == DOME_IDLE && server.hasArg("Azimuth") )
@@ -527,12 +493,14 @@ void handleSlewToAzimuthPut(void)
       //...
       iTargetAzimuth = (int) server.arg("Azimuth").toInt();
       iTargetAzimuth %= 360;
+      iTargetAzimuth += 360;
+      iTargetAzimuth %= 360;
       targetAzimuth = (float) iTargetAzimuth;
       jsonResponseBuilder( root, clientID, transID, F("SlewToAzimuth"), 0, "" );    
     }
    else
     {
-      jsonResponseBuilder( root, clientID, transID, F("SetPark"), 400, F("Dome not idle") );       
+      jsonResponseBuilder( root, clientID, transID, "SlewToAzimuth", 400, "Dome not idle" );       
     }
     root.printTo(message);
     server.send(200, "text/json", message);
@@ -546,27 +514,426 @@ void handleSyncToAzimuthPut(void)
    uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
    int iTargetAzimuth = 0;
    float azimuthOffset = 0.0F;
-   
+   DynamicJsonBuffer jsonBuffer(256);
    JsonObject& root = jsonBuffer.createObject();
    //in this driver model, each device has a separate ip address ,so can only be one device. hence ignore device-number
-   if( domeStatus == DOME_IDLE && server.hasArg(F("Azimuth") ) )
-    {
+   if( domeStatus == DOME_IDLE && server.hasArg("Azimuth") )
+   {
       //Set new (actual) azimuth location.
       //...
-      iTargetAzimuth = (int) server.arg( F("Azimuth") ).toInt();
+      iTargetAzimuth = (int) server.arg( "Azimuth" ).toInt();
       iTargetAzimuth %= 360;
+      iTargetAzimuth += 360;
+      iTargetAzimuth %= 360;
+            
       ///the offset is the difference between where the dome is currently pointing and where we are told it is pointing.
       azimuthOffset = (float) ( iTargetAzimuth - currentAzimuth );
       //Tell the dome to move to the target azimuth using the updated correction
       addDomeCmd( clientID, transID, CMD_DOME_SLEW, iTargetAzimuth );
       jsonResponseBuilder( root, clientID, transID, F("SyncToAzimuth"), 0, "" );    
-    }
+   }
    else
-    {
-      jsonResponseBuilder( root, clientID, transID, F("SyncToAzimuth"), 400, F("Dome not idle") );       
+   {
+      jsonResponseBuilder( root, clientID, transID, "SyncToAzimuth", 400, "Dome not idle" );       
     }
     root.printTo(message);
     server.send(200, F("text/json"), message);
     return ;
 }
+
+  /* Handle the command list - we've already checked we are idle at this point.
+   */
+  void onDomeIdle( void )
+  {
+    cmdItem_t* pCmd = nullptr;
+    
+    if ( domeCmdList->size() > 0 ) 
+    {
+      pCmd = domeCmdList->pop();
+  
+      switch ( pCmd->cmd )
+      {
+        case CMD_DOME_SLEW:
+          domeStatus = DOME_SLEWING;
+          onDomeSlew();
+          break;
+        case CMD_DOME_ABORT:
+          onDomeAbort();
+          break;
+        case CMD_DOMEVAR_SET:
+          //Did this so that dome variables aren't updated while waiting for commands that preceeded them to execute.    
+          default:
+        break;
+      }
+    }  
+    return;
+  }
+
+  /* 
+   *  Not to query rotating shutter but to include offsets in returned result. 
+   */  
+  float getAzimuth( float value )
+  {
+    value = ( value + azimuthSyncOffset );
+    if ( value < 0.0F ) 
+    {
+      value += 360.0;      
+    }
+    else if (value > 360.0F )
+      value -= 360.0F;
+
+    return value;
+  }
+  
+  /*
+   * Handle dome rotation slew speeds and directions 
+   * slow to crawl once near target azimuth
+   * Calc minimum distance to select direction
+   */
+  void onDomeSlew( void )
+  {
+    int distance = 0;
+    enum motorSpeed speed = MOTOR_SPEED_OFF;
+    enum motorDirection direction = MOTOR_DIRN_CW;
+    
+    int localAzimuth = 0; 
+    
+    if( domeStatus != DOME_SLEWING )
+      return;
+
+    localAzimuth = getAzimuth( bearing );
+    distance = targetAzimuth - localAzimuth ;
+    distance %= 360;
+    
+    //Work out speed to turn dome
+    if( abs(distance) < acceptableAzimuthError )
+    {
+      //Stop!!
+      //turn off motor
+      myMotor.setSpeedDirection( speed = MOTOR_SPEED_OFF, direction );
+      domeStatus = DOME_IDLE;
+      if( abs( localAzimuth - homePosition ) < acceptableAzimuthError )
+        atHome = true;
+      DEBUGSL1( "Dome stopped at target");
+      //myLCD.write( 2, 0, "Dome halted at target." );
+    }
+    else if ( abs(distance < slowAzimuthRange ) )   
+    {
+      speed = MOTOR_SPEED_SLOW_SLEW;
+      DEBUGS1( "Dome target distance: ");
+      DEBUGSL1( distance );
+      DEBUGSL1( "Dome speed set to slow slew");
+    }
+    else
+    {
+      speed = MOTOR_SPEED_FAST_SLEW;
+      DEBUGS1( "Dome target distance: ");
+      DEBUGSL1( distance );
+      DEBUGSL1( "Dome speed set to fast slew");    
+    }
+    
+    //Work out the direction. 
+    direction = ( distance > 0 ) ? MOTOR_DIRN_CW: MOTOR_DIRN_CCW;
+    if ( abs( distance ) > 180 )
+    {
+      DEBUGS1( "Dome target distance: ");
+      DEBUGSL1( distance );
+
+      //Swap direction and go the short route. 
+      if( direction == MOTOR_DIRN_CW)
+      {
+         direction = MOTOR_DIRN_CCW;
+          DEBUGSL1( "Dome direction reversed to CCW");         
+      }
+      else
+      {
+        direction = MOTOR_DIRN_CW;
+          DEBUGSL1( "Dome direction reversed to CW");               
+      }
+    }
+        
+    myMotor.setSpeedDirection( speed, direction );
+    return;
+   }
+  
+  /*
+   * Handler for domeAbort command
+   */ 
+  void onDomeAbort( void )
+  {
+    //clear down command list
+    domeCmdList->clear();//TODO memory error- needs to delete all mallocs properly.
+    //turn off motor
+    myMotor.setSpeedDirection( MOTOR_SPEED_OFF, MOTOR_DIRN_CW );
+    //message to LCD  
+    //myLCD.writeLCD( 2, 0, "ABORT received - dome halted." );
+    // ? close shutter ?
+    return;
+  }
+
+  void onShutterIdle()
+  {
+    String response = "";
+    //Get next command if there is one. 
+
+    cmdItem_t* pCmd = nullptr;
+    if ( shutterCmdList->size() > 0 ) 
+      pCmd = shutterCmdList->pop();
+    
+    String uri = "http://";
+    uri.concat( sensorHostname);
+    uri.concat("/shutter");
+    
+    switch ( pCmd->cmd )
+    {
+       case CMD_SHUTTER_OPEN: 
+       case CMD_SHUTTER_CLOSE: 
+          onShutterSlew();
+          break;
+       case CMD_SHUTTER_ABORT:
+          restQuery( uri, "status=abort", response, HTTP_PUT);
+          break;
+       case CMD_SHUTTERVAR_SET:
+       default:
+        break;
+    }
+  }
+  
+  /* Function to hande shutter slew command. 
+     Uses rest aPi to talk to shutter controller on rotating dome section
+     Could instead be the roll off roof controller but you might build that into this, non-rotating controller instead.  
+   */
+  void onShutterSlew()
+  {
+    //check shutter state
+    int currentShutterStatus = SHUTTER_ERROR;
+    String outbuf;
+    String uri = "http://";
+    int response = 0;
+    DynamicJsonBuffer jsonBuff(256);
+
+    uri.concat( shutterHostname );
+    uri.concat( "/shutter" );
+    response = restQuery( uri, "" , outbuf, HTTP_GET );
+    JsonObject& root = jsonBuff.parse( outbuf );
+    
+    if ( response == 200 && root.success() && root.containsKey( "status" ) )
+      currentShutterStatus = root["status"];
+
+    switch ( currentShutterStatus )
+    {
+      case SHUTTER_OPENING:
+      if ( currentShutterStatus == SHUTTER_OPEN  )
+        shutterStatus = SHUTTER_OPEN;
+        //Should now update command response list...
+        break;
+      case SHUTTER_CLOSING:
+      if ( currentShutterStatus == SHUTTER_CLOSED  )
+        shutterStatus = SHUTTER_CLOSED;
+        //Should now update command response list...
+        break;
+      
+      // do nothing for these - they are static, unless they have unexpectedly changed
+      case SHUTTER_OPEN:
+      if( currentShutterStatus != SHUTTER_OPEN )
+        shutterStatus = SHUTTER_ERROR;
+        //What are we going to do about it ?
+      case SHUTTER_CLOSED:
+      if( currentShutterStatus != SHUTTER_CLOSED )
+        shutterStatus = SHUTTER_ERROR;
+      case SHUTTER_ERROR:  //bad state
+      //clear list ?
+        break;
+      default:
+        break;
+    }  
+  }
+
+  void onShutterAbort( void )
+  {
+    String outbuf = "";
+    String uri = "http:";
+    shutterCmdList->clear();
+    uri.concat( sensorHostname );
+    uri.concat("/shutter");
+    if( restQuery( uri, "status=abort", outbuf ,HTTP_PUT) != HTTP_CODE_OK)
+    {
+      //what to do ?
+    }
+  } 
+  
+  void setupEncoder()
+  {
+    //TODO 
+    return;
+  }
+ 
+  //Detect compass service and initialise azimuth bearing of dome
+  bool setupCompass( String targetHost )
+  {
+    bool status = false;
+    String compassURL = "http://";
+    String output = "";
+    int response = 0;
+    float value;
+    DynamicJsonBuffer jsonBuff(256);
+    
+    compassURL.concat( sensorHostname );
+    compassURL.concat( "/bearing" );
+    response = restQuery( compassURL, "", output, HTTP_GET );
+    DEBUG_HTTPCLIENT( "[HTTPClient response ]  rsponse code: %i, response: %s\n", response, output.c_str() );
+    JsonObject& root = jsonBuff.parse( output );
+    
+    if ( response == HTTP_CODE_OK && root.success() && root.containsKey("bearing") )
+    {
+      value = (float) root.get<float>("bearing"); //initialise current setting
+      status = true;
+    }
+    else
+    {
+      Serial.print( "Shutter compass bearing call not successful, response: " );    Serial.println( response );
+      Serial.print( "JSON parsing status: " );    Serial.println( root.success() );
+    }
+
+    return status;
+  }
+
+  /*
+   * Query a url for a parsed json output
+   * check return code with object.success();
+   */ 
+  int restQuery( String uri, String args, String& response, int method )
+  {
+    int httpCode = 0;
+    long int startTime;
+    long int endTime;
+    
+    DEBUG_HTTPCLIENT("restQuery request [%i] uri: %s args:%s\n", method, uri.c_str(), args.c_str() );
+    startTime = millis();
+    if ( hClient.begin( wClient, uri ) ) //uri must already have request args in it
+    {
+      hClient.setReuse( true );
+      hClient.setTimeout ( (uint16_t) 250 );
+
+      if( method == HTTP_GET )
+      {
+        httpCode = hClient.GET();
+        endTime = millis();
+        DEBUG_HTTPCLIENT( "Time for restQuery call(mS): %li\n", endTime-startTime );
+      }
+      else if ( method == HTTP_PUT ) //variables are added as headers
+      {
+        httpCode = hClient.PUT( args );        
+        endTime = millis();
+        DEBUG_HTTPCLIENT("Time for restQuery call: %li mS\n", endTime-startTime );
+      }
+     
+      // file found at server ?
+      if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) 
+      {
+        response = hClient.getString();
+        DEBUG_HTTPCLIENT("Response: %s\n", response.c_str() );
+      }
+      else 
+      {
+        DEBUG_HTTPCLIENT("restQuery ... failed, error: %s\n", hClient.errorToString(httpCode).c_str() );
+        ;;
+      } 
+      hClient.end();
+    }
+    else
+    {
+       DEBUG_HTTPCLIENT("restQuery Unable to open connection");
+    }  
+    return httpCode;
+  }
+  
+  /*
+   * Function to determine bearing of dome - just return a sane value to the caller. Let the caller handler sync offsets. 
+   */
+  float getBearing()
+  {
+    static int bearingRepeatCount = 0;
+    static float lastBearing = 0.0F;
+    const int bearingRepeatLimit = 10;
+    float bearing = 0.0F;
+    int response = 0;
+    String uri = "http://";
+    String outbuf = "";
+    DynamicJsonBuffer jsonBuff(256);    
+    
+    //Update the bearing
+    uri.concat( sensorHostname );
+    uri.concat( "/bearing" );
+    response = restQuery( uri, "", outbuf, HTTP_GET );
+    DEBUG_HTTPCLIENT("GetBearing response code: %i, response: %s\n", response, outbuf.c_str() );
+    JsonObject& root = jsonBuff.parse( outbuf );
+    
+    if ( response == HTTP_CODE_OK && root.success() && root.containsKey( "bearing" ) )
+    {
+      DEBUG_HTTPCLIENT(" GetBearing: successful: %f \n", bearing );
+      bearing = (float) root.get<float>("bearing");
+//      if( bearing >= 0.0F && bearing <= 360.0F )
+//        currentAzimuth = bearing;
+      if ( lastBearing == bearing ) //We do this to check for sensor freeze
+      {
+        bearingRepeatCount ++;
+        DEBUG_HTTPCLIENT(" GetBearing: Sensor stuck detected @ %f\n", bearing );
+        
+        //reset the compass by resetting the target device
+        if ( bearingRepeatCount > bearingRepeatLimit ) 
+        {  
+          uri = "http://";
+          uri.concat( sensorHostname );
+          uri.concat( "/bearing/reset" );
+          
+          response = restQuery( uri, "", outbuf, HTTP_PUT );
+          DEBUG_HTTPCLIENT(" GetBearing: Compass reset attempted !");
+          myLCD.writeLCD( 2, 0, "Compass reset !");
+          bearingRepeatCount = 0;
+        }
+      }
+      else //good value not stuck 
+      {
+        DEBUG_HTTPCLIENT(" GetBearing: Reading obtained %f\n", bearing );
+        lastBearing = bearing;
+        bearingRepeatCount = 0;
+      }
+    }
+    else //can't retrieve the bearing
+    {
+      //hand back the current bearing, so we don;t slew off into strange territory when we return 0.0f instead. 
+      DEBUG_HTTPCLIENT("GetBearing: no reading, using last  ");
+      bearing = currentAzimuth - azimuthSyncOffset;
+    }
+    return bearing;
+  }
+  
+  /*
+   * Rest call to retrieve shutter Status. 
+   */ 
+  int getShutterStatus( String host )
+  {
+    String outbuf;
+    int value = 0;
+    DynamicJsonBuffer jsonBuff(256);
+
+    String uri = String( "http://" );
+    uri.concat( shutterHostname );
+    uri.concat( "/shutter" );
+    int response = restQuery( uri , "", outbuf, HTTP_GET  );
+    JsonObject& root = jsonBuff.parse( outbuf ); 
+    if ( response == 200 && root.success() && root.containsKey("status") )
+    {
+      value = ( enum shutterState) root.get<int>("status");    
+    }
+    else
+    {
+      value = SHUTTER_ERROR;
+      DEBUG_HTTPCLIENT("Shutter controller call not successful, response: %i\n", response );
+      DEBUG_HTTPCLIENT("Shutter JSON parsing status: %i\n", root.success() );
+    }
+  return value;
+  }
+
 #endif

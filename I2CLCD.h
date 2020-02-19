@@ -1,5 +1,5 @@
-#ifndef _I2CLCD_h
-#define _I2CLCD_h
+#ifndef _I2CLCD_h_
+#define _I2CLCD_h_
 #pragma gcc warning "Wire interface must be already initialised and globally defined as 'Wire' "   
 #include <Wire.h> //Uses I2C interface
 
@@ -16,20 +16,21 @@
 */
 /*
   Tech Specs: http://www.robot-electronics.co.uk/htm/Lcd05tech.htm
+  OR http://www.robot-electronics.co.uk/htm/Lcd05tech.htm
 */
 
 class I2CLCD {
   public:
-  enum cursorMode { CURSOR_SOLID, CURSOR_BLINK, CURSOR_UNDERLINE, CURSOR_NONE };
+  enum cursorMode : uint8_t { CURSOR_SOLID, CURSOR_BLINK, CURSOR_UNDERLINE, CURSOR_NONE };
 
   private:  
-  uint8_t _address = 0x00;
+  uint8_t _address = 0xC6;
   uint8_t _proxyAddress = 0x00;
-  uint8_t _rowSize = 2;
+  uint8_t _rowSize = 4;
   uint8_t _colSize = 16;
   bool _backlight = false;
   enum cursorMode _cursorState = CURSOR_NONE;  
-  TwoWire& tw = Wire;
+  TwoWire& _tw = Wire;
    
   public:
   I2CLCD( uint8_t address )
@@ -46,14 +47,15 @@ class I2CLCD {
 
   bool checkLCD()
   {
-      byte inData[1] = {0};
+      byte inData[1];;
       bool readComplete = false;
 
-      tw.requestFrom( (uint8_t) (_address | I2C_READ), (uint8_t) 1 );    // request 1 bytes from slave device
-
-      while ( tw.available() && !readComplete ) 
+      // request 1 bytes from slave device - returns the number of free bytes in the fifo buffer
+      _tw.requestFrom( (uint8_t) ((_address & 0xFE) | I2C_READ), (uint8_t) 0 );   
+      delay(25); 
+      while ( _tw.available() && !readComplete ) 
       { // slave may send less than requested
-         inData[0] = tw.read(); // receive a byte as character
+         inData[0] = _tw.read(); // receive a byte as character
          readComplete = true;
       }
       return readComplete;
@@ -64,42 +66,48 @@ class I2CLCD {
       byte *outData;
       int length = 0;
 
-      //Move to row/col
-      outData = new byte[3];
-      outData[0] = (byte) 3; //CMD
-      outData[1] = (byte)(row); //data
-      outData[2] = (byte)(col); //data
-      tw.beginTransmission( _address | I2C_WRITE); // transmit to device
-      tw.write( outData, 3 );     // sends array contents
-      tw.endTransmission();    // stop transmitting
-
-      //Write string to device display
       length = letters.length() + 1; 
       char *buf = new char[ length ];
       letters.toCharArray( buf, length, 0);
-      tw.beginTransmission( _address | I2C_WRITE ); // transmit to device
-      tw.write( (byte*) buf, length );     // sends array contents
-      tw.endTransmission();    // stop transmitting
+      Serial.printf( "writeLCD %i letters:%s\n", length, buf );
+
+      //Move to row/col
+      outData = new byte[3];
+      outData[0] = (byte) 3;    //CMD
+      outData[1] = (byte)(row); //data
+      outData[2] = (byte)(col); //data
+      _tw.beginTransmission( ( _address & 0xFE )| I2C_WRITE); // transmit to device
+      _tw.write( outData, 3 );     // sends array contents
+      _tw.endTransmission(false);    // stop transmitting
+
+      //Write string to device display
+      _tw.beginTransmission( _address | I2C_WRITE ); // transmit to device
+      _tw.write( (byte*) buf, length );     // sends array contents
+      _tw.endTransmission();    // stop transmitting
   }
 
   void clearScreen()
   {
-      tw.beginTransmission( _address | I2C_WRITE ); // transmit to device
-      tw.write( (byte) 12 );   // CLS cmd
-      tw.endTransmission();    // stop transmitting
+      _tw.beginTransmission( _address | I2C_WRITE ); // transmit to device
+      _tw.write( (byte) 12 );   // CLS cmd
+      _tw.endTransmission();    // stop transmitting
   }
   
   void setBacklight( bool state )
   {
       byte* outData;
 
-      outData = new byte[ 2 ];
-      outData[0] = (byte) 19;
-      outData[1] = (byte) state;
+      outData = new byte[ 1 ];
+      //outData[1] = (byte) state;
+      
+      if( state) 
+        outData[0] = (byte) 19; //on
+      else
+        outData[0] = (byte) 20; //off
 
-      tw.beginTransmission( _address | I2C_WRITE ); // transmit to device
-      tw.write( outData , 2);     // backlight on/off command
-      tw.endTransmission();    // stop transmitting
+      _tw.beginTransmission( ( _address & 0xFE) | I2C_WRITE ); // transmit to device
+      _tw.write( outData , 1);     // backlight on/off command
+      _tw.endTransmission();       // stop transmitting
   }
 
   /*
@@ -119,9 +127,9 @@ class I2CLCD {
       outData[0] = (byte) 3;
       outData[1] = (byte) row;
       outData[2] = (byte) col; //data
-      tw.beginTransmission( _address | I2C_WRITE ); // transmit to device
-      tw.write( outData, 3 );   // cmd
-      tw.endTransmission();  // stop transmitting
+      _tw.beginTransmission( _address | I2C_WRITE ); // transmit to device
+      _tw.write( outData, 3 );   // cmd
+      _tw.endTransmission();  // stop transmitting
 
       //Set cursor mode to solid, blink or underline
       outData = new byte[1];
@@ -141,9 +149,9 @@ class I2CLCD {
               outData[0] = 0x04;
               break;
       }
-      tw.beginTransmission( _address | I2C_WRITE ); // transmit to device
-      tw.write( outData, 1 );   // cmd
-      tw.endTransmission();  // stop transmitting
+      _tw.beginTransmission( _address | I2C_WRITE ); // transmit to device
+      _tw.write( outData, 1 );   // cmd
+      _tw.endTransmission();  // stop transmitting
    }
 };     
 #endif //_header file

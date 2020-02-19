@@ -1,5 +1,5 @@
-#ifndef _i2cMotor_h
-#define _i2cMotor_h
+#ifndef _i2cMotor_h_
+#define _i2cMotor_h_
 /*Include ASCOMDome enum for motor speed and direction settings.
 enum motorSpeed: uint8_t     { MOTOR_SPEED_OFF=0, MOTOR_SPEED_SLOW_SLEW=80, MOTOR_SPEED_FAST_SLEW=120 };
 enum motorDirection: uint8_t { MOTOR_DIRN_CW=0, MOTOR_DIRN_CCW=1 };
@@ -9,9 +9,9 @@ enum motorDirection: uint8_t { MOTOR_DIRN_CW=0, MOTOR_DIRN_CCW=1 };
 class i2cMotor 
 {
    private:
-   enum _motorSpeed _speed = MOTOR_SPEED_OFF;
-   enum _motorDirection _direction = MOTOR_DIRN_CW;
-   uint8_t _address = 0;
+   enum motorSpeed _speed  = MOTOR_SPEED_OFF;
+   enum motorDirection _direction = MOTOR_DIRN_CW;
+   uint8_t _address   = 0;
 
    TwoWire& tw = Wire;
 
@@ -22,33 +22,41 @@ class i2cMotor
       _address = address;
    }
 
+   enum motorSpeed getSpeed(void)
+   {
+    return _speed;
+   }
+
+   enum motorDirection getDirection(void)
+   {
+    return _direction;
+   }
+
    /*
    * Valid input values of speed are from 1 to 255;
    * Valid input values of direction are False - reverse, True - forwards 
    */
-   bool SetSpeedDirection( enum motorSpeed speed, enum motorDirection dirn )
+   bool setSpeedDirection( enum motorSpeed newSpeed, enum motorDirection newDirn )
    {
-      bool validCmd = false;
-      int writeState = 0;
-      
       //Write string to device
       byte* outData = new byte[2];
+      uint8_t speed;
       
       //Convert speed and direction into simple velocity
       //motor mode register address - mode 1 is 0 (full reverse)  128 (stop)   255 (full forward).
       //set both speed registers - motor1 and motor2
 
-      if (speed == MOTOR_SPEED_OFF )
+      if (newSpeed == MOTOR_SPEED_OFF )
       {
           speed = 128;
       }
       else 
       {
-          speed = (byte)(speed/2 );
-          if ( dirn = MOTOR_DIRN_CW )
-              speed = (byte)( 128 - speed);
+          speed = (uint8_t)( newSpeed/2 );
+          if ( newDirn == MOTOR_DIRN_CW )
+              speed = (uint8_t)( 128 - speed);
           else
-              speed = (byte)( 128 + speed);
+              speed = (uint8_t)( 128 + speed);
       }
                       
       outData[0] = (byte)speed; //speed value motor 1;
@@ -56,23 +64,26 @@ class i2cMotor
       tw.beginTransmission( _address | I2C_WRITE); // transmit to device
       tw.write( outData, 2 );  // sends array contents
       tw.endTransmission();    // stop transmitting
-      _speed = speed;
-      _dirn = dirn;
+      _speed = newSpeed;
+      _direction = newDirn;
+      return true;
    }
 
    //Check motor speed control is present by reading register 7 for its version string. 
-   //Motor soeed control device is a Devasys i2c/serial/pwm 5A h-Bridge device from http://robot-electronics.co.uk
-   bool CheckMotorDevice( void )
+   //Motor speed control device is a Devasys i2c/serial/pwm 5A h-Bridge device from http://robot-electronics.co.uk
+   bool check( void )
    {
       //Write string to device
       byte *outData = new byte[1];
-      bool outStatus = false; 
+      byte inData[1];
       bool readComplete = false;
 
       outData[0] = 7; //Version register address
+      tw.beginTransmission( (_address & 0xFE) | I2C_WRITE); // transmit to device
+      tw.write( outData, 1 );  // sends array contents
+      tw.endTransmission(false);    // restart transmitting
       
       tw.requestFrom( (uint8_t) ( _address | I2C_READ), (uint8_t) 1 );    // request 1 bytes from slave device
-
       while ( tw.available() && !readComplete ) 
       { // slave may send less than requested
          inData[0] = tw.read(); // receive a byte as character
@@ -81,10 +92,9 @@ class i2cMotor
       return readComplete;
    }
 
-   void InitMotorDevice( void )
+   void init( void )
    {
       //Write string to device
-      int responseCount = 0;
       byte *outData = new byte[4];
       outData[0] = 0; //motor mode register address - mode 1 is 0 (full reverse)  128 (stop)   255 (full forward).
       outData[1] = 128; //both motors are controlled by their own speed registers, speed register motor 1

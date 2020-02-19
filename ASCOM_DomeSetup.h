@@ -11,7 +11,6 @@ Assumes Use of ARDUINO ESP8266WebServer for entry handlers
 extern EspClass device;
 extern int homePosition;
 extern int parkPosition;
-extern String Name;
 
 //Functions
 String& setupFormBuilder(String& htmlForm, String& errMsg );
@@ -86,7 +85,7 @@ void handleHostnamePut( void )
   if( newName != NULL && newName.length() < nameLengthLimit)
   {
     //save new hostname and cause reboot - requires eeprom read at setup to be in place.  
-    newName.toCharArray( hostname, newName.length(), 0 );
+    newName.toCharArray( Name, newName.length(), 0 );
     //Write new hostname to EEprom
     //......
     
@@ -142,13 +141,12 @@ void handleDomeGoto( void )
  * Set sync offset from setup web page - managed outside of ascom  
  * REST api provides no way of doing this at time of writing. 
  */
-void handleSyncOffsetPut(void)
+void handleSyncOffsetPut( void)
 {
   const String nameStub = "syncOffset";
   String form;
   String name;
   String localName;
-  
   String errMsg;
   int newGoto = 0;
   
@@ -157,16 +155,16 @@ void handleSyncOffsetPut(void)
   DEBUGSL1( "Entered handleSyncOffsetPut");
 
   name = nameStub;
-  if( server.hasArg( name ) )
+  if( server.hasArg( name ) && server.hasArg( "ClientID") && server.hasArg( "transID" ) )
   {
     localName = server.arg(name);
     newGoto = (int) localName.toInt();    
     if ( newGoto >= 0 && newGoto <=360 )
     {
-      domeSyncOffsetDegrees = newGoto;
+      azimuthSyncOffset = newGoto;
       //update current position by moving to current azimuth
-      //Create command item 
       //Add to list at top.
+      addDomeCmd( server.arg( "clientID" ).toInt(), server.arg("transID").toInt(), CMD_DOME_SLEW, currentAzimuth );
     }
   }  
   else
@@ -188,7 +186,7 @@ void handleHomePositionPut(void)
   
   debugURI(errMsg);
   DEBUGSL1 (errMsg);
-  DEBUGSL1( "Entered handleOffsetsPut" );
+  DEBUGSL1( "Entered handleHomePositionPut" );
   name = nameStub;
   if( server.hasArg(name) )
   {
@@ -250,28 +248,31 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
   htmlForm = "<!DOCTYPE HTML><html><head></head><meta></meta><body><div id=\"ErrorMsg\" >\n";
   if( errMsg != NULL && errMsg.length() > 0 ) 
   {
-    htmlForm +="<b>";
+    htmlForm +="<b background='red' >";
     htmlForm.concat( errMsg );
     htmlForm += "</b>";
   }
   htmlForm += "</div>\n";
   
   //Hostname
-  htmlForm += "<div id=\"hostname\" >";
-  htmlForm += "<h1> Enter new hostname for dome driver host</h1>\n";
+  htmlForm += "<div id=\"hostnameset\" >";
+  htmlForm += "<h2> Enter new hostname for dome driver host</h2>\n";
   htmlForm += "<form action=\"http://";
-  htmlForm.concat( hostname );
-  htmlForm += "/Dome/0/Hostname\" method=\"PUT\" id=\"hostname\" >\n";
+  htmlForm.concat( myHostname );
+  htmlForm += "/Hostname\" method=\"PUT\" id=\"hostname\" >\n";
   htmlForm += "Changing the hostname will cause the dome hardware to reboot and may change the address!\n<br>";
   htmlForm += "<input type=\"text\" name=\"hostname\" value=\"";
-  htmlForm.concat( hostname );
+  htmlForm.concat( myHostname );
   htmlForm += "\">\n";
   htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
   
-  //Wheelname
+  //Device name - do we really want to enable this to be changed ?
   htmlForm += "<div id=\"Domenameset\" >";
-  htmlForm += "<h1> Enter new descriptive name for Dome driver </h1>\n";
-  htmlForm += "<form action=\"/Dome/0/Domename\" method=\"PUT\" id=\"domename\" >\n";
+  htmlForm += "<form action=\"http://";
+  htmlForm.concat( Name );
+  htmlForm += "/Name\" method=\"PUT\" id=\"domename\" >\n";
+  htmlForm += "<h2> Enter new descriptive name for Dome driver </h2>\n";
+  htmlForm += "<form action=\"Domename\" method=\"PUT\" id=\"domename\" >\n";
   htmlForm += "<input type=\"text\" name=\"wheelname\" value=\"";
   htmlForm.concat( Name );
   htmlForm += "\">\n";
@@ -279,25 +280,47 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
   
   //Dome goto position
   htmlForm += "<div id=\"gotoset\" >";
-  htmlForm += "<h1> Enter bearing to move dome to </h1>\n";
+  htmlForm += "<h2> Enter bearing to move dome to </h2>\n";
   htmlForm += "<form action=\"http://";
-  htmlForm.concat(hostname);
-  htmlForm += "/Dome/0/goto\" method=\"PUT\" id=\"goto\" >\n";
+  htmlForm.concat( myHostname );
+  htmlForm += "/Goto\" method=\"PUT\" id=\"goto\" >\n";
   htmlForm += "<input type=\"text\" name=\"Goto bearing &deg\" value=\"0\"\">\n";
   htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
   
   //Dome sync offset
   htmlForm += "<div id=\"syncset\" >";
-  htmlForm += "<h1> Enter actual position for dome </h1>\n";
+  htmlForm += "<h2> Enter actual position for dome to sync to </h2>\n";
   htmlForm += "<form action=\"http://";
-  htmlForm.concat(hostname);
-  htmlForm += "/Dome/0/sync\" method=\"PUT\" id=\"sync\" >\n";
+  htmlForm.concat(myHostname);
+  htmlForm += "/Sync\" method=\"PUT\" id=\"sync\" >\n";
+  htmlForm += "<input type=\"text\" name=\"Actual bearing &deg\" value=\"0\"\">\n";
+  htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
+  
+  //Dome home position
+  htmlForm += "<div id=\"homeset\" >";
+  htmlForm += "<h2> Enter new home position for dome </h2>\n";
+  htmlForm += "<form action=\"http://";
+  htmlForm.concat(myHostname);
+  htmlForm += "/Home\" method=\"PUT\" id=\"home\" >\n";
+  htmlForm += "<input type=\"text\" name=\"New Home position &deg\" value=\"";
+  htmlForm += homePosition;
+  htmlForm += "\">\n";  
+  htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
+  
+  //Dome park position
+  htmlForm += "<div id=\"parkset\" >";
+  htmlForm += "<h2> Enter new home position for dome </h2>\n";
+  htmlForm += "<form action=\"http://";
+  htmlForm.concat(myHostname);
+  htmlForm += "/ParkSet\" method=\"PUT\" id=\"park\" >\n";
+  htmlForm += "<input type=\"text\" name=\"New Park value &deg\" value=\"";
+  htmlForm += parkPosition;
+  htmlForm += "\">\n";  
   htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
   
   //Consider also - for later, for systems that don't calc this for us, we 
   //may have to do it ourselves
-  //Dome home position
-  //Dome park position
+
   //Auto-tracking enable
   //W of pier
   //N of pier
