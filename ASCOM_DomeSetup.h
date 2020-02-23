@@ -30,7 +30,7 @@ void handlerNotFound()
   int responseCode = 400;
   uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
   uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-
+  DynamicJsonBuffer jsonBuffer(250);
   JsonObject& root = jsonBuffer.createObject();
   jsonResponseBuilder( root, clientID, transID, "HandlerNotFound", 0x500, "No REST handler found for argument - check ASCOM Dome v2 specification" );    
   JsonObject& err = root.createNestedObject("ErrorMessage");
@@ -46,6 +46,7 @@ void handlerNotImplemented()
   uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
   uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
 
+  DynamicJsonBuffer jsonBuffer(250);
   JsonObject& root = jsonBuffer.createObject();
   jsonResponseBuilder( root, clientID, transID, "HandlerNotFound", 0x500, "No REST handler implemented for argument - check ASCOM Dome v2 specification" );    
   JsonObject& err = root.createNestedObject("ErrorMessage");
@@ -338,6 +339,7 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
   void handleRootReset()
   {
     String message;
+    DynamicJsonBuffer jsonBuffer(250);
     JsonObject& root = jsonBuffer.createObject();
     root["messageType"] = "Alert";
     root["message"]= "Dome controller Resetting";

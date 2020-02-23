@@ -169,17 +169,22 @@ void saveToEeprom( void )
     char* targetNameList[5]  = { myHostname, sensorHostname, shutterHostname, MQTTServerName, Name };
     char* temp = nullptr;
 
+        //Serial.printf( "Sizeof( defaultNameList)/sizeof(char*) is %i\n", sizeof(defaultNameList)/sizeof(char*) );
+    //Serial.printf( "nameLengthLimit is %i\n", nameLengthLimit );
     for ( i = 0; i < (sizeof(defaultNameList)/sizeof( char*)); i++ )
     {
       //Set Ascom device name as configured by dome setup  - initialise to hostname
       if ( *targetNameList[i] != nullptr ) 
         free ( *targetNameList[i] );
-      **targetNameList[i] = (char*) calloc( nameLengthLimit, sizeof( char)  );
-      strncpy(  targetNameList[i], defaultNameList[i], nameLengthLimit );
-
-      Serial.printf( "Source default %i is %s\n", i, defaultNameList[i] );
-      Serial.printf( "Updated variable %i to %s\n", i, targetNameList[i] );
+      *targetNameList[i] = (char*) calloc( nameLengthLimit, sizeof( char)  );
+      if( *targetNameList[i] != nullptr )
+        strncpy(  *targetNameList[i], defaultNameList[i], nameLengthLimit );
+      Serial.printf( "Source default  %i is %s\n", i, defaultNameList[i] );
+      Serial.printf( "Updated default %i to %s\n", i, *targetNameList[i] );
     }
+    //Serial.println("finished");  
+    Serial.printf( "New names are %s, %s, %s, %s, %s\n", myHostname, sensorHostname, shutterHostname, MQTTHostname, Name );
+
     Serial.printf( "New names are %s, %s, %s, %s, %s\n", myHostname, sensorHostname, shutterHostname, MQTTServerName, Name );
     */
     DEBUGSL1( "SetupDefaults complete" );

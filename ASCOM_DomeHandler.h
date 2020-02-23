@@ -139,7 +139,9 @@ void handleCanParkGet(void)
     uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
 
-    JsonObject& root = jsonBuffer.createObject();
+    DynamicJsonBuffer jsonBuff(256);
+    JsonObject& root = jsonBuff.createObject();
+
     jsonResponseBuilder( root, clientID, transID, "CanPark", 0, "" );    
     root["Value"] = canPark;
     //JsonArray& offsets = root.createNestedArray("Value");
@@ -858,11 +860,11 @@ void handleSyncToAzimuthPut(void)
     const int bearingRepeatLimit = 10;
     float bearing = 0.0F;
     int response = 0;
-    String uri = "http://";
     String outbuf = "";
     DynamicJsonBuffer jsonBuff(256);    
     
     //Update the bearing
+    String uri = "http://";
     uri.concat( sensorHostname );
     uri.concat( "/bearing" );
     response = restQuery( uri, "", outbuf, HTTP_GET );

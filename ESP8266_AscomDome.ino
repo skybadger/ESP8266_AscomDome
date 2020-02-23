@@ -61,55 +61,67 @@ ESP8266-12 Huzzah
 #include "JSONHelperFunctions.h"
 #include "ASCOM_Domehandler.h"
 #include "ASCOM_DomeSetup.h"
+#include "ASCOM_DomeEeprom.h"
 #include "Skybadger_common_funcs.h"
 
 void setupWifi(void)
 {
   //Setup Wifi
-  int zz = 0;
+  int zz = 00;
   WiFi.hostname(myHostname);
   WiFi.mode(WIFI_STA);
   WiFi.begin( ssid1, password1 );
+  Serial.println("Connecting");
   while (WiFi.status() != WL_CONNECTED) 
   {
     delay(500);//This delay is essentially for the DHCP response. Shouldn't be required for static config.
     Serial.print(".");
-
-    if ( zz++ >= 400) 
+    if ( zz++ > 200 )
     {
       device.restart();
-    }    
+    }
   }
-
   Serial.println("WiFi connected");
-  Serial.printf("SSID: %s, Signal strength %i dBm \n\r", WiFi.SSID().c_str(), WiFi.RSSI() );
-  Serial.printf("Hostname: %s\n\r",       WiFi.hostname().c_str() );
-  Serial.printf("IP address: %s\n\r",     WiFi.localIP().toString().c_str() );
-  Serial.printf("DNS address 0: %s\n\r",  WiFi.dnsIP(0).toString().c_str() );
-  Serial.printf("DNS address 1: %s\n\r",  WiFi.dnsIP(1).toString().c_str() );
-  delay(5000);
+  Serial.printf("Hostname: %s\n",      WiFi.hostname().c_str() );
+  Serial.printf("IP address: %s\n",    WiFi.localIP().toString().c_str() );
+  Serial.printf("DNS address 0: %s\n", WiFi.dnsIP(0).toString().c_str() );
+  Serial.printf("DNS address 1: %s\n", WiFi.dnsIP(1).toString().c_str() );   
 
   //Setup sleep parameters
-  //WiFi.mode(WIFI_NONE_SLEEP);
+  //wifi_set_sleep_type(LIGHT_SLEEP_T);
   wifi_set_sleep_type(NONE_SLEEP_T);
+
+  Serial.println("WiFi setup complete & connected");
 }
 
 void setup()
 {
   // put your setup code here, to run once:
   String outbuf;
+  DynamicJsonBuffer jsonBuff(256);
+
+  //Minimise serial to one pin only. 
   Serial.begin( 115200, SERIAL_8N1, SERIAL_TX_ONLY);
   Serial.println(F("ESP starting."));
   gdbstub_init();
 
-  //Start NTP client
-  configTime(TZ_SEC, DST_SEC, timeServer1, timeServer2, timerServer3 );
+  Serial.setDebugOutput(true);
+  delay(2000); 
 
-  //Setup defaults first - via EEprom.
+  //Start time
+  //Start NTP client - even before wifi.
+  configTime(TZ_SEC, DST_SEC, timeServer1, timeServer2, timeServer3 );
+  now = time(nullptr);
+  Serial.println( "Time Services setup");
+      
   //Read internal state, apply defaults if we can't find user-set values in Eeprom.
   EEPROM.begin(512);
-  setupDefaults();
-  setupFromEeprom();
+  readFromEeprom();
+  
+  //Setup defaults from EEPROM
+  delay(5000);
+  Serial.printf( "Entering Wifi setup for host %s\n", myHostname );
+  setupWifi();
     
   //Setup I2C
 #if defined _ESP8266_01_
@@ -135,23 +147,27 @@ void setup()
 #endif
   Wire.setClock(100000 );//100KHz target rate
 
-  setupWifi();
-  
   //Open a connection to MQTT
-  client.setServer( MQTTHostname, 1883 );
+  DEBUGSL1("Starting to configure MQTT connection");
+  client.setServer( MQTTServerName, 1883 );
   client.connect( thisID, pubsubUserID, pubsubUserPwd ); 
   //Create a timer-based callback that causes this device to read the local i2C bus devices for data to publish.
   client.setCallback( callback );
   client.subscribe( inTopic );
+  publishHealth();
   client.loop();
-  Serial.println("Configured MQTT connection");
+  DEBUGSL1("Configured MQTT connection");
   
   //Setup i2C to drive motor controller
+  DEBUGSL1("Starting to configure motor connection");
   myMotor.check();
   myMotor.init();
+  DEBUGSL1("Configured motor connection");
 
   //Setup i2c to control LCD display
-  if ( LCDPresent = myLCD.checkLCD() )
+  DEBUGSL1("Starting to configure LCD connection");
+  LCDPresent = myLCD.checkLCD();
+  if ( LCDPresent )
     Serial.printf("unable to access LCD\n");  
   else
   { 
@@ -160,10 +176,11 @@ void setup()
     myLCD.setBacklight( true ); 
     myLCD.writeLCD( 1, 1 , "ASCOMDome ready" );
   }
+  DEBUGSL1("Configured LCD connection");
   
   //Use one of these to track the dome position
 #ifdef _USE_ENCODER_FOR_DOME_ROTATION
-  setupEncoder();
+  //setupEncoder();
 #else
   //Magnetometer setup 
   if ( setupCompass( sensorHostname ) )
@@ -273,8 +290,8 @@ void onCoarseTimer( void* pArg )
 //Used to complete timeout actions. 
 void onTimeoutTimer( void* pArg )
 {
-  timeoutFlag = true;
-  //Used for MQTT reconnects timing currently
+   ;;//fn moved to Shutter controller  - delete later if not used. 
+   timeoutTimerFlag = true;
 }
 
 void loop()
@@ -285,12 +302,12 @@ void loop()
   bool coarseTimer = coarseTimerFlag;
   bool fineTimer = fineTimerFlag;
     
-  // Main code here, to run repeatedly:
   if( WiFi.status() != WL_CONNECTED)
   {
       device.restart();
   }
- 
+
+  // Main code here, to run repeatedly:
   //Handle state changes
   //in dome  
   switch ( domeStatus )
@@ -336,30 +353,41 @@ void loop()
   if ( coarseTimer )
   {
     getTimeAsString( outbuf );
-    //Clock tick
-    myLCD.writeLCD( 1,1, outbuf );
+    
+    //Clock tick onLCD 
+    int index = 0;
+    int lastIndex = 0;
+    String output = "";
+    index = outbuf.indexOf( " " );
+    lastIndex = outbuf.indexOf( "." );
+    if( index >= 0 && lastIndex >= index )
+    {
+      output = outbuf.substring( index, lastIndex );
+      myLCD.writeLCD( 1,1, output );
+    } 
     coarseTimerFlag = false;
   }
  
-  if ( client.connected() )
+  if( client.connected() )
   {
-     if ( callbackFlag == true )
-     {
-       //publish results
-         publishStuff();
-         callbackFlag = false;
-     }
-     client.loop();
-  }
+    if (callbackFlag == true )
+    {
+      //publish results
+      ;; //
+      callbackFlag = false;
+    }
+    client.loop(); 
+  }    //Service MQTT keep-alives
   else
   {
-     reconnectNB();
+    reconnectNB();
+    client.subscribe( inTopic );
   }
   
   //If there are any web client connections - handle them.
   server.handleClient();
 }
-  
+   
   void coarseTimerHandler(void)
   {
     coarseTimerFlag = true;
@@ -424,28 +452,9 @@ void loop()
  */
 void callback(char* topic, byte* payload, unsigned int length) 
 {  
-  String sTopic = String( topic );
-  String sPayload = String( (char*) payload );
-  JsonObject = //'
-  //Need to subscribe to some postings to handle intelligently.
-  //Listen for safety postings. 
-  if ( sTopic.indexOf( "/function/safety/" ) )
-  {
-      
-  }
-  else if (sTopic.indexOf( "/function/observing_conditions/" ) )
-  {
-  }
-      
-   
-  
-  //listen for Observing conditions postings. 
-  
-  
   //set callback flag
   callbackFlag = true;  
-
-}
+ }
 
 /*
  */
@@ -456,14 +465,14 @@ void callback(char* topic, byte* payload, unsigned int length)
   String timestamp;
   
   //publish to our device topic(s)
-  DynamicJsonBuffer jsonBuffer(256);
+  DynamicJsonBuffer jsonBuffer(256);  
   JsonObject& root = jsonBuffer.createObject();
-  
-  getTimeAsString2( timestamp);
+
+  getTimeAsString( timestamp);
+  root["time"] = timestamp;
 
   // Once connected, publish an announcement...
   root["hostname"] = myHostname;
-  root["time"] = timestamp;
   if( connected ) 
     root["message"] = "Dome connected & operating";
   else
@@ -472,5 +481,5 @@ void callback(char* topic, byte* payload, unsigned int length)
   outTopic = outHealthTopic;
   outTopic.concat( myHostname );
   client.publish( outTopic.c_str(), output.c_str() );  
-  Serial.print( outTopic.c_str() );Serial.print( " published: " ); Serial.println( output.c_str() );
+  Serial.print( outTopic );Serial.print( " published: " ); Serial.println( output );
  }
