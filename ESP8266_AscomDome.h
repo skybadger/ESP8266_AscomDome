@@ -7,7 +7,7 @@
 //_ESP8266_12_
 
 //Use for client testing
-#define _DISABLE_MQTT_
+//#define _DISABLE_MQTT_
 
 //#define _USE_ENCODER_FOR_DOME_ROTATION
 //Manage different Encoder pinout variants of the ESP8266
@@ -35,9 +35,9 @@
 #include <EEPROM.h>
 #include <EEPROMAnything.h>
 
-#include <LinkedList.h>      //https://github.com/ivanseidel/LinkedList
 #include <PubSubClient.h> //https://pubsubclient.knolleary.net/api.html
-#include "Skybadger_debug_serial.h" 
+#include "DebugSerial.h" 
+#include <GDBStub.h> //Debugging stub for GDB
 
 //Ntp dependencies - available from v2.4
 #include <time.h>
@@ -56,7 +56,7 @@ extern "C" {
    "20A-ESP8266__RTOS_SDK__Programming Guide__EN_v1.3.0.pdf"
 */
 #define TZ              0       // (utc+) TZ in hours
-#define DST_MN          60      // use 60mn for summer time in some countries
+#define DST_MN          00      // use 60mn for summer time in some countries
 #define TZ_MN           ((TZ)*60)
 #define TZ_SEC          ((TZ)*3600)
 #define DST_SEC         ((DST_MN)*60)
@@ -105,8 +105,9 @@ typedef struct {
 #include <SkybadgerStrings.h>
 
 //defaults for setup before replacing with values read from eeprom
+//Should be const but compiler barfs when copying into an array for later use
 const char* defaultHostname        =   "espDOM01";
-const char* defaultSensorHostname  =   "espSEN01";
+const char* defaultSensorHostname  =   "espSEN00";
 const char* defaultShutterHostname =   "espDSH01";
 
 //nullptr is pre-req for setup default function; 
@@ -114,9 +115,10 @@ char* myHostname         = nullptr;
 char* sensorHostname     = nullptr;
 char* shutterHostname    = nullptr;
 char* thisID             = nullptr;
+char* MQTTServerName     = nullptr;
 
 bool abortFlag = false; 
-float azimuthSyncOffset = 0.0F; //+ve values means tthe dome is further round N through E than returned from the raw reading. 
+float azimuthSyncOffset = 0.0F; //+ve values means the dome is further round N through E than returned from the raw reading. 
 float targetAzimuth = 0.0F;
 float currentAzimuth = 0.0F;    //+ve values are 0 N thro 90 E
 float bearing;
@@ -131,6 +133,7 @@ volatile boolean coarseTimerFlag = false;
 volatile boolean fineTimerFlag = false;
 volatile boolean timeoutTimerFlag = false;
 
+#include <LinkedList.h>      //https://github.com/ivanseidel/LinkedList
 LinkedList <cmdItem_t*> *domeCmdList;
 LinkedList <cmdItem_t*> *shutterCmdList;
 LinkedList <cmdItem_t*> *cmdStatusList; // use to track async completion state. 
@@ -150,10 +153,9 @@ HTTPClient hClient;
 
 //MQTT client
 PubSubClient client(mClient);
-volatile bool callbackFlag = 0;
-
-//JSON data formatter
-//DynamicJsonBuffer jsonBuffer(256);
+volatile bool callbackFlag = false;
+bool timeoutFlag = false;
+bool timerSet = false;
 
 //Encoder interface 
 #if defined _USE_ENCODER_FOR_DOME_ROTATION
@@ -178,6 +180,7 @@ void setupEncoder();
 #else
 bool setupCompass(String url);
 #endif
+
 void saveToEeprom();   //Started - incomplete
 void readFromEeprom(); //Started - incomplete
 void fineTimerHandler(void);
