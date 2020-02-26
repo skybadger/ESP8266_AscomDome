@@ -37,9 +37,9 @@ void onDomeIdle();
 int restQuery( String uri, String args, String& response, int method );
 float getAzimuth( float );
 void setupEncoder();
-bool setupCompass( String targetHost );
+bool setupCompass( String host );
 int getShutterStatus( String host );
-float getBearing( void );
+float getBearing( String host );
 
 void handleAltitudeGet(void)
 {
@@ -658,6 +658,14 @@ void handleSyncToAzimuthPut(void)
     return;
    }
   
+ void updateCmdResponseList( int shutterStatus )
+ {
+    //TODO - check list for status enum and update list to show complete
+    //Idea is that if we have a client come back to check, we answer. 
+    //In practise client polls status so may drop this. 
+    return;    
+ }
+  
   /*
    * Handler for domeAbort command
    */ 
@@ -668,7 +676,7 @@ void handleSyncToAzimuthPut(void)
     //turn off motor
     myMotor.setSpeedDirection( MOTOR_SPEED_OFF, MOTOR_DIRN_CW );
     //message to LCD  
-    //myLCD.writeLCD( 2, 0, "ABORT received - dome halted." );
+    myLCD.writeLCD( 2, 0, "ABORT received - dome halted." );
     // ? close shutter ?
     return;
   }
@@ -694,6 +702,7 @@ void handleSyncToAzimuthPut(void)
           break;
        case CMD_SHUTTER_ABORT:
           restQuery( uri, "status=abort", response, HTTP_PUT);
+          myLCD.writeLCD( 2, 0, "DSH ABORT" );
           break;
        case CMD_SHUTTERVAR_SET:
        default:
@@ -726,13 +735,19 @@ void handleSyncToAzimuthPut(void)
     {
       case SHUTTER_OPENING:
       if ( currentShutterStatus == SHUTTER_OPEN  )
+      {
         shutterStatus = SHUTTER_OPEN;
         //Should now update command response list...
+        updateCmdResponseList( shutterStatus );
+      }
         break;
       case SHUTTER_CLOSING:
       if ( currentShutterStatus == SHUTTER_CLOSED  )
+      {
         shutterStatus = SHUTTER_CLOSED;
         //Should now update command response list...
+        updateCmdResponseList( shutterStatus );
+      }
         break;
       
       // do nothing for these - they are static, unless they have unexpectedly changed
@@ -742,9 +757,16 @@ void handleSyncToAzimuthPut(void)
         //What are we going to do about it ?
       case SHUTTER_CLOSED:
       if( currentShutterStatus != SHUTTER_CLOSED )
+      {
         shutterStatus = SHUTTER_ERROR;
+        //Should now update command response list...
+        updateCmdResponseList( shutterStatus );        
+      }
       case SHUTTER_ERROR:  //bad state
-      //clear list ?
+        //What are we going to do about it ?
+        //Alert
+        //Send email 
+        //etc
         break;
       default:
         break;
@@ -762,6 +784,7 @@ void handleSyncToAzimuthPut(void)
     {
       //what to do ?
     }
+    // updateCmdResponseList( shutterStatus );        
   } 
   
   void setupEncoder()
@@ -796,7 +819,6 @@ void handleSyncToAzimuthPut(void)
       Serial.print( "Shutter compass bearing call not successful, response: " );    Serial.println( response );
       Serial.print( "JSON parsing status: " );    Serial.println( root.success() );
     }
-
     return status;
   }
 
@@ -809,14 +831,14 @@ void handleSyncToAzimuthPut(void)
     int httpCode = 0;
     long int startTime;
     long int endTime;
+    HTTPClient hClient;
+    hClient.setTimeout ( (uint16_t) 250 );    
+    hClient.setReuse( false );    
     
     DEBUG_HTTPCLIENT("restQuery request [%i] uri: %s args:%s\n", method, uri.c_str(), args.c_str() );
     startTime = millis();
     if ( hClient.begin( wClient, uri ) ) //uri must already have request args in it
     {
-      hClient.setReuse( true );
-      hClient.setTimeout ( (uint16_t) 250 );
-
       if( method == HTTP_GET )
       {
         httpCode = hClient.GET();
@@ -853,7 +875,7 @@ void handleSyncToAzimuthPut(void)
   /*
    * Function to determine bearing of dome - just return a sane value to the caller. Let the caller handler sync offsets. 
    */
-  float getBearing()
+  float getBearing( String host)
   {
     static int bearingRepeatCount = 0;
     static float lastBearing = 0.0F;
@@ -865,8 +887,8 @@ void handleSyncToAzimuthPut(void)
     
     //Update the bearing
     String uri = "http://";
-    uri.concat( sensorHostname );
-    uri.concat( "/bearing" );
+    uri.concat( host );
+    uri.concat( "/bearing" );    
     response = restQuery( uri, "", outbuf, HTTP_GET );
     DEBUG_HTTPCLIENT("GetBearing response code: %i, response: %s\n", response, outbuf.c_str() );
     JsonObject& root = jsonBuff.parse( outbuf );
@@ -875,12 +897,12 @@ void handleSyncToAzimuthPut(void)
     {
       DEBUG_HTTPCLIENT(" GetBearing: successful: %f \n", bearing );
       bearing = (float) root.get<float>("bearing");
-//      if( bearing >= 0.0F && bearing <= 360.0F )
-//        currentAzimuth = bearing;
+      if( bearing >= 0.0F && bearing <= 360.0F )
+        currentAzimuth = bearing;
       if ( lastBearing == bearing ) //We do this to check for sensor freeze
       {
         bearingRepeatCount ++;
-        DEBUG_HTTPCLIENT(" GetBearing: Sensor stuck detected @ %f\n", bearing );
+        DEBUG_HTTPCLIENT(" GetBearing: Sensor stuck %i detected @ %f\n", bearingRepeatCount, bearing );
         
         //reset the compass by resetting the target device
         if ( bearingRepeatCount > bearingRepeatLimit ) 
@@ -921,7 +943,7 @@ void handleSyncToAzimuthPut(void)
     DynamicJsonBuffer jsonBuff(256);
 
     String uri = String( "http://" );
-    uri.concat( shutterHostname );
+    uri.concat( host );
     uri.concat( "/shutter" );
     int response = restQuery( uri , "", outbuf, HTTP_GET  );
     JsonObject& root = jsonBuff.parse( outbuf ); 
@@ -937,5 +959,4 @@ void handleSyncToAzimuthPut(void)
     }
   return value;
   }
-
 #endif

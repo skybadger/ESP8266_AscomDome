@@ -2,6 +2,7 @@
 #define _ESP8266_ASCOMDOME_H_
 
 #define _DEBUG
+// #define DEBUG_HTTPCLIENT(...) Serial.printf( __VA_ARGS__ ) // 
 
 #define _ESP8266_01_
 //_ESP8266_12_
@@ -107,15 +108,21 @@ typedef struct {
 //defaults for setup before replacing with values read from eeprom
 //Should be const but compiler barfs when copying into an array for later use
 const char* defaultHostname        =   "espDOM01";
-const char* defaultSensorHostname  =   "espSEN00";
+const char* defaultSensorHostname  =   "espSEN01";
 const char* defaultShutterHostname =   "espDSH01";
 
 //nullptr is pre-req for setup default function; 
-char* myHostname         = nullptr;
-char* sensorHostname     = nullptr;
-char* shutterHostname    = nullptr;
-char* thisID             = nullptr;
-char* MQTTServerName     = nullptr;
+//char* myHostname         = nullptr;
+//char* sensorHostname     = nullptr;
+//char* shutterHostname    = nullptr;
+//char* thisID             = nullptr;
+//char* MQTTServerName     = nullptr;
+char* myHostname         = "espDOM01";
+char* sensorHostname     = "espSEN01.i-badger.co.uk";
+char* shutterHostname    = "espDSH01";
+char* thisID             = "espDOM01";
+char* MQTTServerName     = "obbo.i-badger.co.uk";
+
 
 bool abortFlag = false; 
 float azimuthSyncOffset = 0.0F; //+ve values means the dome is further round N through E than returned from the raw reading. 

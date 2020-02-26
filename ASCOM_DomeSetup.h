@@ -336,18 +336,18 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
 /*
  * Reset the device - Non-ASCOM call
  */
-  void handleRootReset()
-  {
-    String message;
-    DynamicJsonBuffer jsonBuffer(250);
-    JsonObject& root = jsonBuffer.createObject();
-    root["messageType"] = "Alert";
-    root["message"]= "Dome controller Resetting";
-    Serial.println( "Server resetting" );
-    root.printTo(message);
-    server.send(200, "application/json", message);
-    device.restart();
-    return;
-  }
-  
- #endif
+void handleRootReset()
+{
+  String message;
+  DynamicJsonBuffer jsonBuffer(250);
+  JsonObject& root = jsonBuffer.createObject();
+  root["messageType"] = "Alert";
+  root["message"]= "Dome controller Resetting";
+  Serial.println( "Server resetting" );
+  root.printTo(message);
+  server.send(200, "application/json", message);
+  device.restart();
+  return;
+}
+
+#endif

@@ -10,7 +10,7 @@
    Configure the rest interface to use this device's hostname (ESPDome01) and port (80)
    
    Implementing.
-   EEprom partially in place - needs testing
+   EEprom partially in place - needs ping -t testing
    Add MQTT callbacks for health - done - need to measure and add publish for Dome voltage
    
    Testing.
@@ -28,6 +28,7 @@
    Test handler functions 
    5, Add url to query for staus of async operations. Consider whether user just needs to call for status again. 
 
+zero-justify seconds and minutes in sprintf time string.
 To test:
  Download curl for your operating system. Linux variants and Windows powershell should already have it.
  e.g. curl -v -X PUT -d 'homePosition=270' http://EspDom01/Dome/0/API/v1/FilterCount
@@ -89,7 +90,7 @@ void setupWifi(void)
 
   //Setup sleep parameters
   //wifi_set_sleep_type(LIGHT_SLEEP_T);
-  wifi_set_sleep_type(NONE_SLEEP_T);
+  //wifi_set_sleep_type(NONE_SLEEP_T);
 
   Serial.println("WiFi setup complete & connected");
 }
@@ -98,26 +99,24 @@ void setup()
 {
   // put your setup code here, to run once:
   String outbuf;
-  DynamicJsonBuffer jsonBuff(256);
 
   //Minimise serial to one pin only. 
-  Serial.begin( 115200, SERIAL_8N1, SERIAL_TX_ONLY);
+  Serial.begin( 115200 );
+  //Serial.begin( 115200, SERIAL_8N1, SERIAL_TX_ONLY);
   Serial.println(F("ESP starting."));
   gdbstub_init();
-
-  Serial.setDebugOutput(true);
   delay(2000); 
 
   //Start time
   //Start NTP client - even before wifi.
   configTime(TZ_SEC, DST_SEC, timeServer1, timeServer2, timeServer3 );
-  now = time(nullptr);
   Serial.println( "Time Services setup");
       
   //Read internal state, apply defaults if we can't find user-set values in Eeprom.
-  EEPROM.begin(512);
-  readFromEeprom();
-  
+  //EEPROM.begin(512);
+  //readFromEeprom();
+  //setupDefaults();
+    
   //Setup defaults from EEPROM
   delay(5000);
   Serial.printf( "Entering Wifi setup for host %s\n", myHostname );
@@ -145,11 +144,12 @@ void setup()
   Wire.begin(4, 5);
   Serial.println("Configured pins for ESP8266-12");
 #endif
-  Wire.setClock(100000 );//100KHz target rate
+  Wire.setClock(500000 );//100KHz target rate
 
   //Open a connection to MQTT
-  DEBUGSL1("Starting to configure MQTT connection");
+  DEBUGS1("Starting to configure MQTT connection to :");DEBUGSL1( MQTTServerName );
   client.setServer( MQTTServerName, 1883 );
+  Serial.printf(" MQTT settings id: %s user: %s pwd: %s\n", thisID, pubsubUserID, pubsubUserPwd );
   client.connect( thisID, pubsubUserID, pubsubUserPwd ); 
   //Create a timer-based callback that causes this device to read the local i2C bus devices for data to publish.
   client.setCallback( callback );
@@ -184,7 +184,7 @@ void setup()
 #else
   //Magnetometer setup 
   if ( setupCompass( sensorHostname ) )
-    bearing = getBearing();
+    bearing = getBearing( sensorHostname );
   if ( bearing == 0.0F)
     Serial.println( "Dome rotation sensor suspect reading (0.0F) " );
   currentAzimuth = getAzimuth( bearing );
@@ -343,10 +343,11 @@ void loop()
   //Clear down flags
   if( fineTimer )
   {
-    bearing = getBearing();
+    String output = "";
+    bearing = getBearing( sensorHostname );
+   //Test: restQuery( "http://espSRV01.i-badger.co.uk/bearing", "", output, HTTP_GET );
     Serial.printf( "Loop: Bearing %f\n", bearing );
     currentAzimuth = getAzimuth( bearing);
-    Serial.printf( "Loop: Dome %i Shutter %i\n", domeStatus, shutterStatus );
     fineTimerFlag = false;
   }
   
@@ -354,6 +355,10 @@ void loop()
   {
     getTimeAsString( outbuf );
     
+    //Update domeStatus    
+    getShutterStatus( shutterHostname );
+    Serial.printf( "Loop: Dome %i Shutter %i\n", domeStatus, shutterStatus );
+
     //Clock tick onLCD 
     int index = 0;
     int lastIndex = 0;
@@ -425,24 +430,28 @@ void loop()
   }
 
   //Wrapper for web server args handling for URL query arguments that differ by case. The ALPACA API allows this!
+  /*
+   * Pass in the string you want to check exists. 
+   * modifies the string to the case-insensitive version found. 
+   */
   bool hasArgIC( String& check, ESP8266WebServer& ref, bool caseSensitive )
   {
     String matchName;
     if ( caseSensitive )
     {
-      int max = server.args();
+      int max = ref.args();
       for ( int i = 0; i < max; i++ )
       {
-        if( server.argName(i).equalsIgnoreCase( check ) )  
+        if( ref.argName(i).equalsIgnoreCase( check ) )  
         {
-          check = server.arg(i);          
+          check = ref.arg(i);          
           return true;
         }
       }
       return false;
     }
     else
-      return ( server.hasArg( check ) );
+      return ( ref.hasArg( check ) );
   }
 
 /* MQTT callback for subscription and topic.

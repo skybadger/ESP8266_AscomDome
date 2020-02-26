@@ -146,22 +146,23 @@ void saveToEeprom( void )
     if ( sensorHostname != nullptr ) 
         free ( sensorHostname );
     sensorHostname = (char*) calloc( nameLengthLimit, sizeof( char)  );
-    strncpy(  sensorHostname, defaultSensorHostname, nameLengthLimit );
+    strcpy(  sensorHostname, defaultSensorHostname );
 
     if ( shutterHostname != nullptr ) 
         free ( shutterHostname );
     shutterHostname = (char*) calloc( nameLengthLimit, sizeof( char)  );
-    strncpy(  shutterHostname, defaultShutterHostname, nameLengthLimit );
+    strcpy(  shutterHostname, defaultShutterHostname );
 
-    if ( MQTTServerName != nullptr ) 
+    if ( MQTTServerName != nullptr )
         free ( MQTTServerName );
     MQTTServerName = (char*) calloc( nameLengthLimit, sizeof( char)  );
-    strncpy(  MQTTServerName, mqtt_server, nameLengthLimit );
+    strcpy(  MQTTServerName, mqtt_server);
     
     if ( Name != nullptr ) 
         free ( Name );
     Name = (char*) calloc( nameLengthLimit, sizeof( char)  );
     strncpy(  Name, myHostname, nameLengthLimit );
+    
     Serial.printf( "Default values are: myHostname: %s, sensorHostname:%s, shutterHostname: %s, MQTT: %s, thisID: %s\n", myHostname, sensorHostname, shutterHostname, MQTTServerName, Name );
     /* Revisit this later. I'm sure it used to work 
     //Array of addresses (ie ptrs) of variables holding ptrs to char*
@@ -192,7 +193,7 @@ void saveToEeprom( void )
   
   float readFloatFromEeprom( uint8_t addr )
   {
-    int i=0;
+    unsigned int i=0;
     float value = 0.0F;
     uint8_t* ptr = (uint8_t*) malloc(sizeof(float) );
     
@@ -207,7 +208,7 @@ void saveToEeprom( void )
 
   void writeFloatToEeprom( uint8_t addr, float value )
   {
-    int i=0;
+    unsigned int i=0;
     uint8_t* ptr = (uint8_t*) malloc(sizeof(float) );
     
     *((float*) ptr) = value;
@@ -220,7 +221,7 @@ void saveToEeprom( void )
 
   int readIntFromEeprom( uint8_t addr )
   {
-    int i=0;
+    unsigned int i=0;
     int value = 0.0F;
     uint8_t* ptr = (uint8_t*) malloc(sizeof(int) );
     
@@ -235,11 +236,11 @@ void saveToEeprom( void )
 
   void writeIntToEeprom( uint8_t addr, int value )
   {
-    int i=0;
+    unsigned int i=0;
     uint8_t* ptr = (uint8_t*) malloc(sizeof(int) );
     
     *((int*) ptr) = value;
-    for ( i=0; i < sizeof(int); i++, addr++ )
+    for ( i=0; i < sizeof(int) ; i++, addr++ )
     {
        EEPROM.write( addr, ptr[i] ); 
     }
