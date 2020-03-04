@@ -32,9 +32,8 @@ void handlerNotFound()
   uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
   DynamicJsonBuffer jsonBuffer(250);
   JsonObject& root = jsonBuffer.createObject();
-  jsonResponseBuilder( root, clientID, transID, "HandlerNotFound", 0x500, "No REST handler found for argument - check ASCOM Dome v2 specification" );    
-  JsonObject& err = root.createNestedObject("ErrorMessage");
-  err["Value"] = "Dome REST handler not found or parameters incomplete";
+  jsonResponseBuilder( root, clientID, transID, "HandlerNotFound", invalidOperation , "No REST handler found for argument - check ASCOM Dome v2 specification" );    
+  root["Value"] = 0;
   root.printTo(message);
   server.send(responseCode, "text/json", message);
 }
@@ -48,9 +47,8 @@ void handlerNotImplemented()
 
   DynamicJsonBuffer jsonBuffer(250);
   JsonObject& root = jsonBuffer.createObject();
-  jsonResponseBuilder( root, clientID, transID, "HandlerNotFound", 0x500, "No REST handler implemented for argument - check ASCOM Dome v2 specification" );    
-  JsonObject& err = root.createNestedObject("ErrorMessage");
-  err["Value"] = "Dome REST handler not found or parameters incomplete";
+  jsonResponseBuilder( root, clientID, transID, "HandlerNotFound", notImplemented  , "No REST handler implemented for argument - check ASCOM Dome v2 specification" );    
+  root["Value"] = 0;
   root.printTo(message);
   server.send(responseCode, "text/json", message);
 }
@@ -73,22 +71,23 @@ void handleHostnamePut( void )
   String form;
   String errMsg;
   String newName;
+  String argToSearchFor = "hostName";
   
   debugURI( errMsg );
   DEBUGSL1 (errMsg);
   DEBUGSL1( "Entered handleHostnamePut" );
   
   //throw error message
-  if( server.hasArg("hostName"))
+  if( hasArgIC( argToSearchFor, server, false ) )
   {
-    newName = server.arg("hostName");
+    newName = server.arg( argToSearchFor);
   }
-  if( newName != NULL && newName.length() < nameLengthLimit)
+  if( newName != NULL && newName.length() < MAX_NAME_LENGTH )
   {
     //save new hostname and cause reboot - requires eeprom read at setup to be in place.  
-    newName.toCharArray( Name, newName.length(), 0 );
+    strcpy( myHostname, newName.c_str() );
     //Write new hostname to EEprom
-    //......
+    saveToEeprom();
     
     //Send response 
     server.send( 200, "text/html", "rebooting!" ); 
@@ -130,7 +129,7 @@ void handleDomeGoto( void )
   debugURI( errMsg );
   DEBUGSL1 (errMsg);
   DEBUGSL1( "Entered handleDomeGotoPut"  );
-  
+  //Add domeCmd 
   //throw error message
   errMsg = "handleDomeGotoPut: Not yet implemented";
   DEBUGSL1( errMsg );
@@ -150,22 +149,23 @@ void handleSyncOffsetPut( void)
   String localName;
   String errMsg;
   int newGoto = 0;
+  String argsToSearchFor[3] = { "syncOffset", "ClientID", "TransID" };
   
   debugURI( errMsg );
   DEBUGSL1 (errMsg);
   DEBUGSL1( "Entered handleSyncOffsetPut");
 
   name = nameStub;
-  if( server.hasArg( name ) && server.hasArg( "ClientID") && server.hasArg( "transID" ) )
+  if( hasArgIC( argsToSearchFor[0], server, false ) && hasArgIC( argsToSearchFor[1], server, false ) && hasArgIC( argsToSearchFor[2], server, false ) )
   {
-    localName = server.arg(name);
+    localName = server.arg(argsToSearchFor[0]);
     newGoto = (int) localName.toInt();    
     if ( newGoto >= 0 && newGoto <=360 )
     {
       azimuthSyncOffset = newGoto;
       //update current position by moving to current azimuth
       //Add to list at top.
-      addDomeCmd( server.arg( "clientID" ).toInt(), server.arg("transID").toInt(), CMD_DOME_SLEW, currentAzimuth );
+      addDomeCmd( server.arg( argsToSearchFor[1] ).toInt(), server.arg(argsToSearchFor[2]).toInt(), CMD_DOME_SLEW, currentAzimuth );
     }
   }  
   else
@@ -179,8 +179,7 @@ void handleSyncOffsetPut( void)
 
 void handleHomePositionPut(void)
 {
-  const String nameStub = "homePosition";
-  String name;
+  String argToSearchFor = "homePosition";
   String errMsg;
   String form;
   int newHome;
@@ -188,10 +187,9 @@ void handleHomePositionPut(void)
   debugURI(errMsg);
   DEBUGSL1 (errMsg);
   DEBUGSL1( "Entered handleHomePositionPut" );
-  name = nameStub;
-  if( server.hasArg(name) )
+  if( hasArgIC( argToSearchFor, server, false ) )
   {
-    newHome  = server.arg(name).toInt();
+    newHome  = server.arg(argToSearchFor).toInt();
     if ( newHome >= 0 && newHome <= 360)
     {
       homePosition = newHome;
@@ -209,7 +207,7 @@ void handleHomePositionPut(void)
 void handleParkPositionPut(void)
 {
   int i=0;
-  const String nameStub = "parkPosition";
+  String argToSearchFor = "parkPosition";
   String name;
   String errMsg;
   String form;
@@ -218,10 +216,9 @@ void handleParkPositionPut(void)
   debugURI(errMsg);
   DEBUGSL1 (errMsg);
   DEBUGSL1( "handleParkPositionPut" );
-  name = nameStub + i;
-  if( server.hasArg(name) )
+  if( hasArgIC( argToSearchFor, server, false ) )
   {
-    newPark  = server.arg(name).toInt();
+    newPark  = server.arg(argToSearchFor).toInt();
     if ( newPark >= 0 && newPark <= 360)
     {
       parkPosition = newPark;
@@ -270,12 +267,12 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
   //Device name - do we really want to enable this to be changed ?
   htmlForm += "<div id=\"Domenameset\" >";
   htmlForm += "<form action=\"http://";
-  htmlForm.concat( Name );
+  htmlForm.concat( ascomName );
   htmlForm += "/Name\" method=\"PUT\" id=\"domename\" >\n";
   htmlForm += "<h2> Enter new descriptive name for Dome driver </h2>\n";
   htmlForm += "<form action=\"Domename\" method=\"PUT\" id=\"domename\" >\n";
   htmlForm += "<input type=\"text\" name=\"wheelname\" value=\"";
-  htmlForm.concat( Name );
+  htmlForm.concat( ascomName );
   htmlForm += "\">\n";
   htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
   

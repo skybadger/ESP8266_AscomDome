@@ -27,6 +27,7 @@
    4, Update smd list to handle variable settings and fixup responses for async responses. Report to ascom community
    Test handler functions 
    5, Add url to query for staus of async operations. Consider whether user just needs to call for status again. 
+   6, Fix EEPROM handling - done. 
 
 zero-justify seconds and minutes in sprintf time string.
 To test:
@@ -69,7 +70,7 @@ void setupWifi(void)
 {
   //Setup Wifi
   int zz = 00;
-  WiFi.hostname(myHostname);
+  WiFi.hostname( myHostname );
   WiFi.mode(WIFI_STA);
   WiFi.begin( ssid1, password1 );
   Serial.println("Connecting");
@@ -83,14 +84,15 @@ void setupWifi(void)
     }
   }
   Serial.println("WiFi connected");
-  Serial.printf("Hostname: %s\n",      WiFi.hostname().c_str() );
-  Serial.printf("IP address: %s\n",    WiFi.localIP().toString().c_str() );
-  Serial.printf("DNS address 0: %s\n", WiFi.dnsIP(0).toString().c_str() );
-  Serial.printf("DNS address 1: %s\n", WiFi.dnsIP(1).toString().c_str() );   
-
+  Serial.printf("SSID: %s, Signal strength %i dBm \n\r", WiFi.SSID().c_str(), WiFi.RSSI() );
+  Serial.printf("Hostname: %s\n\r",       WiFi.hostname().c_str() );
+  Serial.printf("IP address: %s\n\r",     WiFi.localIP().toString().c_str() );
+  Serial.printf("DNS address 0: %s\n\r",  WiFi.dnsIP(0).toString().c_str() );
+  Serial.printf("DNS address 1: %s\n\r",  WiFi.dnsIP(1).toString().c_str() );
   //Setup sleep parameters
   //wifi_set_sleep_type(LIGHT_SLEEP_T);
-  //wifi_set_sleep_type(NONE_SLEEP_T);
+  wifi_set_sleep_type(NONE_SLEEP_T);
+  delay(5000);
 
   Serial.println("WiFi setup complete & connected");
 }
@@ -104,7 +106,7 @@ void setup()
   Serial.begin( 115200 );
   //Serial.begin( 115200, SERIAL_8N1, SERIAL_TX_ONLY);
   Serial.println(F("ESP starting."));
-  gdbstub_init();
+  //gdbstub_init();
   delay(2000); 
 
   //Start time
@@ -113,10 +115,9 @@ void setup()
   Serial.println( "Time Services setup");
       
   //Read internal state, apply defaults if we can't find user-set values in Eeprom.
-  //EEPROM.begin(512);
-  //readFromEeprom();
-  //setupDefaults();
-    
+  EEPROM.begin(512);
+  readFromEeprom();    
+  
   //Setup defaults from EEPROM
   delay(5000);
   Serial.printf( "Entering Wifi setup for host %s\n", myHostname );
@@ -144,7 +145,7 @@ void setup()
   Wire.begin(4, 5);
   Serial.println("Configured pins for ESP8266-12");
 #endif
-  Wire.setClock(500000 );//100KHz target rate
+  Wire.setClock(50000 );//100KHz target rate
 
   //Open a connection to MQTT
   DEBUGS1("Starting to configure MQTT connection to :");DEBUGSL1( MQTTServerName );
@@ -181,21 +182,8 @@ void setup()
   //Use one of these to track the dome position
 #ifdef _USE_ENCODER_FOR_DOME_ROTATION
   //setupEncoder();
-#else
-  //Magnetometer setup 
-  if ( setupCompass( sensorHostname ) )
-    bearing = getBearing( sensorHostname );
-  if ( bearing == 0.0F)
-    Serial.println( "Dome rotation sensor suspect reading (0.0F) " );
-  currentAzimuth = getAzimuth( bearing );
 #endif
-
-  Serial.println( "Dome rotation sensor connected" );
-  
-  //Setup domeHW state 
-  //remote device on the rotating dome part
-  shutterStatus = getShutterStatus( shutterHostname );
-  
+ 
   //Register Web server handler functions 
   //ASCOM dome-specific functions
   server.on("/api/v1/dome/0/altitude",                   HTTP_GET, handleAltitudeGet ); //tested - 0
@@ -223,18 +211,18 @@ void setup()
   server.on("/api/v1/dome/0/slewtoaltitude",            HTTP_PUT,handleSlewToAltitudePut);
   server.on("/api/v1/dome/0/slewtoazimuth",             HTTP_PUT,handleSlewToAzimuthPut);
   server.on("/api/v1/dome/0/synctoazimuth",             HTTP_PUT,handleSyncToAzimuthPut);
-  
+ 
 //Common ASCOM function handlers
-  server.on("/api/v1/dome/0/Action",        HTTP_PUT, handleAction );              //Tested: Not implemented
-  server.on("/api/v1/dome/0/CommandBlind",  HTTP_PUT, handleCommandBlind );        //These two have fdiffernt responses
-  server.on("/api/v1/dome/0/CommandBool",   HTTP_PUT, handleCommandBool );         //These two have fdiffernt responses
-  server.on("/api/v1/dome/0/CommandString", HTTP_GET, handleCommandString );       //tested
-  server.on("/api/v1/dome/0/Connected",               handleConnected );           //tested  
-  server.on("/api/v1/dome/0/Description",   HTTP_GET, handleDescriptionGet );      //tested
-  server.on("/api/v1/dome/0/DriverInfo",    HTTP_GET, handleDriverInfoGet );       //freezes/times out
-  server.on("/api/v1/dome/0/DriverVersion", HTTP_GET, handleDriverVersionGet );    //tested
-  server.on("/api/v1/dome/0/Name",          HTTP_GET, handleNameGet ); //tested    //tested - doesnt return hostname
-  server.on("/api/v1/dome/0/Actions",       HTTP_GET, handleSupportedActionsGet ); //tested
+  server.on("/api/v1/dome/0/action",        HTTP_PUT, handleAction );              //Tested: Not implemented
+  server.on("/api/v1/dome/0/commandblind",  HTTP_PUT, handleCommandBlind );        //These two have fdiffernt responses
+  server.on("/api/v1/dome/0/commandbool",   HTTP_PUT, handleCommandBool );         //These two have fdiffernt responses
+  server.on("/api/v1/dome/0/commandstring", HTTP_GET, handleCommandString );       //tested
+  server.on("/api/v1/dome/0/connected",               handleConnected );           //tested  
+  server.on("/api/v1/dome/0/description",   HTTP_GET, handleDescriptionGet );      //tested
+  server.on("/api/v1/dome/0/driverinfo",    HTTP_GET, handleDriverInfoGet );       //freezes/times out
+  server.on("/api/v1/dome/0/driverversion", HTTP_GET, handleDriverVersionGet );    //tested
+  server.on("/api/v1/dome/0/name",          HTTP_GET, handleNameGet ); //tested    //tested - doesnt return hostname
+  server.on("/api/v1/dome/0/actions",       HTTP_GET, handleSupportedActionsGet ); //tested
   
   //Custom and setup handlers used by the custom setup form 
   //ASCOM ALPACA doesn't support any way to tell the REST device some of its basic setup constants so you have to 
@@ -266,9 +254,16 @@ void setup()
   server.begin();
   Serial.println( "webserver setup complete");
    
+  //Get values
+  domeStatus = getShutterStatus ( shutterHostname );
+  bearing = getBearing( sensorHostname );
+  currentAzimuth = getAzimuth( bearing);
+  atHome = (currentAzimuth <= (homePosition + acceptableAzimuthError/2) && currentAzimuth >= (homePosition - acceptableAzimuthError/2) );
+  atPark = (currentAzimuth <= (parkPosition + acceptableAzimuthError/2) && currentAzimuth >= (parkPosition - acceptableAzimuthError/2) );
+    
   //Start timers last
   ets_timer_arm_new( &coarseTimer, 1000,     1/*repeat*/, 1);//millis
-  ets_timer_arm_new( &fineTimer,   250,      1/*repeat*/, 1);//millis
+  ets_timer_arm_new( &fineTimer,   500,      1/*repeat*/, 1);//millis
   //ets_timer_arm_new( &timeoutTimer, 2500, 0/*one-shot*/, 1);
 
   //Show welcome message
@@ -297,89 +292,78 @@ void onTimeoutTimer( void* pArg )
 void loop()
 {
 	String outbuf;
+  String LCDOutput = "";
   
-  //Grab a copy in case it changes while we are running.
-  bool coarseTimer = coarseTimerFlag;
-  bool fineTimer = fineTimerFlag;
-    
   if( WiFi.status() != WL_CONNECTED)
   {
       device.restart();
   }
 
-  // Main code here, to run repeatedly:
-  //Handle state changes
-  //in dome  
-  switch ( domeStatus )
+  //Operate and Clear down flags
+  if( fineTimerFlag )
   {
-    case DOME_IDLE:
-      onDomeIdle();
-      break;
-    case DOME_SLEWING:
-      onDomeSlew(); 
-      break;   
-    case DOME_ABORT:
-      onDomeAbort();     
-      break;
-    default:
-      break;
-  }
-
-  //in shutter
-  switch( shutterStatus )
-  {
-    case SHUTTER_CLOSED:
-    case SHUTTER_OPEN:
-         onShutterIdle();
-         break;
-    case SHUTTER_OPENING:
-    case SHUTTER_CLOSING:    
-         onShutterSlew(); 
-         break;
-    default:
-         break;
-  }
-
-  //Clear down flags
-  if( fineTimer )
-  {
-    String output = "";
     bearing = getBearing( sensorHostname );
-   //Test: restQuery( "http://espSRV01.i-badger.co.uk/bearing", "", output, HTTP_GET );
-    Serial.printf( "Loop: Bearing %f\n", bearing );
+    //Serial.printf( "Loop: Bearing %3.2f\n", bearing );
     currentAzimuth = getAzimuth( bearing);
     fineTimerFlag = false;
   }
   
-  if ( coarseTimer )
+  if ( coarseTimerFlag )
   {
-    getTimeAsString( outbuf );
-    
     //Update domeStatus    
     getShutterStatus( shutterHostname );
     Serial.printf( "Loop: Dome %i Shutter %i\n", domeStatus, shutterStatus );
 
+    // Main code here, to run repeatedly:
+    //Handle state changes
+    //in dome  
+    switch ( domeStatus )
+    {
+      case DOME_IDLE:    onDomeIdle();
+                         break;
+      case DOME_SLEWING: onDomeSlew(); 
+                         break;   
+      case DOME_ABORT:   onDomeAbort();     
+                         break;
+      default:
+        break;
+    }
+  
+    //in shutter
+    switch( shutterStatus )
+    {
+      case SHUTTER_CLOSED:
+      case SHUTTER_OPEN:   onShutterIdle();
+                           break;
+      case SHUTTER_OPENING:
+      case SHUTTER_CLOSING:onShutterSlew(); 
+                           break;
+      default:
+           break;
+    }
+ 
     //Clock tick onLCD 
     int index = 0;
     int lastIndex = 0;
     String output = "";
+    getTimeAsString( outbuf );
     index = outbuf.indexOf( " " );
     lastIndex = outbuf.indexOf( "." );
     if( index >= 0 && lastIndex >= index )
     {
-      output = outbuf.substring( index, lastIndex );
-      myLCD.writeLCD( 1,1, output );
+      LCDOutput = outbuf.substring( index, lastIndex );
+      myLCD.writeLCD( 1,1, LCDOutput );
     } 
     coarseTimerFlag = false;
   }
  
   if( client.connected() )
   {
-    if (callbackFlag == true )
+    if (callbackFlag )
     {
-      //publish results
-      ;; //
+      //publish any results ?
       callbackFlag = false;
+      publishHealth();
     }
     client.loop(); 
   }    //Service MQTT keep-alives
@@ -477,7 +461,7 @@ void callback(char* topic, byte* payload, unsigned int length)
   DynamicJsonBuffer jsonBuffer(256);  
   JsonObject& root = jsonBuffer.createObject();
 
-  getTimeAsString( timestamp);
+  getTimeAsString( timestamp );
   root["time"] = timestamp;
 
   // Once connected, publish an announcement...
@@ -486,9 +470,9 @@ void callback(char* topic, byte* payload, unsigned int length)
     root["message"] = "Dome connected & operating";
   else
     root["message"] = "Dome ready for connection";
-
+  root.printTo( output );
   outTopic = outHealthTopic;
   outTopic.concat( myHostname );
   client.publish( outTopic.c_str(), output.c_str() );  
-  Serial.print( outTopic );Serial.print( " published: " ); Serial.println( output );
+  //Serial.print( outTopic );Serial.print( " published: " ); Serial.println( output );
  }

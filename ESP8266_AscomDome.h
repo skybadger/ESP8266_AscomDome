@@ -74,7 +74,7 @@ enum shutterState            { SHUTTER_OPEN, SHUTTER_CLOSED, SHUTTER_OPENING, SH
 enum shutterCmd              { CMD_SHUTTER_ABORT=0, CMD_SHUTTER_OPEN=4, CMD_SHUTTER_CLOSE=5, CMD_SHUTTERVAR_SET };
 enum motorSpeed: uint8_t     { MOTOR_SPEED_OFF=0, MOTOR_SPEED_SLOW_SLEW=80, MOTOR_SPEED_FAST_SLEW=120 };
 enum motorDirection: uint8_t { MOTOR_DIRN_CW=0, MOTOR_DIRN_CCW=1 };
-enum I2CConst                { I2C_READ = 0x70, I2C_WRITE = 0x00 };  
+enum I2CConst                { I2C_READ = 0x80, I2C_WRITE = 0x00 };  
 
 //Dome Encoder information
 #ifdef _USE_ENCODER_FOR_DOME_ROTATION
@@ -108,20 +108,22 @@ typedef struct {
 //defaults for setup before replacing with values read from eeprom
 //Should be const but compiler barfs when copying into an array for later use
 const char* defaultHostname        =   "espDOM01";
-const char* defaultSensorHostname  =   "espSEN01";
-const char* defaultShutterHostname =   "espDSH01";
+const char* defaultSensorHostname  =   "espSEN01.i-badger.co.uk";
+const char* defaultShutterHostname =   "espDSH01.i-badger.co.uk";
 
 //nullptr is pre-req for setup default function; 
-//char* myHostname         = nullptr;
-//char* sensorHostname     = nullptr;
-//char* shutterHostname    = nullptr;
-//char* thisID             = nullptr;
-//char* MQTTServerName     = nullptr;
-char* myHostname         = "espDOM01";
-char* sensorHostname     = "espSEN01.i-badger.co.uk";
-char* shutterHostname    = "espDSH01";
-char* thisID             = "espDOM01";
-char* MQTTServerName     = "obbo.i-badger.co.uk";
+char* myHostname         = nullptr;
+char* sensorHostname     = nullptr;
+char* shutterHostname    = nullptr;
+char* thisID             = nullptr;
+char* MQTTServerName     = nullptr;
+
+//char* myHostname         = "espDOM01";
+//char* sensorHostname     = "espSEN01.i-badger.co.uk";
+//char* shutterHostname    = "espDSH01.i-badger.co.uk";
+//char* thisID             = "espDOM01";
+//char* MQTTServerName     = "obbo.i-badger.co.uk";
+
 
 
 bool abortFlag = false; 
@@ -156,9 +158,8 @@ ESP8266HTTPUpdateServer updater;
 //REST API client
 WiFiClient wClient;
 WiFiClient mClient;
-HTTPClient hClient;
 
-//MQTT client
+//MQTT client - use separate WiFi client as an attempt to separate issues. 
 PubSubClient client(mClient);
 volatile bool callbackFlag = false;
 bool timeoutFlag = false;
@@ -205,7 +206,8 @@ const String Description = "Skybadger ESP2866-based wireless ASCOM Dome controll
 const String InterfaceVersion = "2";
 //setup later since we are allowing this to be dynamic. 
 //pre-req for setup default function; 
-char* Name = nullptr; 
+const char* defaultAscomName = "Skybadger Dome 01"; 
+char* ascomName = nullptr;
 
 //ASCOM variables
 const int defaultHomePosition = 180;
@@ -216,7 +218,6 @@ int homePosition = defaultHomePosition;
 int parkPosition = defaultParkPosition;
 int altitude = 0;
 int azimuth = 0; 
-int azimuthOffset = 0;
 const bool canFindHome = true; 
 const bool canPark = true;
 const bool canSetAzimuth = true;
@@ -225,8 +226,8 @@ const bool canSetPark = true;
 const bool canSetShutter = false;
 bool canSlave = false;
 const bool canSyncAzimuth = true;
-const bool slaved = false;
-const bool slewing = false;
+bool slaved = false;
+bool slewing = false;
 
 //Attached I2C device address list
 //const uint8_t compassAddr = 0x0d; - no longer an attached device - remove in the fullness.

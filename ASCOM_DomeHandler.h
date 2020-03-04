@@ -4,9 +4,11 @@ File to be included into relevant device REST setup
 //Assumes Use of ARDUINO ESP8266WebServer for entry handlers
 #if !defined _ESP8266_DomeHandler_h_ 
 #define _ESP8266_DomeHandler_h_
+#include "AlpacaErrorConsts.h"
 #include "ESP8266_AscomDome.h"
 #include "ASCOMAPIDOME_rest.h"     //Definitions for functions
 #include "JSONHelperFunctions.h"
+
 #include <LinkedList.h>
 
 /* 
@@ -62,27 +64,29 @@ void handleAltitudeGet(void)
     {
       
     }
-    THis is the sort of way we would like to behave
+    This is the sort of way we would like to behave
     */
     
     root["Value"] = altitude;
     //JsonArray& offsets = root.createNestedArray("Value");
     root.printTo(message);
+    DEBUGSL1( message );    
     server.send(200, "text/json", message);
     return ;
 }
 
 void handleAtHomeGet( void)
 {
-    String message;
+     String message;
     uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
     DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
     jsonResponseBuilder( root, clientID, transID, "AtHome", 0, "" );    
-    root["Value"] = atHome;
+    root["Value"] = ( abs( currentAzimuth - homePosition ) <= acceptableAzimuthError/2 )? atHome = true : atHome = false;
     //JsonArray& offsets = root.createNestedArray("Value");
     root.printTo(message);
+    DEBUGSL1( message );
     server.send(200, "text/json", message);
     return ;
 }
@@ -95,12 +99,11 @@ void handleAtParkGet(void)
     DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
     jsonResponseBuilder( root, clientID, transID, "AtPark", 0, "" );    
-    root["Value"] = atPark;
-    //JsonArray& offsets = root.createNestedArray("Value");
+    root["Value"] = ( abs( currentAzimuth - parkPosition) < acceptableAzimuthError/2 ) ? atPark = true : atPark = false;
     root.printTo(message);
+
     server.send(200, "text/json", message);
     return ;
-   
 }
 
 void handleAzimuthGet(void)
@@ -114,6 +117,7 @@ void handleAzimuthGet(void)
     root["Value"] = currentAzimuth;
     //JsonArray& offsets = root.createNestedArray("Value");
     root.printTo(message);
+    DEBUGSL1( message );
     server.send(200, "text/json", message);
     return ;
 }
@@ -172,10 +176,12 @@ void handleCanSetAzimuthGet(void)
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
     DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
-    jsonResponseBuilder( root, clientID, transID, "CanSetAzimuth", 0, "" );    
+    jsonResponseBuilder( root, clientID, transID, "CanSetAzimuth", Success, "" );    
     root["Value"] = canSetAzimuth;
-    //JsonArray& offsets = root.createNestedArray("Value");
     root.printTo(message);
+#ifdef DEBUG_ESP_HTTP_SERVER
+DEBUG_OUTPUT.printf( "handleCanSetAzimuthGet: output:%s\n", message.c_str() );
+#endif
     server.send(200, "text/json", message);
     return ;  
 }
@@ -189,8 +195,10 @@ void handleCanSetParkGet(void)
     JsonObject& root = jsonBuffer.createObject();
     jsonResponseBuilder( root, clientID, transID, "CanSetPark", 0, "" );    
     root["Value"] = canSetPark;
-    //JsonArray& offsets = root.createNestedArray("Value");
-    root.printTo(message);
+    root.prettyPrintTo(message);
+#ifdef DEBUG_ESP_HTTP_SERVER
+DEBUG_OUTPUT.printf( "handleCanSetParkGet: output:%s\n", message.c_str() );
+#endif
     server.send(200, "text/json", message);
     return ;  
 }
@@ -202,10 +210,11 @@ void handleCanSetShutterGet(void)
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
     DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
-    jsonResponseBuilder( root, clientID, transID, "CanSetShutter", 0, "" );    
+    jsonResponseBuilder( root, clientID, transID, "CanSetShutter", Success, "" );    
     root["Value"] = canSetShutter;
     //JsonArray& offsets = root.createNestedArray("Value");
     root.printTo(message);
+    DEBUGSL1( message );
     server.send(200, "text/json", message);
     return ;  
 }
@@ -217,10 +226,10 @@ void handleCanSlaveGet(void)
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
     DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
-    jsonResponseBuilder( root, clientID, transID, "CanSlave", 0, "" );    
+    jsonResponseBuilder( root, clientID, transID, "CanSlave", Success, "" );    
     root["Value"] = canSlave;
-    //JsonArray& offsets = root.createNestedArray("Value");
     root.printTo(message);
+    DEBUGSL1( message );
     server.send(200, "text/json", message);
     return ;  
 }
@@ -232,9 +241,8 @@ void handleCanSyncAzimuthGet(void)
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
     DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
-    jsonResponseBuilder( root, clientID, transID, "CanSyncAzimuth", 0, "" );    
+    jsonResponseBuilder( root, clientID, transID, "CanSyncAzimuth", Success, "" );    
     root["Value"] = canSyncAzimuth;
-    //JsonArray& offsets = root.createNestedArray("Value");
     root.printTo(message);
     server.send(200, "text/json", message);
     return ;  
@@ -248,10 +256,10 @@ void handleSlavedGet(void)
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
     DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
-    jsonResponseBuilder( root, clientID, transID, "Slaved", 400, "Not Implemented" );    
+    jsonResponseBuilder( root, clientID, transID, "Slaved", notImplemented, "Not Implemented" );    
     root["Value"] = slaved;
-    //JsonArray& offsets = root.createNestedArray("Value");
     root.printTo(message);
+    DEBUGSL1( message );
     server.send(200, "text/json", message);
     return ;  
 }
@@ -264,9 +272,8 @@ void handleSlavedPut(void)
 
     DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
-    jsonResponseBuilder( root, clientID, transID, "Slaved", 400, "Not Implemented" );    
+    jsonResponseBuilder( root, clientID, transID, "Slaved", notImplemented, "Not Implemented" );    
     root["Value"] = false;
-    //JsonArray& offsets = root.createNestedArray("Value");
     root.printTo(message);
     server.send(200, "text/json", message);
     return ;  
@@ -279,10 +286,10 @@ void handleSlewingGet(void)
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
     DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
-    jsonResponseBuilder( root, clientID, transID, "Slewing", 0, "" );    
+    jsonResponseBuilder( root, clientID, transID, "Slewing", Success, "" );    
     root["Value"] = ( domeStatus == DOME_SLEWING ) ? true:false;
-    //JsonArray& offsets = root.createNestedArray("Value");
     root.printTo(message);
+    DEBUGSL1( message );
     server.send(200, "text/json", message);
     return ; 
 }
@@ -300,7 +307,7 @@ void handleAbortSlewPut(void)
       //abort slew
       //Need to use shift not just add 
       addDomeCmd( clientID, transID, CMD_DOME_ABORT, 0 );
-      jsonResponseBuilder( root, clientID, transID, "AbortSlew", 0, "" );
+      jsonResponseBuilder( root, clientID, transID, "AbortSlew", Success, "" );
       abortFlag = true;
     }
     else
@@ -323,7 +330,7 @@ void handleShutterStatusGet(void)
   //in this driver model, each device has a separate ip address ,so can only be one device. hence ignore device-number
   jsonResponseBuilder( root, clientID, transID, "ShutterStatus", 0, "" );
   root["Value"] = shutterStatus;
-
+//0 = Open, 1 = Closed, 2 = Opening, 3 = Closing, 4 = Shutter status error
   //JsonArray& offsets = root.createNestedArray("Value");
   root.printTo(message);
   server.send(200, "text/json", message);
@@ -409,21 +416,22 @@ void handleSetParkPut(void)
    uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
    uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
    int location = 0;
+   String argToSearchFor = "location";
    DynamicJsonBuffer jsonBuffer(256);
    JsonObject& root = jsonBuffer.createObject();
    //in this driver model, each device has a separate ip address ,so can only be one device. hence ignore device-number
-   if( domeStatus == DOME_IDLE && server.hasArg("location") )
+   if( domeStatus == DOME_IDLE && hasArgIC( argToSearchFor, server, false) )
     {
       //Set new park location.
       //...
-      location = (int) server.arg("location").toInt();
+      location = (int) server.arg( argToSearchFor ).toInt();
       location %= 360;
       parkPosition = location;
       jsonResponseBuilder( root, clientID, transID, F("SetPark"), 0, "" );    
     }
    else
     {
-      jsonResponseBuilder( root, clientID, transID, F("SetPark"), 400, F("Dome not idle") );       
+      jsonResponseBuilder( root, clientID, transID, F("SetPark"), valueNotSet, F("Dome not idle") );       
     }
     root.printTo(message);
     server.send(200, "text/json", message);
@@ -438,19 +446,13 @@ void handleParkPut(void)
    uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
    DynamicJsonBuffer jsonBuffer(256);
    JsonObject& root = jsonBuffer.createObject();
+
    //in this driver model, each device has a separate ip address ,so can only be one device. Hence ignore device-number
-   if( domeStatus == DOME_IDLE )
-    {
-      addDomeCmd( clientID, transID, CMD_DOME_SLEW, parkPosition );      
-      jsonResponseBuilder( root, clientID, transID, F("Park"), 0, "" );    
-    }
-   else
-    {
-      jsonResponseBuilder( root, clientID, transID, F("Park"), 400, F("Dome not idle, command queued") );       
-    }
-    root.printTo(message);
-    server.send(200, "text/json", message);
-    return ;      
+   addDomeCmd( clientID, transID, CMD_DOME_SLEW, parkPosition );      
+   jsonResponseBuilder( root, clientID, transID, F("Park"), 0, "" );    
+   root.printTo(message);
+   server.send(200, "text/json", message);
+   return ;      
 }
 
 void handleSlewToAltitudePut(void)
@@ -462,18 +464,21 @@ void handleSlewToAltitudePut(void)
    DynamicJsonBuffer jsonBuffer(256);
    JsonObject& root = jsonBuffer.createObject();
    //in this driver model, each device has a separate ip address ,so can only be one device. hence ignore device-number
-   if( domeStatus == DOME_IDLE && server.hasArg("altitude") )
+   String argToSearchFor = "altitude";
+   if( domeStatus == DOME_IDLE && hasArgIC( argToSearchFor, server, false) )
     {
       //Set new shutter altitude.
-      location = server.arg("altitude").toInt();
+      location = server.arg( argToSearchFor ).toInt();
       location %= 110;
+      addShutterCmd( clientId, transId, CMD_SHUTTER_OPEN, targetAltitude );
+
       //cmdItem_t* pCmd = domeCmdList->add( clientID, transID, CMD_DOMEVAR_SET, location );
       targetAltitude = location;
       jsonResponseBuilder( root, clientID, transID, F("SlewToAzimuth"), 0, "" );    
     }
    else
     {
-      jsonResponseBuilder( root, clientID, transID, F("SlewToAzimuth"), 400, F("Dome not idle") );       
+      jsonResponseBuilder( root, clientID, transID, F("SlewToAzimuth"), valueNotSet, F("Dome not idle") );       
     }
     root.printTo(message);
     server.send(200, "text/json", message);
@@ -486,23 +491,26 @@ void handleSlewToAzimuthPut(void)
    uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
    uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
    int iTargetAzimuth = 0;
+   String argToSearchFor = "Azimuth";
    DynamicJsonBuffer jsonBuffer(256);
    JsonObject& root = jsonBuffer.createObject();
    //in this driver model, each device has a separate ip address ,so can only be one device. hence ignore device-number
-   if( domeStatus == DOME_IDLE && server.hasArg("Azimuth") )
+   if( domeStatus == DOME_IDLE && hasArgIC( argToSearchFor, server, false ) )
     {
       //Set new park location.
       //...
-      iTargetAzimuth = (int) server.arg("Azimuth").toInt();
+      iTargetAzimuth = (int) server.arg( argToSearchFor ).toInt();
       iTargetAzimuth %= 360;
       iTargetAzimuth += 360;
       iTargetAzimuth %= 360;
       targetAzimuth = (float) iTargetAzimuth;
+      addDomeCmd( clientID, transID, CMD_DOME_SLEW, parkPosition );      
+
       jsonResponseBuilder( root, clientID, transID, F("SlewToAzimuth"), 0, "" );    
     }
    else
     {
-      jsonResponseBuilder( root, clientID, transID, "SlewToAzimuth", 400, "Dome not idle" );       
+      jsonResponseBuilder( root, clientID, transID, "SlewToAzimuth", valueNotSet, "Dome not idle" );       
     }
     root.printTo(message);
     server.send(200, "text/json", message);
@@ -515,28 +523,28 @@ void handleSyncToAzimuthPut(void)
    uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
    uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
    int iTargetAzimuth = 0;
-   float azimuthOffset = 0.0F;
+   String argToSearchFor = "Azimuth";
    DynamicJsonBuffer jsonBuffer(256);
    JsonObject& root = jsonBuffer.createObject();
    //in this driver model, each device has a separate ip address ,so can only be one device. hence ignore device-number
-   if( domeStatus == DOME_IDLE && server.hasArg("Azimuth") )
+   if( domeStatus == DOME_IDLE && hasArgIC( argToSearchFor, server, false ) )
    {
       //Set new (actual) azimuth location.
       //...
-      iTargetAzimuth = (int) server.arg( "Azimuth" ).toInt();
+      iTargetAzimuth = (int) server.arg( argToSearchFor ).toInt();
       iTargetAzimuth %= 360;
       iTargetAzimuth += 360;
       iTargetAzimuth %= 360;
             
       ///the offset is the difference between where the dome is currently pointing and where we are told it is pointing.
-      azimuthOffset = (float) ( iTargetAzimuth - currentAzimuth );
+      azimuthSyncOffset = (float) ( iTargetAzimuth - currentAzimuth );
       //Tell the dome to move to the target azimuth using the updated correction
       addDomeCmd( clientID, transID, CMD_DOME_SLEW, iTargetAzimuth );
       jsonResponseBuilder( root, clientID, transID, F("SyncToAzimuth"), 0, "" );    
    }
    else
    {
-      jsonResponseBuilder( root, clientID, transID, "SyncToAzimuth", 400, "Dome not idle" );       
+      jsonResponseBuilder( root, clientID, transID, "SyncToAzimuth", valueNotSet, "Dome not idle" );       
     }
     root.printTo(message);
     server.send(200, F("text/json"), message);
@@ -617,14 +625,15 @@ void handleSyncToAzimuthPut(void)
       if( abs( localAzimuth - homePosition ) < acceptableAzimuthError )
         atHome = true;
       DEBUGSL1( "Dome stopped at target");
-      //myLCD.write( 2, 0, "Dome halted at target." );
+      //myLCD.write( 2, 0, "Slew complete." );
     }
     else if ( abs(distance < slowAzimuthRange ) )   
     {
       speed = MOTOR_SPEED_SLOW_SLEW;
       DEBUGS1( "Dome target distance: ");
       DEBUGSL1( distance );
-      DEBUGSL1( "Dome speed set to slow slew");
+      DEBUGSL1( "Slew::Slow");
+      //myLCD.write( 2, 0, "Slew::Slow" );      
     }
     else
     {
@@ -632,6 +641,7 @@ void handleSyncToAzimuthPut(void)
       DEBUGS1( "Dome target distance: ");
       DEBUGSL1( distance );
       DEBUGSL1( "Dome speed set to fast slew");    
+      //myLCD.write( 2, 0, "Slew::Fast" );
     }
     
     //Work out the direction. 
@@ -681,16 +691,17 @@ void handleSyncToAzimuthPut(void)
     return;
   }
 
-  void onShutterIdle()
-  {
-    String response = "";
-    //Get next command if there is one. 
+void onShutterIdle()
+{
+  String response = "";
+  String uri = "http://";
 
-    cmdItem_t* pCmd = nullptr;
-    if ( shutterCmdList->size() > 0 ) 
-      pCmd = shutterCmdList->pop();
-    
-    String uri = "http://";
+  //Get next command if there is one. 
+  cmdItem_t* pCmd = nullptr;
+  if ( shutterCmdList->size() > 0 ) 
+  {
+    pCmd = shutterCmdList->pop();
+  
     uri.concat( sensorHostname);
     uri.concat("/shutter");
     
@@ -709,6 +720,7 @@ void handleSyncToAzimuthPut(void)
         break;
     }
   }
+}
   
   /* Function to hande shutter slew command. 
      Uses rest aPi to talk to shutter controller on rotating dome section

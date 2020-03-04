@@ -69,7 +69,7 @@ class I2CLCD {
       length = letters.length() + 1; 
       char *buf = new char[ length ];
       letters.toCharArray( buf, length, 0);
-      Serial.printf( "writeLCD %i letters:%s\n", length, buf );
+      //Serial.printf( "writeLCD %i letters:%s\n", length, buf );
 
       //Move to row/col
       outData = new byte[3];

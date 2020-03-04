@@ -20,6 +20,8 @@ extern ...
 void readFromEeprom()
 {
   int addr = 0;
+  char tempBuf[30];
+  
   if( ( (char) EEPROM.read(0) ) != '*' )
   {
     //read
@@ -28,53 +30,93 @@ void readFromEeprom()
     saveToEeprom();
   }  
 
+  //Test readback of contents
+  char ch;
+  int i = 0;
+  String input;
+  for ( i = 0; i < 500 ; i++ )
+  {
+    ch = (char) EEPROM.read( i );
+    if ( ch == '\0' )
+      ch = '_';
+    if ( (i % 25) == 0 )
+      input.concat( "\n\r" );
+    input.concat( ch );
+  }
+
+  Serial.printf( "EEPROM contents before: \n %s \n", input.c_str() );
+
   DEBUGSL1( "Existing eeprom settings found - reading existing.." );
   addr = 1;
-  currentAzimuth = (float) readFloatFromEeprom( addr );
+  EEPROMReadAnything( addr, azimuthSyncOffset );
+  addr += ( sizeof( float) );
+  EEPROMReadAnything( addr, currentAzimuth );
   targetAzimuth = currentAzimuth;
   addr += ( sizeof( float) );
-  azimuthOffset = (float) readFloatFromEeprom( addr );
-  addr += ( sizeof( float) );
-  homePosition = (int) readIntFromEeprom( addr );
+  EEPROMReadAnything( addr, homePosition);
   addr += ( sizeof( int ) );
-  parkPosition = (int) readIntFromEeprom( addr );
+  EEPROMReadAnything( addr, parkPosition );
   addr += ( sizeof( int ) );
-  altitude = (int) readIntFromEeprom( addr );
+  EEPROMReadAnything( addr, altitude );
   addr += ( sizeof( int ) );
-  atHome = (currentAzimuth <= (homePosition +2) && currentAzimuth >= (homePosition -2) );
-  atPark = (currentAzimuth <= (parkPosition +2) && currentAzimuth >= (parkPosition -2) );
   
   //Now read back strings
+  DEBUGS1( "Starting address for strings: " );DEBUGSL1( addr );
+  
   if ( myHostname != nullptr ) 
-      free ( myHostname );
-  myHostname = (char*) calloc( nameLengthLimit, sizeof( char)  );
-  EEPROMReadString( addr, myHostname, nameLengthLimit );
-  addr+= nameLengthLimit;
-  
+      free ( myHostname );    
+  myHostname = (char*) calloc( MAX_NAME_LENGTH, sizeof( char)  );
+  EEPROMReadString( addr, myHostname, MAX_NAME_LENGTH );
+  DEBUGS1( "myHostname: " );DEBUGSL1( myHostname );
+    
+  if ( thisID != nullptr ) 
+    free ( thisID );    
+  thisID = (char*) calloc( MAX_NAME_LENGTH, sizeof( char)  );    
+  strcpy( thisID, myHostname );
+  DEBUGS1( "thisID: " );DEBUGSL1( thisID );
+  addr+= MAX_NAME_LENGTH;
+    
   if ( sensorHostname != nullptr ) 
-      free ( sensorHostname );
-  sensorHostname = (char*) calloc( nameLengthLimit, sizeof( char)  );
-  EEPROMReadString( addr, sensorHostname, nameLengthLimit );
-  addr+= nameLengthLimit;
-  
+    free ( sensorHostname );
+  sensorHostname = (char*) calloc( MAX_NAME_LENGTH, sizeof( char)  );
+  EEPROMReadString( addr, sensorHostname, MAX_NAME_LENGTH );
+  addr+= MAX_NAME_LENGTH;
+  DEBUGS1( "sensorHostname: " );DEBUGSL1( sensorHostname );
+    
   if ( shutterHostname != nullptr ) 
-      free ( shutterHostname );
-  shutterHostname = (char*) calloc( nameLengthLimit, sizeof( char)  );
-  EEPROMReadString( addr, shutterHostname, nameLengthLimit );
-  addr+= nameLengthLimit;
+    free ( shutterHostname );
+  shutterHostname = (char*) calloc( MAX_NAME_LENGTH, sizeof( char)  );
+  EEPROMReadString( addr, shutterHostname, MAX_NAME_LENGTH );
+  addr+= MAX_NAME_LENGTH;
+  DEBUGS1( "shutterHostname: " );DEBUGSL1( shutterHostname );
   
   if ( MQTTServerName != nullptr ) 
       free ( MQTTServerName );
-  MQTTServerName = (char*) calloc( nameLengthLimit, sizeof( char)  );
-  EEPROMReadString( addr, MQTTServerName, nameLengthLimit );
-  addr+= nameLengthLimit;
+  MQTTServerName = (char*) calloc( MAX_NAME_LENGTH, sizeof( char)  );
+  EEPROMReadString( addr, MQTTServerName, MAX_NAME_LENGTH );
+  addr+= MAX_NAME_LENGTH;
+  DEBUGS1( "MQTTServerName: " );DEBUGSL1( MQTTServerName );
+    
+  if ( ascomName != nullptr ) 
+      free ( ascomName );
+  ascomName = (char*) calloc( MAX_NAME_LENGTH, sizeof( char)  );
+  EEPROMReadString( addr, ascomName, MAX_NAME_LENGTH );
+  addr+= MAX_NAME_LENGTH;
+  DEBUGS1( "ascomName: " );DEBUGSL1( ascomName );  
   
-  if ( Name != nullptr ) 
-      free ( Name );
-  Name = (char*) calloc( nameLengthLimit, sizeof( char)  );
-  EEPROMReadString( addr, Name, nameLengthLimit );
-  addr+= nameLengthLimit;
-  Serial.printf( "Values read from EEPROM are: myHostname: %s, sensorHostname:%s, shutterHostname: %s, MQTT: %s, thisID: %s\n", myHostname, sensorHostname, shutterHostname, MQTTServerName, Name );
+  Serial.printf( "Values read from EEPROM are: myHostname: %s, sensorHostname:%s, shutterHostname: %s, MQTT: %s, ASCOM Name: %s\n", myHostname, sensorHostname, shutterHostname, MQTTServerName, ascomName );
+
+  //Test readback of contents
+  for ( i = 0; i < 500 ; i++ )
+  {
+    ch = (char) EEPROM.read( i );
+    if ( ch == '\0' )
+      ch = '~';
+    if ( (i % 25) == 0 )
+      input.concat( "\n\r" );
+    input.concat( ch );
+  }
+  Serial.printf( "EEPROM contents after: \n %s \n", input.c_str() );
 
   DEBUGSL1( "Read settings from EEPROM complete" );
 }
@@ -88,35 +130,46 @@ void saveToEeprom( void )
   char* tempBuf = nullptr;
   
   DEBUGSL1( "saveToEeprom entered" );
-  
+ 
   addr = 1;
-  EEPROM.put( addr, currentAzimuth );
+  EEPROMWriteAnything( addr, azimuthSyncOffset );
   addr += ( sizeof( float) );
-  EEPROM.put( addr, azimuthOffset );
+  EEPROMWriteAnything( addr, currentAzimuth );
   addr += ( sizeof( float) );
-  EEPROM.put( addr, homePosition);
+  EEPROMWriteAnything( addr, homePosition);
   addr += ( sizeof( int ) );
-  EEPROM.put( addr, parkPosition );
+  EEPROMWriteAnything( addr, parkPosition );
   addr += ( sizeof( int ) );
-  EEPROM.put( addr, altitude );
+  EEPROMWriteAnything( addr, altitude );
   addr += ( sizeof( int ) );
-
-  //Strings 
-  EEPROMWriteString( addr, myHostname, nameLengthLimit ) ;
-  addr += nameLengthLimit;
-  EEPROMWriteString( addr, sensorHostname, nameLengthLimit ) ;
-  addr += nameLengthLimit;
-  EEPROMWriteString( addr, shutterHostname, nameLengthLimit ) ;
-  addr += nameLengthLimit;
-  EEPROMWriteString( addr, MQTTServerName, nameLengthLimit ) ;
-  addr += nameLengthLimit;
-  EEPROMWriteString( addr, Name, nameLengthLimit ) ;
-  addr += nameLengthLimit;
   
-  Serial.printf( "Saved values are: myHostname: %s, sensorHostname:%s, shutterHostname: %s, MQTT: %s, thisID: %s\n", myHostname, sensorHostname, shutterHostname, MQTTServerName, Name );
-  //Write character to say the data is worth reading. 
-  EEPROM.put( 0, '*' );
+  //Strings 
+  DEBUGS1( "Starting address for strings: " );DEBUGSL1( addr );
+  size_t sLen = strlen( myHostname );
+  DEBUGS1( "myHostname length: " );DEBUGSL1( sLen );
+  EEPROMWriteString( addr, myHostname, (size_t)MAX_NAME_LENGTH );
+  addr += MAX_NAME_LENGTH;
+  DEBUGS1( "myHostname: " );DEBUGSL1( myHostname );
 
+  EEPROMWriteString( addr, sensorHostname, (size_t)MAX_NAME_LENGTH ) ;
+  addr += MAX_NAME_LENGTH;
+  DEBUGS1( "sensorHostname: " );DEBUGSL1( sensorHostname );
+    
+  EEPROMWriteString( addr, shutterHostname, (size_t)MAX_NAME_LENGTH ) ;
+  addr += MAX_NAME_LENGTH;
+  DEBUGS1( "shutterHostname: " );DEBUGSL1( shutterHostname );
+  
+  EEPROMWriteString( addr, MQTTServerName, (size_t)MAX_NAME_LENGTH ) ;
+  addr += MAX_NAME_LENGTH;
+  DEBUGS1( "MQTTServerName: " );DEBUGSL1( MQTTServerName );
+  
+  EEPROMWriteString( addr, ascomName, (size_t)MAX_NAME_LENGTH ) ;
+  addr += MAX_NAME_LENGTH;
+  DEBUGS1( "ascomName: " );DEBUGSL1( ascomName );
+
+  //Write character to say the data is saved. 
+  EEPROM.put( 0, '*' );
+  Serial.printf( "Saved values are: myHostname: %s, sensorHostname:%s, shutterHostname: %s, MQTT: %s, thisID: %s ASCOM name: %s\n", myHostname, sensorHostname, shutterHostname, MQTTServerName, thisID, ascomName );
   //commit changes
   EEPROM.commit();
   DEBUGSL1( "Save to EEprom complete" );
@@ -128,42 +181,63 @@ void saveToEeprom( void )
     int i = 0;
     
     DEBUGSL1( "setupDefaults entered" );
-    //azimuth
+
+    azimuthSyncOffset = 0.0F; //+ve values means the dome is further round N through E than returned from the raw reading. 
     currentAzimuth = 0.0F;
-    //azimuthOffset
-    azimuthOffset = 0.0F;
-    //homePosition
+    targetAzimuth = 0.0F;
+    azimuth = 0; 
+    currentAltitude = 0;
+    targetAltitude = 0;
+    altitude = 0;
+    atPark = false;
+    atHome = false;
+    abortFlag = false; 
     homePosition = defaultHomePosition;
-    //parkPosition
     parkPosition = defaultParkPosition;
+    connected = false;
+    slaved = false;
+    slewing = false;
+
       
     //Strings 
     if ( myHostname != nullptr ) 
-        free ( myHostname );
-    myHostname = (char*) calloc( nameLengthLimit, sizeof( char)  );
-    strncpy(  myHostname, defaultHostname, nameLengthLimit );
+       free ( myHostname );
+    myHostname = (char*) calloc( MAX_NAME_LENGTH, sizeof( char)  );
+    strcpy( myHostname, defaultHostname );
+    
+    //MQTT thisID copied from hostname
+    if ( thisID != nullptr ) 
+       free ( thisID );
+    thisID = (char*) calloc( MAX_NAME_LENGTH, sizeof( char)  );       
+    strcpy ( thisID, myHostname );
+    
+    DEBUGS1( "myHostname :" );DEBUGSL1( myHostname );
 
     if ( sensorHostname != nullptr ) 
-        free ( sensorHostname );
-    sensorHostname = (char*) calloc( nameLengthLimit, sizeof( char)  );
+       free ( sensorHostname );
+    sensorHostname = (char*) calloc( MAX_NAME_LENGTH, sizeof( char)  );
     strcpy(  sensorHostname, defaultSensorHostname );
+    DEBUGS1( "sensorHostname :" );DEBUGSL1( sensorHostname );
 
     if ( shutterHostname != nullptr ) 
-        free ( shutterHostname );
-    shutterHostname = (char*) calloc( nameLengthLimit, sizeof( char)  );
+       free ( shutterHostname );
+    shutterHostname = (char*) calloc( MAX_NAME_LENGTH, sizeof( char)  );
     strcpy(  shutterHostname, defaultShutterHostname );
+    DEBUGS1( "shutterHostname :" );DEBUGSL1( shutterHostname );
 
     if ( MQTTServerName != nullptr )
         free ( MQTTServerName );
-    MQTTServerName = (char*) calloc( nameLengthLimit, sizeof( char)  );
-    strcpy(  MQTTServerName, mqtt_server);
+    MQTTServerName = (char*) calloc( MAX_NAME_LENGTH, sizeof( char)  );
+    strcpy( MQTTServerName, mqtt_server );
+    DEBUGS1( "MQTTServerName :" );DEBUGSL1( MQTTServerName );
+
+    if ( ascomName != nullptr ) 
+        free ( ascomName );
+    ascomName = (char*) calloc( MAX_NAME_LENGTH, sizeof( char)  );
+    strcpy( ascomName, defaultAscomName );
+    DEBUGS1( "ascomName :" );DEBUGSL1( ascomName );
     
-    if ( Name != nullptr ) 
-        free ( Name );
-    Name = (char*) calloc( nameLengthLimit, sizeof( char)  );
-    strncpy(  Name, myHostname, nameLengthLimit );
-    
-    Serial.printf( "Default values are: myHostname: %s, sensorHostname:%s, shutterHostname: %s, MQTT: %s, thisID: %s\n", myHostname, sensorHostname, shutterHostname, MQTTServerName, Name );
+    //Serial.printf( "Default values are: myHostname: %s, sensorHostname:%s, shutterHostname: %s, MQTT: %s, thisID: %s\n", myHostname, sensorHostname, shutterHostname, MQTTServerName, Name );
     /* Revisit this later. I'm sure it used to work 
     //Array of addresses (ie ptrs) of variables holding ptrs to char*
     const char* defaultNameList[5] = { defaultHostname, defaultSensorHostname, defaultShutterHostname, (const char*)mqtt_server, defaultHostname };      
@@ -171,15 +245,15 @@ void saveToEeprom( void )
     char* temp = nullptr;
 
         //Serial.printf( "Sizeof( defaultNameList)/sizeof(char*) is %i\n", sizeof(defaultNameList)/sizeof(char*) );
-    //Serial.printf( "nameLengthLimit is %i\n", nameLengthLimit );
+    //Serial.printf( "MAX_NAME_LENGTH is %i\n", MAX_NAME_LENGTH );
     for ( i = 0; i < (sizeof(defaultNameList)/sizeof( char*)); i++ )
     {
       //Set Ascom device name as configured by dome setup  - initialise to hostname
       if ( *targetNameList[i] != nullptr ) 
         free ( *targetNameList[i] );
-      *targetNameList[i] = (char*) calloc( nameLengthLimit, sizeof( char)  );
+      *targetNameList[i] = (char*) calloc( MAX_NAME_LENGTH, sizeof( char)  );
       if( *targetNameList[i] != nullptr )
-        strncpy(  *targetNameList[i], defaultNameList[i], nameLengthLimit );
+        strncpy(  *targetNameList[i], defaultNameList[i], MAX_NAME_LENGTH );
       Serial.printf( "Source default  %i is %s\n", i, defaultNameList[i] );
       Serial.printf( "Updated default %i to %s\n", i, *targetNameList[i] );
     }
