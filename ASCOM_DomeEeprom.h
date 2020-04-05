@@ -28,6 +28,7 @@ void readFromEeprom()
     DEBUGSL1( "Existing eeprom settings not found - setting up defaults.." );
     setupDefaults();      
     saveToEeprom();
+    device.restart(); //restart to take advantage of new settings. 
   }  
 
   //Test readback of contents

@@ -89,6 +89,7 @@ void setupWifi(void)
   Serial.printf("IP address: %s\n\r",     WiFi.localIP().toString().c_str() );
   Serial.printf("DNS address 0: %s\n\r",  WiFi.dnsIP(0).toString().c_str() );
   Serial.printf("DNS address 1: %s\n\r",  WiFi.dnsIP(1).toString().c_str() );
+
   //Setup sleep parameters
   //wifi_set_sleep_type(LIGHT_SLEEP_T);
   wifi_set_sleep_type(NONE_SLEEP_T);
@@ -110,16 +111,15 @@ void setup()
   delay(2000); 
 
   //Start time
-  //Start NTP client - even before wifi.
   configTime(TZ_SEC, DST_SEC, timeServer1, timeServer2, timeServer3 );
   Serial.println( "Time Services setup");
       
   //Read internal state, apply defaults if we can't find user-set values in Eeprom.
   EEPROM.begin(512);
   readFromEeprom();    
-  
-  //Setup defaults from EEPROM
-  delay(5000);
+  delay(2000);
+    
+  //Setup WiFi
   Serial.printf( "Entering Wifi setup for host %s\n", myHostname );
   setupWifi();
     
@@ -145,7 +145,10 @@ void setup()
   Wire.begin(4, 5);
   Serial.println("Configured pins for ESP8266-12");
 #endif
-  Wire.setClock(50000 );//100KHz target rate
+  Wire.setClock(50000 );//100KHz target rate is a bit hopeful for this device 
+
+  outbuf = scanI2CBus();
+  Serial.println( outbuf.c_str() ) ;
 
   //Open a connection to MQTT
   DEBUGS1("Starting to configure MQTT connection to :");DEBUGSL1( MQTTServerName );
@@ -167,8 +170,9 @@ void setup()
 
   //Setup i2c to control LCD display
   DEBUGSL1("Starting to configure LCD connection");
-  LCDPresent = myLCD.checkLCD();
-  if ( LCDPresent )
+  //LCDPresent = myLCD.checkLCD();
+  LCDPresent = true;
+  if ( !LCDPresent )
     Serial.printf("unable to access LCD\n");  
   else
   { 
@@ -228,13 +232,13 @@ void setup()
   //ASCOM ALPACA doesn't support any way to tell the REST device some of its basic setup constants so you have to 
   //do something like this. Or a serial interface .. Its a legacy of expecting a windows exe driver thing.
   server.on("/",            HTTP_GET, handleSetup);
-  //HTML forms don't support PUT - use GET instead.
-  server.on("/Sync",        HTTP_GET, handleSyncOffsetPut );
-  //  server.on("/Dome/0/SetHome", HTTP_GET, handleFilterNamesPut );
+  //HTML forms don't support PUT - they typically use GET instead.
   server.on("/Hostname",    HTTP_GET, handleHostnamePut );
   server.on("/DomeName",    HTTP_GET, handleNamePut );
   //server.on("/SetPark",    HTTP_GET, handleParkPut );
   //server.on("/SetHome",    HTTP_GET, handleHomePut );
+  server.on("/Sync",        HTTP_GET, handleSyncOffsetPut );
+  server.on("/restart", handlerRestart );
 
   server.onNotFound(handlerNotFound);
   Serial.println( "Web handlers registered" );
@@ -303,7 +307,7 @@ void loop()
   if( fineTimerFlag )
   {
     bearing = getBearing( sensorHostname );
-    //Serial.printf( "Loop: Bearing %3.2f\n", bearing );
+    Serial.printf( "Loop: Bearing %3.2f\n", bearing );
     currentAzimuth = getAzimuth( bearing);
     fineTimerFlag = false;
   }
@@ -413,31 +417,6 @@ void loop()
       return pCmd;
   }
 
-  //Wrapper for web server args handling for URL query arguments that differ by case. The ALPACA API allows this!
-  /*
-   * Pass in the string you want to check exists. 
-   * modifies the string to the case-insensitive version found. 
-   */
-  bool hasArgIC( String& check, ESP8266WebServer& ref, bool caseSensitive )
-  {
-    String matchName;
-    if ( caseSensitive )
-    {
-      int max = ref.args();
-      for ( int i = 0; i < max; i++ )
-      {
-        if( ref.argName(i).equalsIgnoreCase( check ) )  
-        {
-          check = ref.arg(i);          
-          return true;
-        }
-      }
-      return false;
-    }
-    else
-      return ( ref.hasArg( check ) );
-  }
-
 /* MQTT callback for subscription and topic.
  * Only respond to valid states ""
  * Publish under ~/skybadger/sensors/<sensor type>/<host>
@@ -461,7 +440,7 @@ void callback(char* topic, byte* payload, unsigned int length)
   DynamicJsonBuffer jsonBuffer(256);  
   JsonObject& root = jsonBuffer.createObject();
 
-  getTimeAsString( timestamp );
+  getTimeAsString2( timestamp );
   root["time"] = timestamp;
 
   // Once connected, publish an announcement...
@@ -474,5 +453,5 @@ void callback(char* topic, byte* payload, unsigned int length)
   outTopic = outHealthTopic;
   outTopic.concat( myHostname );
   client.publish( outTopic.c_str(), output.c_str() );  
-  //Serial.print( outTopic );Serial.print( " published: " ); Serial.println( output );
+  Serial.print( outTopic );Serial.print( " published: " ); Serial.println( output );
  }

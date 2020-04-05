@@ -61,7 +61,7 @@ class i2cMotor
                       
       outData[0] = (byte)speed; //speed value motor 1;
       outData[1] = (byte)speed; //speed value motor 2;
-      tw.beginTransmission( _address | I2C_WRITE); // transmit to device
+      tw.beginTransmission( ( _address & 0xFE ) | I2C_WRITE); // transmit to device
       tw.write( outData, 2 );  // sends array contents
       tw.endTransmission();    // stop transmitting
       _speed = newSpeed;
@@ -83,7 +83,7 @@ class i2cMotor
       tw.write( outData, 1 );  // sends array contents
       tw.endTransmission(false);    // restart transmitting
       
-      tw.requestFrom( (uint8_t) ( _address | I2C_READ), (uint8_t) 1 );    // request 1 bytes from slave device
+      tw.requestFrom( (uint8_t) ( ( _address & 0xFE ) | I2C_READ), (uint8_t) 1 );    // request 1 bytes from slave device
       while ( tw.available() && !readComplete ) 
       { // slave may send less than requested
          inData[0] = tw.read(); // receive a byte as character
@@ -101,7 +101,7 @@ class i2cMotor
       outData[2] = 128; //speed register motor 2
       outData[3] = 255; //slowest acceleration
       
-      tw.beginTransmission( _address | I2C_WRITE); // transmit to device
+      tw.beginTransmission( ( _address & 0xFE ) | I2C_WRITE); // transmit to device
       tw.write( outData, 4 );  // sends array contents
       tw.endTransmission();    // stop transmitting
    }

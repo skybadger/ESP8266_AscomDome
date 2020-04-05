@@ -51,7 +51,7 @@ class I2CLCD {
       bool readComplete = false;
 
       // request 1 bytes from slave device - returns the number of free bytes in the fifo buffer
-      _tw.requestFrom( (uint8_t) ((_address & 0xFE) | I2C_READ), (uint8_t) 0 );   
+      _tw.requestFrom( (uint8_t)( (_address & 0xFE) | I2C_READ), (uint8_t) 0 );   
       delay(25); 
       while ( _tw.available() && !readComplete ) 
       { // slave may send less than requested
@@ -81,14 +81,14 @@ class I2CLCD {
       _tw.endTransmission(false);    // stop transmitting
 
       //Write string to device display
-      _tw.beginTransmission( _address | I2C_WRITE ); // transmit to device
+      _tw.beginTransmission( ( _address & 0xFE )| I2C_WRITE ); // transmit to device
       _tw.write( (byte*) buf, length );     // sends array contents
       _tw.endTransmission();    // stop transmitting
   }
 
   void clearScreen()
   {
-      _tw.beginTransmission( _address | I2C_WRITE ); // transmit to device
+      _tw.beginTransmission( ( _address & 0xFE ) | I2C_WRITE ); // transmit to device
       _tw.write( (byte) 12 );   // CLS cmd
       _tw.endTransmission();    // stop transmitting
   }
@@ -127,7 +127,7 @@ class I2CLCD {
       outData[0] = (byte) 3;
       outData[1] = (byte) row;
       outData[2] = (byte) col; //data
-      _tw.beginTransmission( _address | I2C_WRITE ); // transmit to device
+      _tw.beginTransmission( ( _address & 0xFE ) | I2C_WRITE ); // transmit to device
       _tw.write( outData, 3 );   // cmd
       _tw.endTransmission();  // stop transmitting
 
@@ -149,7 +149,7 @@ class I2CLCD {
               outData[0] = 0x04;
               break;
       }
-      _tw.beginTransmission( _address | I2C_WRITE ); // transmit to device
+      _tw.beginTransmission( ( _address & 0xFE ) | I2C_WRITE ); // transmit to device
       _tw.write( outData, 1 );   // cmd
       _tw.endTransmission();  // stop transmitting
    }

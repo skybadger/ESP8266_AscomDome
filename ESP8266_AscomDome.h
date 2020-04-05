@@ -118,14 +118,6 @@ char* shutterHostname    = nullptr;
 char* thisID             = nullptr;
 char* MQTTServerName     = nullptr;
 
-//char* myHostname         = "espDOM01";
-//char* sensorHostname     = "espSEN01.i-badger.co.uk";
-//char* shutterHostname    = "espDSH01.i-badger.co.uk";
-//char* thisID             = "espDOM01";
-//char* MQTTServerName     = "obbo.i-badger.co.uk";
-
-
-
 bool abortFlag = false; 
 float azimuthSyncOffset = 0.0F; //+ve values means the dome is further round N through E than returned from the raw reading. 
 float targetAzimuth = 0.0F;
@@ -231,9 +223,12 @@ bool slewing = false;
 
 //Attached I2C device address list
 //const uint8_t compassAddr = 0x0d; - no longer an attached device - remove in the fullness.
-const uint8_t motorControllerAddr = 176;
-const uint8_t LCDControllerAddr = 0xC6;
-const uint8_t ADCControllerAddr = 0x48;
+const uint8_t PCFAControllerAddr  = 0x10;//160 Waveshare expander board
+//const uint8_t PCFAControllerAddr  = 0x70;//TI8574a 
+const uint8_t PCFControllerAddr   = 0x20;//32  
+const uint8_t motorControllerAddr = 0xB0;//176
+const uint8_t LCDControllerAddr   = 0xC6;//198
+const uint8_t ADCControllerAddr   = 0x48;//72
 
 #include "I2CLCD.h"
 I2CLCD myLCD( LCDControllerAddr, 4, 16 );

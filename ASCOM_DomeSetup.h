@@ -38,6 +38,21 @@ void handlerNotFound()
   server.send(responseCode, "text/json", message);
 }
 
+void handlerRestart() //PUT or GET
+{
+  String message;
+  int responseCode = 200;
+  uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
+  uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
+  DynamicJsonBuffer jsonBuffer(250);
+  JsonObject& root = jsonBuffer.createObject();
+  jsonResponseBuilder( root, clientID, transID, "handleRestart", Success , "restarting" );    
+  root["Value"] = 0;
+  root.printTo(message);
+  server.send(responseCode, "text/json", message);
+  device.restart();
+}
+
 void handlerNotImplemented()
 {
   String message;
@@ -125,6 +140,7 @@ void handleDomeGoto( void )
 {
   String form;
   String errMsg;
+  String argToSearchFor = "bearing";
   
   debugURI( errMsg );
   DEBUGSL1 (errMsg);
@@ -156,7 +172,9 @@ void handleSyncOffsetPut( void)
   DEBUGSL1( "Entered handleSyncOffsetPut");
 
   name = nameStub;
-  if( hasArgIC( argsToSearchFor[0], server, false ) && hasArgIC( argsToSearchFor[1], server, false ) && hasArgIC( argsToSearchFor[2], server, false ) )
+  if( hasArgIC( argsToSearchFor[0], server, false ) && 
+      hasArgIC( argsToSearchFor[1], server, false ) && 
+      hasArgIC( argsToSearchFor[2], server, false ) )
   {
     localName = server.arg(argsToSearchFor[0]);
     newGoto = (int) localName.toInt();    
@@ -271,7 +289,7 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
   htmlForm += "/Name\" method=\"PUT\" id=\"domename\" >\n";
   htmlForm += "<h2> Enter new descriptive name for Dome driver </h2>\n";
   htmlForm += "<form action=\"Domename\" method=\"PUT\" id=\"domename\" >\n";
-  htmlForm += "<input type=\"text\" name=\"wheelname\" value=\"";
+  htmlForm += "<input type=\"text\" name=\"domeName\" value=\"";
   htmlForm.concat( ascomName );
   htmlForm += "\">\n";
   htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
@@ -282,7 +300,9 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
   htmlForm += "<form action=\"http://";
   htmlForm.concat( myHostname );
   htmlForm += "/Goto\" method=\"PUT\" id=\"goto\" >\n";
-  htmlForm += "<input type=\"text\" name=\"Goto bearing &deg\" value=\"0\"\">\n";
+  htmlForm += "<input type=\"number\" name=\"bearing\" max=\"360.0\" min=\"0.0\" value=\"";
+  htmlForm += parkPosition;
+  htmlForm += "\">\n";
   htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
   
   //Dome sync offset
@@ -291,7 +311,9 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
   htmlForm += "<form action=\"http://";
   htmlForm.concat(myHostname);
   htmlForm += "/Sync\" method=\"PUT\" id=\"sync\" >\n";
-  htmlForm += "<input type=\"text\" name=\"Actual bearing &deg\" value=\"0\"\">\n";
+  htmlForm += "<input type=\"number\" name=\"syncOffset\" max=\"360.0\" min=\"0.0\" value=\"";
+  htmlForm += bearing;
+  htmlForm += "\">\n";
   htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
   
   //Dome home position
@@ -300,7 +322,7 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
   htmlForm += "<form action=\"http://";
   htmlForm.concat(myHostname);
   htmlForm += "/Home\" method=\"PUT\" id=\"home\" >\n";
-  htmlForm += "<input type=\"text\" name=\"New Home position &deg\" value=\"";
+  htmlForm += "<input type=\"number\" name=\"homePosition\" max=\"360.0\" min=\"0.0\" value=\"";
   htmlForm += homePosition;
   htmlForm += "\">\n";  
   htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
@@ -311,7 +333,7 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
   htmlForm += "<form action=\"http://";
   htmlForm.concat(myHostname);
   htmlForm += "/ParkSet\" method=\"PUT\" id=\"park\" >\n";
-  htmlForm += "<input type=\"text\" name=\"New Park value &deg\" value=\"";
+  htmlForm += "<input type=\"text\" name=\"parkPosition\" value=\"";
   htmlForm += parkPosition;
   htmlForm += "\">\n";  
   htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
@@ -322,7 +344,7 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
   //Auto-tracking enable
   //W of pier
   //N of pier
-  //Elevatin above centre
+  //Elevation above centre
   //Dome radius
   //Distance from RA axis.
   

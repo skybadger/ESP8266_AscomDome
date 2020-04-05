@@ -470,7 +470,7 @@ void handleSlewToAltitudePut(void)
       //Set new shutter altitude.
       location = server.arg( argToSearchFor ).toInt();
       location %= 110;
-      addShutterCmd( clientId, transId, CMD_SHUTTER_OPEN, targetAltitude );
+      addShutterCmd( clientId, transID, CMD_SHUTTER_OPEN, targetAltitude );
 
       //cmdItem_t* pCmd = domeCmdList->add( clientID, transID, CMD_DOMEVAR_SET, location );
       targetAltitude = location;
