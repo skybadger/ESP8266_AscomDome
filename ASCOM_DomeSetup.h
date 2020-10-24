@@ -32,24 +32,44 @@ void handlerNotFound()
   uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
   DynamicJsonBuffer jsonBuffer(250);
   JsonObject& root = jsonBuffer.createObject();
-  jsonResponseBuilder( root, clientID, transID, "HandlerNotFound", invalidOperation , "No REST handler found for argument - check ASCOM Dome v2 specification" );    
+  jsonResponseBuilder( root, clientID, transID, ++serverTransID, "HandlerNotFound", invalidOperation , "No REST handler found for argument - check ASCOM Dome v2 specification" );    
   root["Value"] = 0;
   root.printTo(message);
-  server.send(responseCode, "text/json", message);
+  server.send(responseCode, "application/json", message);
+}
+
+void handlerStatus()
+{
+  String message;
+  int responseCode = 400;
+  uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
+  uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
+  DynamicJsonBuffer jsonBuffer(250);
+  JsonObject& root = jsonBuffer.createObject();
+  //jsonResponseBuilder( root, clientID, transID, ++serverTransID, "HandlerStatus", invalidOperation , "No REST handler found for argument - check ASCOM Dome v2 specification" );    
+  
+  //Status info
+  root["dome status"]           = domeStatus;
+  root["dome status string"]    = domeStateNames[domeStatus];
+  root["shutter status"]        = shutterStatus;
+  root["shutter status string"] = shutterStateNames[shutterStatus];
+  root["motor speed"]           = motorSpeed;
+  root["motor direction"]       = motorDirection;
+  root["target azimuth"]        = targetAzimuth;
+  root["current azimuth"]       = currentAzimuth;
+  root["current altitude"]      = currentAltitude;
+  
+  root.printTo(message);
+  server.send(responseCode=200, "application/json", message);
 }
 
 void handlerRestart() //PUT or GET
 {
   String message;
   int responseCode = 200;
-  uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
-  uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-  DynamicJsonBuffer jsonBuffer(250);
-  JsonObject& root = jsonBuffer.createObject();
-  jsonResponseBuilder( root, clientID, transID, "handleRestart", Success , "restarting" );    
-  root["Value"] = 0;
-  root.printTo(message);
-  server.send(responseCode, "text/json", message);
+  //Trying to do a redirect to the rebooted host so we pick up from where we left off. 
+  server.sendHeader( WiFi.hostname().c_str(), String("/status"), true);
+  server.send ( 302, "text/plain", "<!Doctype html><html>Redirecting for restart</html>");
   device.restart();
 }
 
@@ -62,7 +82,7 @@ void handlerNotImplemented()
 
   DynamicJsonBuffer jsonBuffer(250);
   JsonObject& root = jsonBuffer.createObject();
-  jsonResponseBuilder( root, clientID, transID, "HandlerNotFound", notImplemented  , "No REST handler implemented for argument - check ASCOM Dome v2 specification" );    
+  jsonResponseBuilder( root, clientID, transID, ++serverTransID, "HandlerNotFound", notImplemented  , "No REST handler implemented for argument - check ASCOM Dome v2 specification" );    
   root["Value"] = 0;
   root.printTo(message);
   server.send(responseCode, "text/json", message);
@@ -86,7 +106,7 @@ void handleHostnamePut( void )
   String form;
   String errMsg;
   String newName;
-  String argToSearchFor = "hostName";
+  String argToSearchFor = "hostname";
   
   debugURI( errMsg );
   DEBUGSL1 (errMsg);
@@ -119,36 +139,106 @@ void handleHostnamePut( void )
 }
 
 //  server.on("/Dome/*/DomeName", HTTP_PUT, handleNamePut );
-void handleNamePut( void) 
+void handleShutterNamePut( void ) 
 {
-  String errMsg;
   String form;
-
+  String errMsg;
+  String newName;
+  String argToSearchFor = "shutterhostname";
+  
   debugURI( errMsg );
   DEBUGSL1 (errMsg);
-  DEBUGSL1( "Entered handleNamePut" );
+  DEBUGSL1( "Entered handleShutterNamePut" );
   
   //throw error message
-  errMsg = "handleNamePut: Not handled yet";
-  DEBUGSL1( errMsg );
-  form = setupFormBuilder( form, errMsg );
-  server.send( 200, "text/html", form );
+  if( hasArgIC( argToSearchFor, server, false ) )
+  {
+    newName = server.arg( argToSearchFor);
+  }
+  if( newName != NULL && newName.length() < MAX_NAME_LENGTH )
+  {
+    //save new hostname and cause reboot - requires eeprom read at setup to be in place.  
+    strcpy( shutterHostname, newName.c_str() );
+    //Write new hostname to EEprom
+    saveToEeprom();
+    
+    //Send response 
+    form = setupFormBuilder( form, errMsg );
+    server.send( 200, "text/html", form ); 
+  }
+  else
+  {
+    errMsg = "handleHostnamePut: Error handling new hostname";
+    DEBUGSL1( errMsg );
+    form = setupFormBuilder( form, errMsg );
+    server.send( 200, "text/html", form ); 
+  }
 }
 
-//  server.on("/Dome/*/FilterCount", HTTP_PUT, handleFilterCountPut );
+#if defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION || defined USE_REMOTE_ENCODER_FOR_DOME_ROTATION
+//server.on("/Dome/*/Hostname", HTTP_PUT, handleHostnamePut );
+void handleSensorNamePut( void ) 
+{
+  String form;
+  String errMsg;
+  String newName;
+  String argsToSearchFor[] = {"bearingsensorname"};
+  
+  debugURI( errMsg );
+  DEBUGSL1 (errMsg);
+  DEBUGSL1( "Entered handleHostnamePut" );
+  
+  //throw error message
+  if( hasArgIC( argsToSearchFor[0], server, false ) )
+  {
+    newName = server.arg( argsToSearchFor[0]);
+  }
+  if( newName != NULL && newName.length() < MAX_NAME_LENGTH )
+  {
+    //save new hostname and cause reboot - requires eeprom read at setup to be in place.  
+    strcpy( sensorHostname, newName.c_str() );
+    //Write new hostname to EEprom
+    saveToEeprom();  
+  }
+  else
+  {
+    errMsg = "handleHostnamePut: Error handling new hostname";
+    DEBUGSL1( errMsg );
+  }
+  //Send response 
+  form = setupFormBuilder( form, errMsg );
+  server.send( 200, "text/html", form ); 
+  return;
+}
+#endif
+
 void handleDomeGoto( void )
 {
   String form;
   String errMsg;
-  String argToSearchFor = "bearing";
+  String argsToSearchFor[] = {"bearing"};
+  String value;
+  int newGoto = 0;
   
   debugURI( errMsg );
   DEBUGSL1 (errMsg);
   DEBUGSL1( "Entered handleDomeGotoPut"  );
-  //Add domeCmd 
-  //throw error message
-  errMsg = "handleDomeGotoPut: Not yet implemented";
-  DEBUGSL1( errMsg );
+
+  if( hasArgIC( argsToSearchFor[0], server, false ) )
+  {
+    value = server.arg(argsToSearchFor[0]);
+    newGoto = (int) value.toInt();    
+    if ( newGoto >= 0 && newGoto <=360 )
+    {
+      //update current position by moving to current azimuth
+      //Add to list at top.
+      addDomeCmd( 100, 1000, "", CMD_DOME_SLEW, newGoto );
+    }
+  }  
+  else
+  {
+    errMsg = String("Goto position not in range 0-360");
+  }
   form = setupFormBuilder( form, errMsg );
   server.send( 200, "text/html", form );
 }
@@ -165,39 +255,36 @@ void handleSyncOffsetPut( void)
   String localName;
   String errMsg;
   int newGoto = 0;
-  String argsToSearchFor[3] = { "syncOffset", "ClientID", "TransID" };
+  String argsToSearchFor[] = { "syncOffset","ClientID", "ClientTransactionID" };
   
   debugURI( errMsg );
   DEBUGSL1 (errMsg);
   DEBUGSL1( "Entered handleSyncOffsetPut");
-
-  name = nameStub;
-  if( hasArgIC( argsToSearchFor[0], server, false ) && 
-      hasArgIC( argsToSearchFor[1], server, false ) && 
-      hasArgIC( argsToSearchFor[2], server, false ) )
+  float offsetVal = 0.0F;
+  
+  if( hasArgIC( argsToSearchFor[0], server, false ) )
   {
     localName = server.arg(argsToSearchFor[0]);
     newGoto = (int) localName.toInt();    
     if ( newGoto >= 0 && newGoto <=360 )
     {
-      azimuthSyncOffset = newGoto;
+      offsetVal = newGoto - currentAzimuth;
       //update current position by moving to current azimuth
       //Add to list at top.
-      addDomeCmd( server.arg( argsToSearchFor[1] ).toInt(), server.arg(argsToSearchFor[2]).toInt(), CMD_DOME_SLEW, currentAzimuth );
+      addDomeCmd( server.arg( argsToSearchFor[1] ).toInt(), server.arg(argsToSearchFor[2]).toInt(), "synctoazimuth" , CMD_DOMEVAR_SET, offsetVal );
     }
   }  
   else
   {
     errMsg = String("Goto position not in range 0-360");
-    form = setupFormBuilder( form, errMsg );
-    server.send( 200, "text/html", form );
   }
-  return;
+  form = setupFormBuilder( form, errMsg );
+  server.send( 200, "text/html", form );
 }
 
 void handleHomePositionPut(void)
 {
-  String argToSearchFor = "homePosition";
+  String argsToSearchFor[] = {"homePosition"};
   String errMsg;
   String form;
   int newHome;
@@ -205,9 +292,9 @@ void handleHomePositionPut(void)
   debugURI(errMsg);
   DEBUGSL1 (errMsg);
   DEBUGSL1( "Entered handleHomePositionPut" );
-  if( hasArgIC( argToSearchFor, server, false ) )
+  if( hasArgIC( argsToSearchFor[0], server, false ) )
   {
-    newHome  = server.arg(argToSearchFor).toInt();
+    newHome  = server.arg(argsToSearchFor[0]).toInt();
     if ( newHome >= 0 && newHome <= 360)
     {
       homePosition = newHome;
@@ -224,8 +311,7 @@ void handleHomePositionPut(void)
 
 void handleParkPositionPut(void)
 {
-  int i=0;
-  String argToSearchFor = "parkPosition";
+  String argsToSearchFor[] = {"parkPosition"};
   String name;
   String errMsg;
   String form;
@@ -234,9 +320,9 @@ void handleParkPositionPut(void)
   debugURI(errMsg);
   DEBUGSL1 (errMsg);
   DEBUGSL1( "handleParkPositionPut" );
-  if( hasArgIC( argToSearchFor, server, false ) )
+  if( hasArgIC( argsToSearchFor[0], server, false ) )
   {
-    newPark  = server.arg(argToSearchFor).toInt();
+    newPark  = server.arg(argsToSearchFor[0]).toInt();
     if ( newPark >= 0 && newPark <= 360)
     {
       parkPosition = newPark;
@@ -272,7 +358,7 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
   
   //Hostname
   htmlForm += "<div id=\"hostnameset\" >";
-  htmlForm += "<h2> Enter new hostname for dome driver host</h2>\n";
+  htmlForm += "<h2> Enter new hostname for ASCOM Dome driver host</h2>\n";
   htmlForm += "<form action=\"http://";
   htmlForm.concat( myHostname );
   htmlForm += "/Hostname\" method=\"PUT\" id=\"hostname\" >\n";
@@ -282,18 +368,30 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
   htmlForm += "\">\n";
   htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
   
-  //Device name - do we really want to enable this to be changed ?
-  htmlForm += "<div id=\"Domenameset\" >";
+  //Shutter controller hostname
+  htmlForm += "<div id=\"Shutternameset\" >";
   htmlForm += "<form action=\"http://";
-  htmlForm.concat( ascomName );
-  htmlForm += "/Name\" method=\"PUT\" id=\"domename\" >\n";
-  htmlForm += "<h2> Enter new descriptive name for Dome driver </h2>\n";
-  htmlForm += "<form action=\"Domename\" method=\"PUT\" id=\"domename\" >\n";
-  htmlForm += "<input type=\"text\" name=\"domeName\" value=\"";
-  htmlForm.concat( ascomName );
+  htmlForm.concat( myHostname );
+  htmlForm += "/ShutterName\" method=\"PUT\" id=\"shutterhostname\" >\n";
+  htmlForm += "<h2> Enter new hostname for Dome orientation sensor </h2>\n";
+  htmlForm += "<input type=\"text\" name=\"shutterhostname\" value=\"";
+  htmlForm.concat( shutterHostname );
   htmlForm += "\">\n";
   htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
   
+#if defined USE_REMOTE_ENCODER_FOR_DOME_ROTATION  || defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION  
+  //Device name - do we really want to enable this to be changed ?
+  htmlForm += "<div id=\"Bearingsensorname\" >";
+  htmlForm += "<form action=\"http://";
+  htmlForm.concat( myHostname );
+  htmlForm += "/SensorName\" method=\"PUT\" id=\"bearingsensorname\" >\n";
+  htmlForm += "<h2> Enter new hostname for Dome orientation sensor </h2>\n";
+  htmlForm += "<input type=\"text\" name=\"bearingsensorname\" value=\"";
+  htmlForm.concat( sensorHostname );
+  htmlForm += "\">\n";
+  htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
+#endif
+
   //Dome goto position
   htmlForm += "<div id=\"gotoset\" >";
   htmlForm += "<h2> Enter bearing to move dome to </h2>\n";
@@ -329,10 +427,10 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
   
   //Dome park position
   htmlForm += "<div id=\"parkset\" >";
-  htmlForm += "<h2> Enter new home position for dome </h2>\n";
+  htmlForm += "<h2> Enter new Park position for dome </h2>\n";
   htmlForm += "<form action=\"http://";
   htmlForm.concat(myHostname);
-  htmlForm += "/ParkSet\" method=\"PUT\" id=\"park\" >\n";
+  htmlForm += "/Park\" method=\"PUT\" id=\"park\" >\n";
   htmlForm += "<input type=\"text\" name=\"parkPosition\" value=\"";
   htmlForm += parkPosition;
   htmlForm += "\">\n";  

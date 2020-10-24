@@ -20,8 +20,7 @@ extern ...
 void readFromEeprom()
 {
   int addr = 0;
-  char tempBuf[30];
-  
+ 
   if( ( (char) EEPROM.read(0) ) != '*' )
   {
     //read
@@ -76,13 +75,14 @@ void readFromEeprom()
   strcpy( thisID, myHostname );
   DEBUGS1( "thisID: " );DEBUGSL1( thisID );
   addr+= MAX_NAME_LENGTH;
-    
+ #if defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION || defined USE_REMOTE_ENCODER_FOR_DOME_ROTATION
   if ( sensorHostname != nullptr ) 
     free ( sensorHostname );
   sensorHostname = (char*) calloc( MAX_NAME_LENGTH, sizeof( char)  );
   EEPROMReadString( addr, sensorHostname, MAX_NAME_LENGTH );
   addr+= MAX_NAME_LENGTH;
   DEBUGS1( "sensorHostname: " );DEBUGSL1( sensorHostname );
+#endif
     
   if ( shutterHostname != nullptr ) 
     free ( shutterHostname );
@@ -126,9 +126,7 @@ void saveToEeprom( void )
 {
   int addr = 1;
   String tempS = "";
-  int i = 0, j=0;
-  char inc = '_';
-  char* tempBuf = nullptr;
+  int i = 0;
   
   DEBUGSL1( "saveToEeprom entered" );
  
@@ -152,9 +150,11 @@ void saveToEeprom( void )
   addr += MAX_NAME_LENGTH;
   DEBUGS1( "myHostname: " );DEBUGSL1( myHostname );
 
+#if defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION || defined USE_REMOTE_ENCODER_FOR_DOME_ROTATION  
   EEPROMWriteString( addr, sensorHostname, (size_t)MAX_NAME_LENGTH ) ;
   addr += MAX_NAME_LENGTH;
   DEBUGS1( "sensorHostname: " );DEBUGSL1( sensorHostname );
+#endif 
     
   EEPROMWriteString( addr, shutterHostname, (size_t)MAX_NAME_LENGTH ) ;
   addr += MAX_NAME_LENGTH;
@@ -179,8 +179,6 @@ void saveToEeprom( void )
 //Function to setup ASCOM Dome default settings, use prior to reading the EEPROM settings which then override them.
   void setupDefaults()
   {
-    int i = 0;
-    
     DEBUGSL1( "setupDefaults entered" );
 
     azimuthSyncOffset = 0.0F; //+ve values means the dome is further round N through E than returned from the raw reading. 
@@ -198,7 +196,8 @@ void saveToEeprom( void )
     connected = false;
     slaved = false;
     slewing = false;
-
+    domeStatus = DOME_IDLE;
+    shutterStatus = SHUTTER_CLOSED;
       
     //Strings 
     if ( myHostname != nullptr ) 
@@ -214,11 +213,13 @@ void saveToEeprom( void )
     
     DEBUGS1( "myHostname :" );DEBUGSL1( myHostname );
 
+#if defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION || defined USE_REMOTE_ENCODER_FOR_DOME_ROTATION
     if ( sensorHostname != nullptr ) 
        free ( sensorHostname );
     sensorHostname = (char*) calloc( MAX_NAME_LENGTH, sizeof( char)  );
     strcpy(  sensorHostname, defaultSensorHostname );
     DEBUGS1( "sensorHostname :" );DEBUGSL1( sensorHostname );
+#endif
 
     if ( shutterHostname != nullptr ) 
        free ( shutterHostname );

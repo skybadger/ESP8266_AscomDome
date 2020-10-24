@@ -6,7 +6,7 @@
    The second configuration is where the motor and display controllers are attached to the dome wall and the rotation sensor
    is mounted on the rotating dome itself. This sensor is typically a digital compass and accessed via its REST API. (see ESP8266_Mag.ino).
    In either case the part fixed to the wall is the sole interface to ASCOM so the ASCOM driver only has one interface to deal with. 
-   THis hardware supports the ALPACA rest API interface so there is no need for an installable driver on the observatory controller server. 
+   This hardware supports the ALPACA rest API interface so there is no need for an installable driver on the observatory controller server. 
    Configure the rest interface to use this device's hostname (ESPDome01) and port (80)
    
    Implementing.
@@ -14,9 +14,9 @@
    Add MQTT callbacks for health - done - need to measure and add publish for Dome voltage
    
    Testing.
-   Curl resting of command handlers for ALPACA appears good. 
+   Curl resting of command handlers for ALPACA appears good. Used with DeviceHub for get/can calls testing 
    Need to test with ALPACA
-   
+      
    Operating. 
    Check power demand and manage
    
@@ -28,15 +28,19 @@
    Test handler functions 
    5, Add url to query for staus of async operations. Consider whether user just needs to call for status again. 
    6, Fix EEPROM handling - done. 
+   7, Add ALPACA mgmt API and UDP discovery call handling
+   8, zero-justify seconds and minutes in sprintf time string.
+   9, Fix LCD detection even when not present.. 
 
-zero-justify seconds and minutes in sprintf time string.
 To test:
  Download curl for your operating system. Linux variants and Windows powershell should already have it.
  e.g. curl -v -X PUT -d 'homePosition=270' http://EspDom01/Dome/0/API/v1/FilterCount
  Use the ALPACA REST API docs at <> to validate the dome behaviour. At some point there will be a script
 
-Dependencies
-Arduino JSON library 5.13 ( moving to 6 is a big change) 
+External Dependencies:
+ArduinoJSON library 5.13 ( moving to 6 is a big change) 
+pubsub library 
+ALPACA for ASCOM 6.5
 Expressif ESP8266 board library for arduino - configured for v2.5
 
 ESP8266-12 Huzzah
@@ -58,20 +62,21 @@ ESP8266-12 Huzzah
 /////////////////////////////////////////////////////////////////////////////////
 
 #include "ESP8266_AscomDome.h"   //App variables - pulls in the other include files - its all in there.
+#include "Skybadger_common_funcs.h"
 #include "ASCOMAPIDome_rest.h"
 #include "ASCOMAPICommon_rest.h"
 #include "JSONHelperFunctions.h"
+#include "ASCOM_DomeCmds.h"
 #include "ASCOM_Domehandler.h"
 #include "ASCOM_DomeSetup.h"
 #include "ASCOM_DomeEeprom.h"
-#include "Skybadger_common_funcs.h"
 
 void setupWifi(void)
 {
   //Setup Wifi
   int zz = 00;
-  WiFi.hostname( myHostname );
   WiFi.mode(WIFI_STA);
+  WiFi.hostname( myHostname );
   WiFi.begin( ssid1, password1 );
   Serial.println("Connecting");
   while (WiFi.status() != WL_CONNECTED) 
@@ -80,6 +85,7 @@ void setupWifi(void)
     Serial.print(".");
     if ( zz++ > 200 )
     {
+      Serial.println("Restarting to try to find a connection");
       device.restart();
     }
   }
@@ -104,11 +110,21 @@ void setup()
   String outbuf;
 
   //Minimise serial to one pin only. 
-  Serial.begin( 115200 );
-  //Serial.begin( 115200, SERIAL_8N1, SERIAL_TX_ONLY);
+  Serial.begin( 115200, SERIAL_8N1, SERIAL_TX_ONLY);
   Serial.println(F("ESP starting."));
   //gdbstub_init();
   delay(2000); 
+
+  //Debugging over telnet setup
+  // Initialize the server (telnet or web socket) of RemoteDebug
+  //Debug.begin(HOST_NAME, startingDebugLevel );
+  Debug.begin( WiFi.hostname().c_str(), Debug.VERBOSE ); 
+  Debug.setSerialEnabled(true);//until set false 
+  // Options
+  // Debug.setResetCmdEnabled(true); // Enable the reset command
+  // Debug.showProfiler(true); // To show profiler - time between messages of Debug
+  //In practice still need to use serial commands until debugger is up and running.. 
+  debugE("Remote debugger enabled and operating");
 
   //Start time
   configTime(TZ_SEC, DST_SEC, timeServer1, timeServer2, timeServer3 );
@@ -117,7 +133,7 @@ void setup()
   //Read internal state, apply defaults if we can't find user-set values in Eeprom.
   EEPROM.begin(512);
   readFromEeprom();    
-  delay(2000);
+  delay(5000);
     
   //Setup WiFi
   Serial.printf( "Entering Wifi setup for host %s\n", myHostname );
@@ -126,32 +142,35 @@ void setup()
   //Setup I2C
 #if defined _ESP8266_01_
   //Pins mode and direction setup for i2c on ESP8266-01
-  pinMode(0, OUTPUT);
-  pinMode(2, OUTPUT);
+  pinMode(0, INPUT_PULLUP);
+  pinMode(2, INPUT_PULLUP);
   pinMode(3, INPUT_PULLUP);
     
   //I2C setup SDA pin 0, SCL pin 2
-  Wire.begin(0, 2);
+  //Normally Wire.begin(0, 2);
+  Wire.begin( 2,0 /*0, 2*/);  
   Serial.println("Configured pins for ESP8266-01");
 #else //__ESP8266_12_
   //Pins mode and direction setup for i2c on ESP8266-12
-  pinMode(4, OUTPUT);
-  pinMode(5, OUTPUT);
-  pinMode(3, INPUT_PULLUP);
-  //setup pins 13, 14, 15 for encoder 
-  //setup pin 11 to be analogue in for battery voltage sensing.   
-  //pinMode( 11, INPUT );
-  //I2C setup SDA pin 0, SCL pin 2
+  pinMode(4, INPUT_PULLUP);
+  pinMode(5, INPUT_PULLUP);
+  //I2C setup SDA GPIO 5, SCL GPIO4 4
   Wire.begin(4, 5);
+  
+  //setup pins 13, 14, 15 for encoder (only need two + home if available.)
+  pinMode(12, INPUT_PULLUP);
+  pinMode(13, INPUT_PULLUP);
   Serial.println("Configured pins for ESP8266-12");
 #endif
-  Wire.setClock(50000 );//100KHz target rate is a bit hopeful for this device 
+  Wire.setClock(100000 );//100KHz target rate is a bit hopeful for this device 
+////////////////////////////////////////////////////////////////////////////////////////
 
   outbuf = scanI2CBus();
-  Serial.println( outbuf.c_str() ) ;
+  debugD( "I2CScan: %s", outbuf.c_str() );
 
+////////////////////////////////////////////////////////////////////////////////////////
   //Open a connection to MQTT
-  DEBUGS1("Starting to configure MQTT connection to :");DEBUGSL1( MQTTServerName );
+  DEBUGS1("Configuring MQTT connection to :");DEBUGSL1( MQTTServerName );
   client.setServer( MQTTServerName, 1883 );
   Serial.printf(" MQTT settings id: %s user: %s pwd: %s\n", thisID, pubsubUserID, pubsubUserPwd );
   client.connect( thisID, pubsubUserID, pubsubUserPwd ); 
@@ -161,31 +180,44 @@ void setup()
   publishHealth();
   client.loop();
   DEBUGSL1("Configured MQTT connection");
-  
-  //Setup i2C to drive motor controller
-  DEBUGSL1("Starting to configure motor connection");
-  myMotor.check();
-  myMotor.init();
-  DEBUGSL1("Configured motor connection");
+   
+  //Setup the sensors
+  motorPresent = myMotor.check();
+  if ( motorPresent )
+  {
+    myMotor.init();
+    myMotor.setSpeedDirection( MOTOR_SPEED_OFF, MOTOR_DIRN_CW );  
+    motorSpeed = MOTOR_SPEED_OFF;
+    motorDirection = MOTOR_DIRN_CW;
+    myMotor.getSpeedDirection();
+    Serial.printf("motor initialised - speed: %u, direction: %u", myMotor.getSpeed(), myMotor.getDirection() );
+  }
+  else
+    Serial.println("No motor found on i2c bus");
 
   //Setup i2c to control LCD display
   DEBUGSL1("Starting to configure LCD connection");
-  //LCDPresent = myLCD.checkLCD();
-  LCDPresent = true;
-  if ( !LCDPresent )
-    Serial.printf("unable to access LCD\n");  
-  else
+  lcdPresent = ( myLCD.checkLCD() == 0 )? true: false;
+  if( lcdPresent )
   { 
     myLCD.clearScreen();
     myLCD.setCursor( 1, 1, I2CLCD::CURSOR_UNDERLINE );
     myLCD.setBacklight( true ); 
-    myLCD.writeLCD( 1, 1 , "ASCOMDome ready" );
+    myLCD.writeLCD( 4, 1 , "ASCOMDome ready" );
+    DEBUGSL1("Configured LCD connection");
   }
-  DEBUGSL1("Configured LCD connection");
+  else
+  {
+    Serial.printf("LCD not found to configure.\n");  
+  }
   
   //Use one of these to track the dome position
-#ifdef _USE_ENCODER_FOR_DOME_ROTATION
-  //setupEncoder();
+#ifdef USE_LOCAL_ENCODER_FOR_DOME_ROTATION
+  setupEncoder();
+#elif defined USE_REMOTE_ENCODER_FOR_DOME_ROTATION
+  //
+#elif defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION
+  //
 #endif
  
   //Register Web server handler functions 
@@ -218,28 +250,34 @@ void setup()
  
 //Common ASCOM function handlers
   server.on("/api/v1/dome/0/action",        HTTP_PUT, handleAction );              //Tested: Not implemented
-  server.on("/api/v1/dome/0/commandblind",  HTTP_PUT, handleCommandBlind );        //These two have fdiffernt responses
-  server.on("/api/v1/dome/0/commandbool",   HTTP_PUT, handleCommandBool );         //These two have fdiffernt responses
+  server.on("/api/v1/dome/0/commandblind",  HTTP_PUT, handleCommandBlind );        //These two have different responses
+  server.on("/api/v1/dome/0/commandbool",   HTTP_PUT, handleCommandBool );         //These two have different responses
   server.on("/api/v1/dome/0/commandstring", HTTP_GET, handleCommandString );       //tested
   server.on("/api/v1/dome/0/connected",               handleConnected );           //tested  
   server.on("/api/v1/dome/0/description",   HTTP_GET, handleDescriptionGet );      //tested
   server.on("/api/v1/dome/0/driverinfo",    HTTP_GET, handleDriverInfoGet );       //freezes/times out
   server.on("/api/v1/dome/0/driverversion", HTTP_GET, handleDriverVersionGet );    //tested
+  server.on("/api/v1/dome/0/interfaceversion", HTTP_GET, handleInterfaceVersionGet );    //tested
   server.on("/api/v1/dome/0/name",          HTTP_GET, handleNameGet ); //tested    //tested - doesnt return hostname
   server.on("/api/v1/dome/0/actions",       HTTP_GET, handleSupportedActionsGet ); //tested
   
   //Custom and setup handlers used by the custom setup form 
   //ASCOM ALPACA doesn't support any way to tell the REST device some of its basic setup constants so you have to 
   //do something like this. Or a serial interface .. Its a legacy of expecting a windows exe driver thing.
-  server.on("/",            HTTP_GET, handleSetup);
-  //HTML forms don't support PUT - they typically use GET instead.
+  server.on("/setup",            HTTP_GET, handleSetup);
+  server.on("/api/v1/dome/0/setup",HTTP_GET, handleSetup);
+  
+  //HTML forms don't support PUT -  they typically transform them to use GET instead.
   server.on("/Hostname",    HTTP_GET, handleHostnamePut );
-  server.on("/DomeName",    HTTP_GET, handleNamePut );
-  //server.on("/SetPark",    HTTP_GET, handleParkPut );
-  //server.on("/SetHome",    HTTP_GET, handleHomePut );
+  server.on("/ShutterName", HTTP_GET, handleShutterNamePut );
+  server.on("/SensorName",  HTTP_GET, handleSensorNamePut );
+  server.on("/Park",        HTTP_GET, handleParkPositionPut );
+  server.on("/Home",        HTTP_GET, handleHomePositionPut );
+  server.on("/Goto",        HTTP_GET, handleDomeGoto );
   server.on("/Sync",        HTTP_GET, handleSyncOffsetPut );
   server.on("/restart", handlerRestart );
-
+  server.on("/status", handlerStatus );
+  server.on("/", handlerStatus);
   server.onNotFound(handlerNotFound);
   Serial.println( "Web handlers registered" );
   
@@ -258,20 +296,28 @@ void setup()
   server.begin();
   Serial.println( "webserver setup complete");
    
-  //Get values
-  domeStatus = getShutterStatus ( shutterHostname );
+  //Get startup values
+  domeStatus = DOME_IDLE;
+  domeTargetStatus = domeStatus;
+  
+  shutterStatus = getShutterStatus ( shutterHostname );
+  shutterTargetStatus = shutterStatus;
+  
   bearing = getBearing( sensorHostname );
   currentAzimuth = getAzimuth( bearing);
-  atHome = (currentAzimuth <= (homePosition + acceptableAzimuthError/2) && currentAzimuth >= (homePosition - acceptableAzimuthError/2) );
-  atPark = (currentAzimuth <= (parkPosition + acceptableAzimuthError/2) && currentAzimuth >= (parkPosition - acceptableAzimuthError/2) );
+  
+  //Are we close to locations of interest ?
+  atHome = ( abs( currentAzimuth - homePosition ) < acceptableAzimuthError );
+  atPark = ( abs( currentAzimuth - parkPosition ) < acceptableAzimuthError );
     
   //Start timers last
-  ets_timer_arm_new( &coarseTimer, 1000,     1/*repeat*/, 1);//millis
-  ets_timer_arm_new( &fineTimer,   500,      1/*repeat*/, 1);//millis
+  ets_timer_arm_new( &coarseTimer, 5000,     1/*repeat*/, 1);//millis
+  ets_timer_arm_new( &fineTimer,   2000,      1/*repeat*/, 1);//millis
   //ets_timer_arm_new( &timeoutTimer, 2500, 0/*one-shot*/, 1);
 
   //Show welcome message
-  Serial.println( "setup complete");
+  Debug.setSerialEnabled(true);
+  debugW( "setup complete");
 }
 
 void onFineTimer( void* pArg )
@@ -298,16 +344,11 @@ void loop()
 	String outbuf;
   String LCDOutput = "";
   
-  if( WiFi.status() != WL_CONNECTED)
-  {
-      device.restart();
-  }
-
   //Operate and Clear down flags
   if( fineTimerFlag )
   {
     bearing = getBearing( sensorHostname );
-    Serial.printf( "Loop: Bearing %3.2f\n", bearing );
+    //debugI( "Loop: Bearing %03.2f\n", bearing );
     currentAzimuth = getAzimuth( bearing);
     fineTimerFlag = false;
   }
@@ -315,12 +356,13 @@ void loop()
   if ( coarseTimerFlag )
   {
     //Update domeStatus    
-    getShutterStatus( shutterHostname );
-    Serial.printf( "Loop: Dome %i Shutter %i\n", domeStatus, shutterStatus );
+    //getShutterStatus( shutterHostname );
+    //debugI( "Loop: Dome %i Shutter %i\n", domeStatus, shutterStatus );
 
     // Main code here, to run repeatedly:
     //Handle state changes
     //in dome  
+   
     switch ( domeStatus )
     {
       case DOME_IDLE:    onDomeIdle();
@@ -347,23 +389,27 @@ void loop()
     }
  
     //Clock tick onLCD 
-    int index = 0;
-    int lastIndex = 0;
-    String output = "";
-    getTimeAsString( outbuf );
-    index = outbuf.indexOf( " " );
-    lastIndex = outbuf.indexOf( "." );
-    if( index >= 0 && lastIndex >= index )
+    if ( lcdPresent ) 
     {
-      LCDOutput = outbuf.substring( index, lastIndex );
-      myLCD.writeLCD( 1,1, LCDOutput );
-    } 
+      int index = 0;
+      int lastIndex = 0;
+      String output = "";
+      getTimeAsString( outbuf );
+      index = outbuf.indexOf( " " );
+      lastIndex = outbuf.indexOf( "." );
+      if( index >= 0 && lastIndex >= index )
+      {
+        LCDOutput = outbuf.substring( index, lastIndex );
+        myLCD.writeLCD( 1,1, LCDOutput );
+      } 
+    }
+
     coarseTimerFlag = false;
   }
  
   if( client.connected() )
   {
-    if (callbackFlag )
+    if( callbackFlag )
     {
       //publish any results ?
       callbackFlag = false;
@@ -379,6 +425,11 @@ void loop()
   
   //If there are any web client connections - handle them.
   server.handleClient();
+
+  // Remote debug over WiFi
+  Debug.handle();
+  // Or
+  //debugHandle(); // Equal to SerialDebug  
 }
    
   void coarseTimerHandler(void)
@@ -391,32 +442,6 @@ void loop()
     fineTimerFlag = true;
   }
   
-  cmdItem_t* addDomeCmd( uint32_t clientId, uint32_t transId, enum domeCmd newCmd, int value )
-  {
-      //Create new command
-      cmdItem_t* pCmd = (cmdItem_t*) calloc( sizeof( cmdItem_t ), 1); 
-      //Add to list 
-      pCmd->cmd = (int) newCmd;
-      pCmd->value = value;
-      pCmd->clientId = clientId;
-      pCmd->transId = transId; 
-      domeCmdList->add( pCmd );
-      return pCmd;
-  }
-
-  cmdItem_t* addShutterCmd( uint32_t clientId, uint32_t transId, enum shutterCmd newCmd, int value )
-  {
-      //Create new command
-      cmdItem_t* pCmd = (cmdItem_t*) calloc( sizeof( cmdItem_t ), 1); 
-      //Add to list 
-      pCmd->cmd = (int) newCmd;
-      pCmd->value = value;
-      pCmd->clientId = clientId;
-      pCmd->transId = transId; 
-      shutterCmdList->add( pCmd );
-      return pCmd;
-  }
-
 /* MQTT callback for subscription and topic.
  * Only respond to valid states ""
  * Publish under ~/skybadger/sensors/<sensor type>/<host>
@@ -445,13 +470,15 @@ void callback(char* topic, byte* payload, unsigned int length)
 
   // Once connected, publish an announcement...
   root["hostname"] = myHostname;
-  if( connected ) 
+  if( connected != NOT_CONNECTED ) 
     root["message"] = "Dome connected & operating";
   else
     root["message"] = "Dome ready for connection";
   root.printTo( output );
+  
   outTopic = outHealthTopic;
   outTopic.concat( myHostname );
+  
   client.publish( outTopic.c_str(), output.c_str() );  
-  Serial.print( outTopic );Serial.print( " published: " ); Serial.println( output );
- }
+  debugI( "Topic published: %s ", output.c_str() ); 
+  }
