@@ -34,28 +34,25 @@
 
 To test:
  Download curl for your operating system. Linux variants and Windows powershell should already have it.
- e.g. curl -v -X PUT -d 'homePosition=270' http://EspDom01/Dome/0/API/v1/FilterCount
+ e.g. curl -v -X PUT -d 'homePosition=270' http://EspDom01/API/v1/Dome/0/setHome
  Use the ALPACA REST API docs at <> to validate the dome behaviour. At some point there will be a script
 
 External Dependencies:
 ArduinoJSON library 5.13 ( moving to 6 is a big change) 
-pubsub library 
+pubsub library for MQTT 
 ALPACA for ASCOM 6.5
 Expressif ESP8266 board library for arduino - configured for v2.5
+EEPROMAnything library - added string handler since it doesn't do char* strings well
 
 ESP8266-12 Huzzah
   /INT - GPIO3
-  [I2C SDA - GPIO4
-  SCL - GPIO5]
-  [SPI SCK = GPIO #14 (default)
-  SPI MOSI = GPIO #13 (default)
-  SPI MISO = GPIO #12 (default)]
+  [I2C SDA - GPIO4  SCL - GPIO5]
+  [SPI SCK = GPIO #14 (default)  SPI MOSI = GPIO #13 (default)  SPI MISO = GPIO #12 (default)]
   ENC_A
   ENC_B
   ENC_H
-  Humidity sensor - 1-wire interface
-  Battery voltage Sensor- i2c
-  Temp Sensor = i2c
+  
+  Motor controller - i2c
   LCD Display - i2c
 */
 
@@ -77,7 +74,7 @@ void setupWifi(void)
   int zz = 00;
   WiFi.mode(WIFI_STA);
   WiFi.hostname( myHostname );
-  WiFi.begin( ssid1, password1 );
+  WiFi.begin( ssid2, password2 );
   Serial.println("Connecting");
   while (WiFi.status() != WL_CONNECTED) 
   {
@@ -118,7 +115,7 @@ void setup()
   //Debugging over telnet setup
   // Initialize the server (telnet or web socket) of RemoteDebug
   //Debug.begin(HOST_NAME, startingDebugLevel );
-  Debug.begin( WiFi.hostname().c_str(), Debug.VERBOSE ); 
+  Debug.begin( WiFi.hostname().c_str(), Debug.INFO ); 
   Debug.setSerialEnabled(true);//until set false 
   // Options
   // Debug.setResetCmdEnabled(true); // Enable the reset command
@@ -131,7 +128,7 @@ void setup()
   Serial.println( "Time Services setup");
       
   //Read internal state, apply defaults if we can't find user-set values in Eeprom.
-  EEPROM.begin(512);
+  EEPROM.begin(1024);
   readFromEeprom();    
   delay(5000);
     

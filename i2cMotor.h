@@ -2,7 +2,7 @@
 #define _i2cMotor_h_
 
 //*Include ASCOMDome enum for motor speed and direction settings.
-enum motorSpeed: uint8_t     { MOTOR_SPEED_OFF=0, MOTOR_SPEED_SLOW_SLEW=80, MOTOR_SPEED_FAST_SLEW=120 };
+enum motorSpeed: uint8_t     { MOTOR_SPEED_OFF=0, MOTOR_SPEED_SLOW_SLEW=160, MOTOR_SPEED_FAST_SLEW=240 };
 enum motorDirection: uint8_t { MOTOR_DIRN_CW=0, MOTOR_DIRN_CCW=1 };
 
 
@@ -114,9 +114,7 @@ class i2cMotor
    {
       //Write string to device
       byte* outData = new byte[3];
-      uint8_t speed;
-      //_speed = newSpeed;
-      //_direction = newDirn;
+      uint8_t speed = 128;
       
       //Convert speed and direction into simple velocity
       //motor mode register address - mode 2 is 0 (full reverse)  128 (stop)   255 (full forward).

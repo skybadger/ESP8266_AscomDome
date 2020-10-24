@@ -70,8 +70,8 @@ extern "C" {
 time_t now; //use as 'gmtime(&now);'
 
 //Program constants
-#define MAX_NAME_LENGTH 25
-const int nameLengthLimit = 25; //Default max length of names in char[]
+#define MAX_NAME_LENGTH 100
+const int nameLengthLimit = MAX_NAME_LENGTH; //Default max length of names in char[]
 const int acceptableAzimuthError = 2; //Indicates how close to target we want to get before we say its done. 
 const int slowAzimuthRange = 10; //Indicates how close to target we want to get before we slow down to a crawl.
 enum domeState               { DOME_IDLE, DOME_SLEWING, DOME_ABORT };
@@ -124,7 +124,7 @@ typedef struct {
 
 //defaults for setup before replacing with values read from eeprom
 //Should be const but compiler barfs when copying into an array for later use
-const char* defaultHostname        =   "espDOMtst";
+const char* defaultHostname        =   "espDOM01";
 const char* defaultShutterHostname =   "espDSH00.i-badger.co.uk";
 #if   defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION
 const char* defaultSensorHostname  =   "espSEN01.i-badger.co.uk"; //Remote Compass host

@@ -400,7 +400,9 @@ void onShutterIdle()
     compassURL.concat( sensorHostname );
     compassURL.concat( "/bearing" );
     response = restQuery( compassURL, "", output, HTTP_GET );
+#if defined DEBUG_HTTPCLIENT      
     debugD( "[HTTPClient response ] response code: %i, response: %s", response, output.c_str() );
+#endif    
     JsonObject& root = jsonBuff.parse( output );
     
     if ( response == HTTP_CODE_OK && root.success() && root.containsKey("bearing") )
@@ -411,7 +413,9 @@ void onShutterIdle()
     else
     {
       debugE( "Shutter compass bearing call not successful, response: %i", response );
+#if defined DEBUG_HTTPCLIENT      
       debugV( "bearing json content: %s", output.c_str() );
+#endif      
       debugE( "JSON parsing status: %i", root.success() );
     }
     return status;
@@ -430,7 +434,7 @@ void onShutterIdle()
     hClient.setTimeout ( (uint16_t) 250 );    
     hClient.setReuse( true );    
     
-    //debugI("restQuery request - uri: %s args:%s\n", host.c_str(), args.c_str() );
+    debugI("restQuery request - uri: %s args:%s\n", host.c_str(), args.c_str() );
     startTime = millis();
     if ( hClient.begin( wClient, host) ) //host and args are separate, need to join them for a GET parameterised request.    //if ( hClient.begin( wClient, uri ) ) //uri must already have request args in it
     {
@@ -438,24 +442,33 @@ void onShutterIdle()
       {
         httpCode = hClient.GET();
         endTime = millis();
-        //debugV( "Time for restQuery call(mS): %li\n", endTime-startTime );
+#if defined DEBUG_HTTPCLIENT            
+        debugV( "Time for restQuery call(mS): %li\n", endTime-startTime );
+#endif        
       }
       else if ( method == HTTP_PUT ) //variables are added as headers
       {
         httpCode = hClient.PUT( args );        
         endTime = millis();
-        //debugV("Time for restQuery call: %li mS\n", endTime-startTime );
+#if defined DEBUG_HTTPCLIENT      
+        debugV("Time for restQuery call: %li mS\n", endTime-startTime );
+#endif        
       }
      
       // file found at server ?
       if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) 
       {
         response = hClient.getString();
-        //debugV("HTTP rest query : %s\n", response.c_str() );
+#if defined DEBUG_HTTPCLIENT      
+        debugV("HTTP rest query : %s\n", response.c_str() );
+#endif        
       }
       else 
       {
-        //debugV("restQuery ... failed, error: %s\n", hClient.errorToString(httpCode).c_str() );
+#if defined DEBUG_HTTPCLIENT      
+        debugV("restQuery ... failed, error: %s\n", hClient.errorToString(httpCode).c_str() );
+#endif        
+        ;;
       } 
       hClient.end();
     }
@@ -469,6 +482,9 @@ void onShutterIdle()
 #if defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION || defined USE_REMOTE_ENCODER_FOR_DOME_ROTATION
   /*
    * Function to determine bearing of dome - just return a sane value to the caller. Let the caller handler sync offsets. 
+   * Note that if we don this right we can point this at any device that returns a 'bearing' in the rest response as long as the url is
+   * setup correctly in the setup pages. 
+   * That means the 'host' string is no longer strictly just a hostname. 
    */
   float getBearing( String host)
   {
@@ -482,29 +498,30 @@ void onShutterIdle()
     DynamicJsonBuffer jsonBuff(256);    
     
     //Update the bearing
-#if defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION        
     path = String( "http://" );
     path += host;
     path += "/bearing";
-    debugD("GetBearing using remote compass - host path: %s \n", host.c_str() );
-#elif defined USE_REMOTE_ENCODER_FOR_DOME_ROTATION
-    path = String( "http://" );
-    path += host;
-    path += "/encoder/bearing";    
-    debugD("GetBearing using remote encoder - host path: %s \n", path.c_str() );
-#endif  
-    debugD("GetBearing setup - host uri: %s \n", host.c_str() );
+#if defined DEBUG_HTTPCLIENT      
+    debugV("GetBearing using remote encoder - host path: %s \n", path.c_str() );
+    debugV("GetBearing setup - host uri: %s \n", host.c_str() );
+#endif    
     response = restQuery( path, "", outbuf, HTTP_GET );
+#if defined DEBUG_HTTPCLIENT      
     debugD("GetBearing response - code: %i, output: %s", response, outbuf.c_str() );
+#endif
     
     //Sometimes we get a good HTTP code but still no body... 
     JsonObject& root = jsonBuff.parse( outbuf );
     if ( response == HTTP_CODE_OK && root.success() && root.containsKey( "bearing" ) )
     {            
         bearing = (float) root["bearing"];
+#if defined DEBUG_HTTPCLIENT      
         debugD(" GetBearing: bearing %f", bearing );     
+#endif        
 
 #if defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION        
+      //this isnt the right thing to do if its due to not getting a rest response in time from a busy device. 
+      /*
       if ( lastBearing == bearing ) //We do this to check for sensor freeze
       {
         bearingRepeatCount ++;
@@ -514,18 +531,22 @@ void onShutterIdle()
         if ( bearingRepeatCount > bearingRepeatLimit ) 
         {  
           uri = "http://";
-          uri.concat( sensorHostname );
-          uri.concat( "/encoder/bearing/reset" );
+          uri.concat( host );
+          uri.concat( "/reset" );
           
           response = restQuery( uri, "", outbuf, HTTP_PUT );
           debugW(" GetBearing: Compass reset attempted !");
-          myLCD.writeLCD( 2, 0, "Compass reset !");
+          if (myLCD.present ) 
+            myLCD.writeLCD( 2, 0, "Compass reset !");
           bearingRepeatCount = 0;
         }
       }
       else //good value not stuck 
+      */
       {
+#if defined DEBUG_HTTPCLIENT      
         debugV(" GetBearing: Reading obtained %f\n", bearing );
+#endif       
         lastBearing = bearing;
         bearingRepeatCount = 0;
       }
@@ -533,7 +554,9 @@ void onShutterIdle()
     }
     else //can't retrieve the bearing
     {
-      //debugV( "GetBearing: response code: %i, parse success: %i, json data: %s", response, root.success(), outbuf.c_str() );
+#if defined DEBUG_HTTPCLIENT      
+      debugV( "GetBearing: response code: %i, parse success: %i, json data: %s", response, root.success(), outbuf.c_str() );
+#endif      
       debugW("GetBearing: no reading, using last  ");
 
       //hand back the current bearing, so we don't slew off into strange territory when we return 0.0f instead. 
@@ -588,7 +611,9 @@ void onShutterIdle()
     {
       value = SHUTTER_ERROR;
       debugW("Shutter controller call not successful");
-      //debugD("Shutter response: %i, parse result %i, json data %s", response, root.success(), outbuf.c_str() );
+#if defined DEBUG_HTTPCLIENT      
+      debugD("Shutter response: %i, parse result %i, json data %s", response, root.success(), outbuf.c_str() );
+#endif      
     }
   return value;
   }
