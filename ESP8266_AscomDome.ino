@@ -43,7 +43,9 @@ pubsub library for MQTT
 ALPACA for ASCOM 6.5
 Expressif ESP8266 board library for arduino - configured for v2.5
 EEPROMAnything library - added string handler since it doesn't do char* strings well
-
+GDB - not really used
+RemoteDebug - used more and more. 
++
 ESP8266-12 Huzzah
   /INT - GPIO3
   [I2C SDA - GPIO4  SCL - GPIO5]
@@ -58,15 +60,38 @@ ESP8266-12 Huzzah
 
 /////////////////////////////////////////////////////////////////////////////////
 
+//Internal variables
+#include "SkybadgerStrings.h"
 #include "ESP8266_AscomDome.h"   //App variables - pulls in the other include files - its all in there.
 #include "Skybadger_common_funcs.h"
-#include "ASCOMAPIDome_rest.h"
 #include "ASCOMAPICommon_rest.h"
+#include "ASCOMAPIDome_rest.h"
 #include "JSONHelperFunctions.h"
 #include "ASCOM_DomeCmds.h"
 #include "ASCOM_Domehandler.h"
 #include "ASCOM_DomeSetup.h"
 #include "ASCOM_DomeEeprom.h"
+
+void scanNet(void)
+{
+  int i;
+  int n;
+  WiFi.disconnect();
+  n = WiFi.scanNetworks(false, true);
+  if (n == 0) 
+  {
+    Serial.println("(no networks found)");
+  } 
+  else 
+  {
+    Serial.println(" networks found ");
+    for (int i = 0; i < n; ++i)
+    {
+      Serial.println(WiFi.SSID(i));
+      Serial.println(WiFi.RSSI(i));
+    }
+  }
+}
 
 void setupWifi(void)
 {
@@ -74,6 +99,9 @@ void setupWifi(void)
   int zz = 00;
   WiFi.mode(WIFI_STA);
   WiFi.hostname( myHostname );
+
+  scanNet( );
+  
   WiFi.begin( ssid2, password2 );
   Serial.println("Connecting");
   while (WiFi.status() != WL_CONNECTED) 
@@ -110,7 +138,7 @@ void setup()
   Serial.begin( 115200, SERIAL_8N1, SERIAL_TX_ONLY);
   Serial.println(F("ESP starting."));
   //gdbstub_init();
-  delay(2000); 
+  delay(5000); 
 
   //Debugging over telnet setup
   // Initialize the server (telnet or web socket) of RemoteDebug
@@ -128,7 +156,7 @@ void setup()
   Serial.println( "Time Services setup");
       
   //Read internal state, apply defaults if we can't find user-set values in Eeprom.
-  EEPROM.begin(1024);
+  EEPROM.begin(800);
   readFromEeprom();    
   delay(5000);
     

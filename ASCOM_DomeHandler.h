@@ -275,8 +275,8 @@ void handleSlewingGet(void)
   JsonObject& root = jsonBuffer.createObject();
 
   String argsToSearchFor[] = {"clientID","clientTransactionID"};
-  uint32_t clientID;
-  uint32_t transID;
+  uint32_t clientID = 0;
+  uint32_t transID = 0;
    
   if( hasArgIC( argsToSearchFor[0], server, false ) )
      clientID = (uint32_t)server.arg( argsToSearchFor[0] ).toInt();
@@ -403,8 +403,8 @@ void handleFindHomePut(void)
    JsonObject& root = jsonBuffer.createObject();
 
    String argsToSearchFor[] = {"clientID","clientTransactionID"};
-   uint32_t clientID;
-   uint32_t transID;
+   uint32_t clientID = 0;
+   uint32_t transID = 0;
    
   if( hasArgIC( argsToSearchFor[0], server, false ) )
      clientID = (uint32_t)server.arg( argsToSearchFor[0] ).toInt();
@@ -433,8 +433,8 @@ void handleOpenShutterPut(void)
    JsonObject& root = jsonBuffer.createObject();
 
    String argsToSearchFor[] = {"clientID","clientTransactionID"};
-   uint32_t clientID;
-   uint32_t transID;
+   uint32_t clientID = 0;
+   uint32_t transID = 0;
    
   if( hasArgIC( argsToSearchFor[0], server, false ) )
      clientID = (uint32_t)server.arg( argsToSearchFor[0] ).toInt();
@@ -475,8 +475,8 @@ void handleSetParkPut(void)
    JsonObject& root = jsonBuffer.createObject();
 
    String argsToSearchFor[] = {"clientID","clientTransactionID",};
-   uint32_t clientID;
-   uint32_t transID;
+   uint32_t clientID = 0;
+   uint32_t transID = 0;
    
   if( hasArgIC( argsToSearchFor[0], server, false ) )
      clientID = (uint32_t)server.arg( argsToSearchFor[0] ).toInt();
@@ -526,8 +526,8 @@ void handleSlewToAltitudePut(void)
    JsonObject& root = jsonBuffer.createObject();
 
    String argsToSearchFor[] = {"clientID","clientTransactionID","altitude"};
-   uint32_t clientID;
-   uint32_t transID;
+   uint32_t clientID = 0;
+   uint32_t transID = 0;
    
   if( hasArgIC( argsToSearchFor[0], server, false ) )
      clientID = (uint32_t)server.arg( argsToSearchFor[0] ).toInt();
@@ -564,8 +564,8 @@ void handleSlewToAzimuthPut(void)
    String message;
    
    String argsToSearchFor[] = {"clientID","clientTransactionID","Azimuth"};
-   uint32_t clientID;
-   uint32_t transID;
+   uint32_t clientID = 0;
+   uint32_t transID = 0;
    
    float location = 0.0F;
    
@@ -618,8 +618,8 @@ void handleSyncToAzimuthPut(void)
    JsonObject& root = jsonBuffer.createObject();
 
    String argsToSearchFor[] = {"clientID","clientTransactionID","Azimuth"};
-   uint32_t clientID;
-   uint32_t transID;
+   uint32_t clientID = 0;
+   uint32_t transID = 0;
     
   if( hasArgIC( argsToSearchFor[0], server, false ) )
     clientID = (uint32_t)server.arg( argsToSearchFor[0] ).toInt();

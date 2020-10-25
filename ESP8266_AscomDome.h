@@ -98,7 +98,7 @@ enum I2CConst                { I2C_READ = 0x80, I2C_WRITE = 0x00 };
 #define ENCODER_H_PIN 6
 #define ENCODER_OPTIMIZE_INTERRUPTS
 #include <Encoder.h>
-const int defaultWheelDiameter = 68; //Encoder jockey wheel 
+const int defaultWheelDiameter = 60; //Encoder jockey wheel 
 const int defaultDomeDiameter = 2700; //My Dome diameter - change for yours. 
 const int defaultEncoderTicksPerRevolution = 400*4; //Encoder PPR is 400 but we detect every edge so *4 
 const int defaultEncoderCountsPerDomeRev = defaultEncoderTicksPerRevolution * (defaultDomeDiameter/defaultWheelDiameter);
@@ -119,17 +119,14 @@ typedef struct {
   long int transId;
 } cmdItem_t;
   
-//Internal variables
-#include <SkybadgerStrings.h>
-
 //defaults for setup before replacing with values read from eeprom
 //Should be const but compiler barfs when copying into an array for later use
 const char* defaultHostname        =   "espDOM01";
 const char* defaultShutterHostname =   "espDSH00.i-badger.co.uk";
 #if   defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION
-const char* defaultSensorHostname  =   "espSEN01.i-badger.co.uk"; //Remote Compass host
+const char* defaultSensorHostname  =   "espenc01.i-badger.co.uk";         //Remote Compass host
 #elif defined USE_REMOTE_ENCODER_FOR_DOME_ROTATION
-const char* defaultSensorHostname  =   "espENC01.i-badger.co.uk"; //Remote Encoder host
+const char* defaultSensorHostname  =   "espENC01.i-badger.co.uk/encoder"; //Remote Encoder host
 #elif defined USE_LOCAL_COMPASS_FOR_DOME_ROTATION
 //Nada
 #endif //Encoder source host selection 
@@ -214,9 +211,9 @@ void timeoutTimerHandler(void);
 //ASCOM-dependent variables 
 unsigned int transactionId;
 unsigned int clientId;
-const long int NOT_CONNECTED = -1;
 int connectionCtr = 0;
-long int connected = NOT_CONNECTED;
+extern const unsigned int NOT_CONNECTED;
+unsigned int connected = NOT_CONNECTED;
 const String DriverName = "Skybadger.ESPDome";
 const String DriverVersion = "0.9";
 const String DriverInfo = "Skybadger.ESPDome RESTful native device. ";
@@ -226,7 +223,7 @@ const String InterfaceVersion = "2";
 const int INSTANCE_NUMBER = 0001;
 const int GUID = 001002003004;
 
-//setup later since we are allowing this to be dynamic. 
+//setup later since we are allowing this to be dynamic via EEprom. 
 //pre-req for setup default function; 
 const char* defaultAscomName = "Skybadger Dome 01"; 
 char* ascomName = nullptr;
