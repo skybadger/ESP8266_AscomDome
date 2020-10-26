@@ -33,23 +33,29 @@ File to be included into relevant device REST setup
 
   float normaliseFloat( float& input, float radix) 
   {
+    float temp = input;
     float output = 0.0F;
     output = fmod( input, radix ) ;
-    while( output < 0.0 ) //some compilers allow negative values with mod
+    while( output < 0.0F ) //some compilers allow negative values with mod
     {
       output += radix;
     }
+    debugV( "NormaliseFloat: in: %f, out: %f", temp, output );
+    input = output;
     return output;
   }
   
   int normaliseInt( int& input, int radix )
   {
-    int output = 0.0;
+    int temp = input;
+    int output = 0;
     output = input % radix;
-    while( output < 0.0 ) //some compilers allow negative values with mod
+    while( output < 0 ) //some compilers allow negative values with mod
     {
       output += radix;
     }
+    debugV( "NormaliseInt: in: %i, out: %i", temp, output );
+    input = output;
     return output;  
   }
 
@@ -129,10 +135,6 @@ File to be included into relevant device REST setup
           {
               azimuthSyncOffset = (float) pCmd->value;
               saveToEeprom();
-          }
-          else if ( pCmd->cmdName.equalsIgnoreCase( "azimuthSyncOffset") )
-          {
-            
           }
           domeStatus = DOME_IDLE;
           break;
@@ -400,7 +402,7 @@ void onShutterIdle()
     compassURL.concat( sensorHostname );
     compassURL.concat( "/bearing" );
     response = restQuery( compassURL, "", output, HTTP_GET );
-#if defined DEBUG_HTTPCLIENT      
+#if defined DEBUG_ESP_HTTP_CLIENT      
     debugD( "[HTTPClient response ] response code: %i, response: %s", response, output.c_str() );
 #endif    
     JsonObject& root = jsonBuff.parse( output );
@@ -413,7 +415,7 @@ void onShutterIdle()
     else
     {
       debugE( "Shutter compass bearing call not successful, response: %i", response );
-#if defined DEBUG_HTTPCLIENT      
+#if defined DEBUG_ESP_HTTP_CLIENT      
       debugV( "bearing json content: %s", output.c_str() );
 #endif      
       debugE( "JSON parsing status: %i", root.success() );
@@ -430,7 +432,7 @@ void onShutterIdle()
     int httpCode = 0;
     long int startTime;
     long int endTime;
-    HTTPClient hClient;
+    //HTTPClient hClient;
     hClient.setTimeout ( (uint16_t) 250 );    
     hClient.setReuse( true );    
     
@@ -442,7 +444,7 @@ void onShutterIdle()
       {
         httpCode = hClient.GET();
         endTime = millis();
-#if defined DEBUG_HTTPCLIENT            
+#if defined DEBUG_ESP_HTTP_CLIENT            
         debugV( "Time for restQuery call(mS): %li\n", endTime-startTime );
 #endif        
       }
@@ -450,7 +452,7 @@ void onShutterIdle()
       {
         httpCode = hClient.PUT( args );        
         endTime = millis();
-#if defined DEBUG_HTTPCLIENT      
+#if defined DEBUG_ESP_HTTP_CLIENT      
         debugV("Time for restQuery call: %li mS\n", endTime-startTime );
 #endif        
       }
@@ -459,13 +461,13 @@ void onShutterIdle()
       if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) 
       {
         response = hClient.getString();
-#if defined DEBUG_HTTPCLIENT      
+#if defined DEBUG_ESP_HTTP_CLIENT      
         debugV("HTTP rest query : %s\n", response.c_str() );
 #endif        
       }
       else 
       {
-#if defined DEBUG_HTTPCLIENT      
+#if defined DEBUG_ESP_HTTP_CLIENT      
         debugV("restQuery ... failed, error: %s\n", hClient.errorToString(httpCode).c_str() );
 #endif        
         ;;
@@ -491,7 +493,7 @@ void onShutterIdle()
     static int bearingRepeatCount = 0;
     static float lastBearing = 0.0F;
     const int bearingRepeatLimit = 10;
-    float bearing = 0.0F;
+    float localBearing = 0.0F;
     int response = 0;
     String outbuf = "";
     String path = "";
@@ -501,12 +503,12 @@ void onShutterIdle()
     path = String( "http://" );
     path += host;
     path += "/bearing";
-#if defined DEBUG_HTTPCLIENT      
+#if defined DEBUG_ESP_HTTP_CLIENT      
     debugV("GetBearing using remote encoder - host path: %s \n", path.c_str() );
     debugV("GetBearing setup - host uri: %s \n", host.c_str() );
 #endif    
     response = restQuery( path, "", outbuf, HTTP_GET );
-#if defined DEBUG_HTTPCLIENT      
+#if defined DEBUG_ESP_HTTP_CLIENT      
     debugD("GetBearing response - code: %i, output: %s", response, outbuf.c_str() );
 #endif
     
@@ -514,9 +516,9 @@ void onShutterIdle()
     JsonObject& root = jsonBuff.parse( outbuf );
     if ( response == HTTP_CODE_OK && root.success() && root.containsKey( "bearing" ) )
     {            
-        bearing = (float) root["bearing"];
-#if defined DEBUG_HTTPCLIENT      
-        debugD(" GetBearing: bearing %f", bearing );     
+        localBearing = (float) root["bearing"];
+#if defined DEBUG_ESP_HTTP_CLIENT      
+        debugD(" GetBearing: bearing %f", localBearing );     
 #endif        
 
 #if defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION        
@@ -544,23 +546,21 @@ void onShutterIdle()
       else //good value not stuck 
       */
       {
-#if defined DEBUG_HTTPCLIENT      
-        debugV(" GetBearing: Reading obtained %f\n", bearing );
+#if defined DEBUG_ESP_HTTP_CLIENT      
+        debugV(" GetBearing: Reading obtained %f\n", localBearing );
 #endif       
-        lastBearing = bearing;
+        lastBearing = localBearing;
+        bearing = localBearing;
         bearingRepeatCount = 0;
       }
 #endif      
     }
     else //can't retrieve the bearing
     {
-#if defined DEBUG_HTTPCLIENT      
+#if defined DEBUG_ESP_HTTP_CLIENT      
       debugV( "GetBearing: response code: %i, parse success: %i, json data: %s", response, root.success(), outbuf.c_str() );
 #endif      
       debugW("GetBearing: no reading, using last  ");
-
-      //hand back the current bearing, so we don't slew off into strange territory when we return 0.0f instead. 
-      bearing = currentAzimuth - azimuthSyncOffset;
     }
     return bearing;
   }
@@ -611,7 +611,7 @@ void onShutterIdle()
     {
       value = SHUTTER_ERROR;
       debugW("Shutter controller call not successful");
-#if defined DEBUG_HTTPCLIENT      
+#if defined DEBUG_ESP_HTTP_CLIENT      
       debugD("Shutter response: %i, parse result %i, json data %s", response, root.success(), outbuf.c_str() );
 #endif      
     }
