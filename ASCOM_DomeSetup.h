@@ -243,12 +243,13 @@ void handleSyncOffsetPut( void)
     newGoto = (int) localName.toFloat();    
  
     //range should be limited in HTML form constraints
-    if ( newGoto >= 0 && newGoto <=360 )
+    if ( newGoto >= 0.0F && newGoto <=360.0F )
     {
-      offsetVal = newGoto - currentAzimuth;
-      //update current position by moving to current azimuth
+      offsetVal = newGoto - bearing;
+      normaliseFloat( offsetVal, 360.0F );
+
       //Add to list at top.
-      addDomeCmd( 100, 1000, "synctoazimuth" , CMD_DOMEVAR_SET, offsetVal );
+      addDomeCmd( 100, 1000, "azimuthSyncOffset" , CMD_DOMEVAR_SET, offsetVal );
     }
     else
     {
