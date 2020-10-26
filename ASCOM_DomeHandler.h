@@ -100,7 +100,7 @@ void handleAzimuthGet(void)
     DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, "Azimuth", 0, "" );    
-    root["Value"] = currentAzimuth;
+    root["Value"] = normaliseFloat( currentAzimuth, 360.0);
     //JsonArray& offsets = root.createNestedArray("Value");
     root.printTo(message);
     debugI("AzimuthGet: %s", message.c_str() );
@@ -299,8 +299,8 @@ void handleAbortSlewPut(void)
   JsonObject& root = jsonBuffer.createObject();
 
   String argsToSearchFor[] = {"clientID","clientTransactionID"};
-  uint32_t clientID;
-  uint32_t transID;
+  uint32_t clientID =0;
+  uint32_t transID =0;
    
   if( hasArgIC( argsToSearchFor[0], server, false ) )
      clientID = (uint32_t)server.arg( argsToSearchFor[0] ).toInt();
@@ -341,8 +341,8 @@ void handleShutterStatusGet(void)
   JsonObject& root = jsonBuffer.createObject();
 
   String argsToSearchFor[] = {"clientID","clientTransactionID"};
-  uint32_t clientID;
-  uint32_t transID;
+  uint32_t clientID =0;
+  uint32_t transID =0;
    
   if( hasArgIC( argsToSearchFor[0], server, false ) )
      clientID = (uint32_t)server.arg( argsToSearchFor[0] ).toInt();
@@ -368,8 +368,8 @@ void handleCloseShutterPut(void)
   JsonObject& root = jsonBuffer.createObject();
 
   String argsToSearchFor[] = {"clientID","clientTransactionID"};
-  uint32_t clientID;
-  uint32_t transID;
+  uint32_t clientID =0;
+  uint32_t transID =0;
    
   if( hasArgIC( argsToSearchFor[0], server, false ) )
      clientID = (uint32_t)server.arg( argsToSearchFor[0] ).toInt();
@@ -581,7 +581,7 @@ void handleSlewToAzimuthPut(void)
   if( hasArgIC( argsToSearchFor[2], server, false ) )
     location = server.arg( argsToSearchFor[2]).toFloat();
      
-  //debugD( "SlewToAzimuthPut: %i", location );
+  debugI( "SlewToAzimuthPut: %f", location );
  
   //Removed DOME_IDLE dependency - we don't care since this will be an async call...
   if( connected != clientID ) 
@@ -632,20 +632,22 @@ void handleSyncToAzimuthPut(void)
 
   if( connected != clientID ) 
       jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SyncToAzimuth"), notConnected, "Not connected" );    
-  if( server.hasArg( argsToSearchFor[2] ) )
+  else if( server.hasArg( argsToSearchFor[2] ) )
   {
     //Set new (actual) azimuth location.
     normaliseFloat( location, 360.0F );
     
-    //The offset is the difference between where the dome is currently pointing and where we are told it is pointing.
-    azimuthSyncOffset = (float) ( location - currentAzimuth );
-    
+    //The offset is the difference between where the dome says it is currently pointing and where we are told it is pointing.
+    azimuthSyncOffset = (float) ( location - bearing );
+    debugD( "azimuthsync - input: %f, currentAz: %f, offset %f", location, currentAzimuth, azimuthSyncOffset);
     //Because we can go out of range we do this again
     normaliseFloat( azimuthSyncOffset, 360.0F );
+    debugD( "azimuthsync - normalised offset: %f ",  azimuthSyncOffset );
     
     addDomeCmd( clientID, transID, "azimuthSyncOffset", CMD_DOMEVAR_SET, azimuthSyncOffset );
-    //Tell the dome to move to the target azimuth using the updated correction
-    addDomeCmd( clientID, transID, "", CMD_DOME_SLEW, iTargetAzimuth );
+    //Tell the dome to move to the target azimuth using the updated correction - should be trivial.
+    addDomeCmd( clientID, transID, "", CMD_DOME_SLEW, (int) getAzimuth( bearing ) );
+    
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SyncToAzimuth"), Success, "" );    
   }
   else

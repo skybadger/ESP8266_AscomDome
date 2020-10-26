@@ -2,7 +2,7 @@
 #define _ESP8266_ASCOMDOME_H_
 
 #define _DEBUG
-// #define DEBUG_HTTPCLIENT(...) Serial.printf( __VA_ARGS__ ) // 
+// #define DEBUG_ESP_HTTP_CLIENT(...) Serial.printf( __VA_ARGS__ ) // 
 
 #define _ESP8266_01_
 //define _ESP8266_12_
@@ -124,7 +124,7 @@ typedef struct {
 const char* defaultHostname        =   "espDOM01";
 const char* defaultShutterHostname =   "espDSH00.i-badger.co.uk";
 #if   defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION
-const char* defaultSensorHostname  =   "espenc01.i-badger.co.uk";         //Remote Compass host
+const char* defaultSensorHostname  =   "espsen01.i-badger.co.uk";         //Remote Compass host
 #elif defined USE_REMOTE_ENCODER_FOR_DOME_ROTATION
 const char* defaultSensorHostname  =   "espENC01.i-badger.co.uk/encoder"; //Remote Encoder host
 #elif defined USE_LOCAL_COMPASS_FOR_DOME_ROTATION
@@ -170,6 +170,7 @@ ESP8266WebServer server(80);
 ESP8266HTTPUpdateServer updater;
 
 //REST API client
+HTTPClient hClient;  
 WiFiClient wClient;  //Client for web requests
 WiFiClient mClient;  //Client for MQTT
 
@@ -215,7 +216,7 @@ int connectionCtr = 0;
 extern const unsigned int NOT_CONNECTED;
 unsigned int connected = NOT_CONNECTED;
 const String DriverName = "Skybadger.ESPDome";
-const String DriverVersion = "0.9";
+const String DriverVersion = "1";
 const String DriverInfo = "Skybadger.ESPDome RESTful native device. ";
 const String Description = "Skybadger ESP2866-based wireless ASCOM Dome controller";
 const String InterfaceVersion = "2";

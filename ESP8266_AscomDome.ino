@@ -26,7 +26,7 @@
    3, Add list handler - done
    4, Update smd list to handle variable settings and fixup responses for async responses. Report to ascom community
    Test handler functions 
-   5, Add url to query for staus of async operations. Consider whether user just needs to call for status again. 
+   5, Add url to query for status of async operations. Consider whether user just needs to call for status again. 
    6, Fix EEPROM handling - done. 
    7, Add ALPACA mgmt API and UDP discovery call handling
    8, zero-justify seconds and minutes in sprintf time string.
@@ -87,8 +87,7 @@ void scanNet(void)
     Serial.println(" networks found ");
     for (int i = 0; i < n; ++i)
     {
-      Serial.println(WiFi.SSID(i));
-      Serial.println(WiFi.RSSI(i));
+      Serial.printf( "ID: %s, Strength: %i \n", WiFi.SSID(i).c_str(), WiFi.RSSI(i) );
     }
   }
 }
@@ -102,8 +101,7 @@ void setupWifi(void)
 
   scanNet( );
   
-  WiFi.begin( ssid2, password2 );
-  Serial.println("Connecting");
+  WiFi.begin( ssid2, password2 );  Serial.println("Connecting");
   while (WiFi.status() != WL_CONNECTED) 
   {
     delay(500);//This delay is essentially for the DHCP response. Shouldn't be required for static config.
@@ -143,7 +141,7 @@ void setup()
   //Debugging over telnet setup
   // Initialize the server (telnet or web socket) of RemoteDebug
   //Debug.begin(HOST_NAME, startingDebugLevel );
-  Debug.begin( WiFi.hostname().c_str(), Debug.INFO ); 
+  Debug.begin( WiFi.hostname().c_str(), Debug.ERROR ); 
   Debug.setSerialEnabled(true);//until set false 
   // Options
   // Debug.setResetCmdEnabled(true); // Enable the reset command
@@ -229,7 +227,7 @@ void setup()
     myLCD.setCursor( 1, 1, I2CLCD::CURSOR_UNDERLINE );
     myLCD.setBacklight( true ); 
     myLCD.writeLCD( 4, 1 , "ASCOMDome ready" );
-    DEBUGSL1("Configured LCD connection");
+    DEBUGSL1("LCD found and configured");
   }
   else
   {
@@ -336,8 +334,8 @@ void setup()
   atPark = ( abs( currentAzimuth - parkPosition ) < acceptableAzimuthError );
     
   //Start timers last
-  ets_timer_arm_new( &coarseTimer, 5000,     1/*repeat*/, 1);//millis
-  ets_timer_arm_new( &fineTimer,   2000,      1/*repeat*/, 1);//millis
+  ets_timer_arm_new( &coarseTimer, 2500,     1/*repeat*/, 1);//millis
+  ets_timer_arm_new( &fineTimer,   1000,      1/*repeat*/, 1);//millis
   //ets_timer_arm_new( &timeoutTimer, 2500, 0/*one-shot*/, 1);
 
   //Show welcome message
@@ -361,7 +359,7 @@ void onCoarseTimer( void* pArg )
 void onTimeoutTimer( void* pArg )
 {
    ;;//fn moved to Shutter controller  - delete later if not used. 
-   timeoutTimerFlag = true;
+   timeoutFlag = true;
 }
 
 void loop()
@@ -373,8 +371,8 @@ void loop()
   if( fineTimerFlag )
   {
     bearing = getBearing( sensorHostname );
-    //debugI( "Loop: Bearing %03.2f\n", bearing );
     currentAzimuth = getAzimuth( bearing);
+    debugD( "Loop: Bearing %03.2f, offset: %f, adjusted: %f\n", bearing, azimuthSyncOffset, currentAzimuth );
     fineTimerFlag = false;
   }
   
@@ -432,22 +430,25 @@ void loop()
     coarseTimerFlag = false;
   }
  
-  if( client.connected() )
+  if ( client.connected() )
   {
-    if( callbackFlag )
+    //Service MQTT keep-alives
+    client.loop();
+
+    if (callbackFlag ) 
     {
-      //publish any results ?
-      callbackFlag = false;
+      //publish results
       publishHealth();
+      callbackFlag = false;
     }
-    client.loop(); 
-  }    //Service MQTT keep-alives
+  }
   else
   {
+    //reconnect();
     reconnectNB();
-    client.subscribe( inTopic );
+    client.subscribe(inTopic);
   }
-  
+
   //If there are any web client connections - handle them.
   server.handleClient();
 
