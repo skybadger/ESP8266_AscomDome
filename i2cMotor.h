@@ -142,8 +142,5 @@ class i2cMotor
       _direction = newDirn;
       return ( error == 0 );
    }
-
-
-
 };
 #endif

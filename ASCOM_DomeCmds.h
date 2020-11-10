@@ -120,8 +120,16 @@ File to be included into relevant device REST setup
           onDomeAbort();
           break;
         case CMD_DOMEVAR_SET:
-          //Did this so that dome variables aren't updated while waiting for commands that preceeded them to execute.    
-          if( pCmd->cmdName.equalsIgnoreCase( "parkPosition") )
+          //Did this so that dome variables aren't updated while waiting for commands that preceeded them to execute.   
+          if ( pCmd->cmdName == nullptr )
+          {
+            debugW( "DOME_VAR_SET nullptr command name");
+          }
+          else if ( pCmd->cmdName == "" )
+          {
+            debugW( "DOME_VAR_SET empty command name");            
+          }
+          else if( pCmd->cmdName.equalsIgnoreCase( "parkPosition") )
           {
               parkPosition = (float) pCmd->value;
               saveToEeprom();
@@ -164,7 +172,7 @@ File to be included into relevant device REST setup
    */
   void onDomeSlew( void )
   {
-    int distance = 0;
+    float distance = 0;
     enum motorSpeed speed = MOTOR_SPEED_OFF;
     enum motorDirection direction = MOTOR_DIRN_CW; 
     float localAzimuth = 0.0F; 
@@ -176,6 +184,12 @@ File to be included into relevant device REST setup
     distance = targetAzimuth - localAzimuth ;
     debugD( "OnDomeSlew: current: %f, target: %f", localAzimuth, targetAzimuth );    
 
+    //Whatever the state. 
+    if( abs( localAzimuth - homePosition ) < acceptableAzimuthError )
+      atHome = true;
+    if( abs( localAzimuth - parkPosition ) < acceptableAzimuthError )
+      atPark = true;
+
     //Work out speed to turn dome
     if( abs(distance) < acceptableAzimuthError )
     {
@@ -183,10 +197,6 @@ File to be included into relevant device REST setup
       //turn off motor
       myMotor.setSpeedDirection( speed = MOTOR_SPEED_OFF, direction );
       domeStatus = DOME_IDLE;
-      if( abs( localAzimuth - homePosition ) < acceptableAzimuthError )
-        atHome = true;
-      if( abs( localAzimuth - parkPosition ) < acceptableAzimuthError )
-        atPark = true;
 
       //Update the desired state to say we have finished.
       domeStatus = DOME_IDLE;
@@ -205,16 +215,16 @@ File to be included into relevant device REST setup
     else
     {
       speed = MOTOR_SPEED_FAST_SLEW;
-      debugD( "Dome speed fast - distance: %i", distance );    
+      debugD( "Dome speed fast - distance: %f", distance );    
       if ( lcdPresent ) 
         myLCD.writeLCD( 2, 0, "Slew::Fast" );
     }
     
     //Work out the direction. 
-    direction = ( distance > 0 ) ? MOTOR_DIRN_CW: MOTOR_DIRN_CCW;
-    debugD( "Dome target distance & dirn: %i, %i", distance, direction );         
+    direction = ( distance >= 0.0F ) ? MOTOR_DIRN_CW: MOTOR_DIRN_CCW;
+    debugD( "Dome target distance & dirn: %f, %i", distance, direction );         
 
-    if ( abs(distance) > 180 )
+    if ( abs(distance) > 180.0F )
     {
       //Swap direction and go the short route. 
       direction = ( direction == MOTOR_DIRN_CW )? MOTOR_DIRN_CCW:MOTOR_DIRN_CW; 
@@ -257,11 +267,11 @@ File to be included into relevant device REST setup
     //turn off motor
     if( motorPresent )
       myMotor.setSpeedDirection( MOTOR_SPEED_OFF, MOTOR_DIRN_CW );
-    debugW("Aborting- set motor to stop");
+    debugW("Aborting- motor set to stop");
     
     //message to LCD  
     if( lcdPresent ) 
-      myLCD.writeLCD( 2, 0, "ABORT received - dome halted." );
+      myLCD.writeLCD( 2, 0, "ABORT - dome halted." );
     
     // ? close shutter ?
     
@@ -281,8 +291,8 @@ void onShutterIdle()
   {
     pCmd = shutterCmdList->pop();
     debugI("OnShutterIdle - new command popped: %i", pCmd->cmd );  
-    shutterTargetStatus = pCmd->cmd;
-    switch ( shutterTargetStatus )
+    
+    switch ( pCmd->cmd )
     {
        case CMD_SHUTTER_OPEN: 
        case CMD_SHUTTER_CLOSE:           
@@ -491,8 +501,8 @@ void onShutterIdle()
   float getBearing( String host)
   {
     static int bearingRepeatCount = 0;
-    static float lastBearing = 0.0F;
     const int bearingRepeatLimit = 10;
+    static float lastBearing = bearing;
     float localBearing = 0.0F;
     int response = 0;
     String outbuf = "";
@@ -504,7 +514,7 @@ void onShutterIdle()
     path += host;
     path += "/bearing";
 #if defined DEBUG_ESP_HTTP_CLIENT      
-    debugV("GetBearing using remote encoder - host path: %s \n", path.c_str() );
+    debugV("GetBearing using remote device - host path: %s \n", path.c_str() );
     debugV("GetBearing setup - host uri: %s \n", host.c_str() );
 #endif    
     response = restQuery( path, "", outbuf, HTTP_GET );
@@ -518,7 +528,7 @@ void onShutterIdle()
     {            
         localBearing = (float) root["bearing"];
 #if defined DEBUG_ESP_HTTP_CLIENT      
-        debugD(" GetBearing: bearing %f", localBearing );     
+        debugD(" GetBearing: localBearing %f", localBearing );     
 #endif        
 
 #if defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION        
@@ -549,8 +559,6 @@ void onShutterIdle()
 #if defined DEBUG_ESP_HTTP_CLIENT      
         debugV(" GetBearing: Reading obtained %f\n", localBearing );
 #endif       
-        lastBearing = localBearing;
-        bearing = localBearing;
         bearingRepeatCount = 0;
       }
 #endif      
@@ -561,8 +569,9 @@ void onShutterIdle()
       debugV( "GetBearing: response code: %i, parse success: %i, json data: %s", response, root.success(), outbuf.c_str() );
 #endif      
       debugW("GetBearing: no reading, using last  ");
+      localBearing = lastBearing;
     }
-    return bearing;
+    return localBearing;
   }
 #else //if local interface in use
    //write something for the local case of local hardware encoder interface

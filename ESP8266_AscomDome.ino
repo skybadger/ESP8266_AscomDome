@@ -138,17 +138,6 @@ void setup()
   //gdbstub_init();
   delay(5000); 
 
-  //Debugging over telnet setup
-  // Initialize the server (telnet or web socket) of RemoteDebug
-  //Debug.begin(HOST_NAME, startingDebugLevel );
-  Debug.begin( WiFi.hostname().c_str(), Debug.ERROR ); 
-  Debug.setSerialEnabled(true);//until set false 
-  // Options
-  // Debug.setResetCmdEnabled(true); // Enable the reset command
-  // Debug.showProfiler(true); // To show profiler - time between messages of Debug
-  //In practice still need to use serial commands until debugger is up and running.. 
-  debugE("Remote debugger enabled and operating");
-
   //Start time
   configTime(TZ_SEC, DST_SEC, timeServer1, timeServer2, timeServer3 );
   Serial.println( "Time Services setup");
@@ -162,6 +151,17 @@ void setup()
   Serial.printf( "Entering Wifi setup for host %s\n", myHostname );
   setupWifi();
     
+  //Debugging over telnet setup
+  // Initialize the server (telnet or web socket) of RemoteDebug
+  //Debug.begin(HOST_NAME, startingDebugLevel );
+  Debug.begin( WiFi.hostname().c_str(), Debug.ERROR ); 
+  Debug.setSerialEnabled(true);//until set false 
+  // Options
+  // Debug.setResetCmdEnabled(true); // Enable the reset command
+  // Debug.showProfiler(true); // To show profiler - time between messages of Debug
+  //In practice still need to use serial commands until debugger is up and running.. 
+  debugE("Remote debugger enabled and operating");
+
   //Setup I2C
 #if defined _ESP8266_01_
   //Pins mode and direction setup for i2c on ESP8266-01
@@ -221,6 +221,7 @@ void setup()
   //Setup i2c to control LCD display
   DEBUGSL1("Starting to configure LCD connection");
   lcdPresent = ( myLCD.checkLCD() == 0 )? true: false;
+  lcdPresent = false;//above check doesnt work - LCD currently not fitted. 
   if( lcdPresent )
   { 
     myLCD.clearScreen();
@@ -282,13 +283,19 @@ void setup()
   server.on("/api/v1/dome/0/driverversion", HTTP_GET, handleDriverVersionGet );    //tested
   server.on("/api/v1/dome/0/interfaceversion", HTTP_GET, handleInterfaceVersionGet );    //tested
   server.on("/api/v1/dome/0/name",          HTTP_GET, handleNameGet ); //tested    //tested - doesnt return hostname
-  server.on("/api/v1/dome/0/actions",       HTTP_GET, handleSupportedActionsGet ); //tested
+  server.on("/api/v1/dome/0/supportedactions",       HTTP_GET, handleSupportedActionsGet ); //tested
+
+  /* ALPACA Management and setup interfaces
+   * The main browser setup URL would be http://192.168.1.89:7843/setup
+The JSON list of supported interface versions would be available through a GET to http://192.168.1.89:7843/management/apiversions
+The JSON list of configured ASCOM devices would be available through a GET to http://192.168.1.89:7843/management/v1/configureddevices
+   */
+  //server.on("/management/apiversions",          HTTP_GET, handleNameGet ); //tested? NYI
+  //server.on("/management/v1/configureddevices", HTTP_GET, handleNameGet ); //tested? NYI - check vi url component is real
   
-  //Custom and setup handlers used by the custom setup form 
-  //ASCOM ALPACA doesn't support any way to tell the REST device some of its basic setup constants so you have to 
-  //do something like this. Or a serial interface .. Its a legacy of expecting a windows exe driver thing.
-  server.on("/setup",            HTTP_GET, handleSetup);
-  server.on("/api/v1/dome/0/setup",HTTP_GET, handleSetup);
+  //Custom and setup handlers used by the custom setup form - currently there is no collection of devices.
+  server.on("/setup",            HTTP_GET, handleSetup); //Primary browser web page for the overall collection of devices
+  server.on("/setup​/v1​/dome/01​/setup", HTTP_GET, handleSetup);
   
   //HTML forms don't support PUT -  they typically transform them to use GET instead.
   server.on("/Hostname",    HTTP_GET, handleHostnamePut );
@@ -301,6 +308,7 @@ void setup()
   server.on("/restart", handlerRestart );
   server.on("/status", handlerStatus );
   server.on("/", handlerStatus);
+  
   server.onNotFound(handlerNotFound);
   Serial.println( "Web handlers registered" );
   
@@ -308,6 +316,7 @@ void setup()
   ets_timer_setfn( &fineTimer,    onFineTimer,    NULL ); 
   ets_timer_setfn( &coarseTimer,  onCoarseTimer,  NULL ); 
   ets_timer_setfn( &timeoutTimer, onTimeoutTimer, NULL ); 
+  ets_timer_setfn( &minuteTimer, onMinuteTimer, NULL ); 
   
   domeCmdList    = new LinkedList <cmdItem_t*>();
   shutterCmdList = new LinkedList <cmdItem_t*>();
@@ -321,11 +330,7 @@ void setup()
    
   //Get startup values
   domeStatus = DOME_IDLE;
-  domeTargetStatus = domeStatus;
-  
   shutterStatus = getShutterStatus ( shutterHostname );
-  shutterTargetStatus = shutterStatus;
-  
   bearing = getBearing( sensorHostname );
   currentAzimuth = getAzimuth( bearing);
   
@@ -336,10 +341,17 @@ void setup()
   //Start timers last
   ets_timer_arm_new( &coarseTimer, 2500,     1/*repeat*/, 1);//millis
   ets_timer_arm_new( &fineTimer,   1000,      1/*repeat*/, 1);//millis
+  //ets_timer_arm_new( &minuteTimer,   60000,      1/*repeat*/, 1);//millis
   //ets_timer_arm_new( &timeoutTimer, 2500, 0/*one-shot*/, 1);
 
   //Show welcome message
-  Debug.setSerialEnabled(true);
+  Debug.setSerialEnabled(false);
+
+#if defined _TEST_RAM_
+  originalRam = device.getFreeHeap();
+  lastRam = originalRam;
+#endif
+
   debugW( "setup complete");
 }
 
@@ -362,6 +374,13 @@ void onTimeoutTimer( void* pArg )
    timeoutFlag = true;
 }
 
+//Used to test/force callback health actions. 
+void onMinuteTimer( void* pArg )
+{
+   ;;//fn moved to Shutter controller  - delete later if not used. 
+   callbackFlag = true;
+}
+
 void loop()
 {
 	String outbuf;
@@ -380,7 +399,7 @@ void loop()
   {
     //Update domeStatus    
     //getShutterStatus( shutterHostname );
-    //debugI( "Loop: Dome %i Shutter %i\n", domeStatus, shutterStatus );
+    debugV( "Loop: Dome %i Shutter %i\n", domeStatus, shutterStatus );
 
     // Main code here, to run repeatedly:
     //Handle state changes
@@ -430,23 +449,25 @@ void loop()
     coarseTimerFlag = false;
   }
  
-  if ( client.connected() )
+  if ( !client.connected() )
+  {
+    debugW( "Waiting on client sync reconnection ");
+    //reconnect();
+    reconnectNB();
+    debugI( "MQTT reconnected  ");
+    client.setCallback( callback );
+    client.subscribe(inTopic);
+  }
+  else
   {
     //Service MQTT keep-alives
     client.loop();
-
     if (callbackFlag ) 
     {
       //publish results
       publishHealth();
       callbackFlag = false;
     }
-  }
-  else
-  {
-    //reconnect();
-    reconnectNB();
-    client.subscribe(inTopic);
   }
 
   //If there are any web client connections - handle them.
@@ -456,6 +477,16 @@ void loop()
   Debug.handle();
   // Or
   //debugHandle(); // Equal to SerialDebug  
+
+#if defined _TEST_RAM_    
+    //Check heap for memory bugs 
+    uint32_t ram = ESP.getFreeHeap();
+    if( lastRam != ( ram - originalRam ) )
+    {
+      lastRam = ram - originalRam;
+      debugI("RAM: %d  change %d\n", ram, lastRam );
+    }
+#endif
 }
    
   void coarseTimerHandler(void)
@@ -505,6 +536,12 @@ void callback(char* topic, byte* payload, unsigned int length)
   outTopic = outHealthTopic;
   outTopic.concat( myHostname );
   
-  client.publish( outTopic.c_str(), output.c_str() );  
-  debugI( "Topic published: %s ", output.c_str() ); 
+  if( client.publish( outTopic.c_str(), output.c_str() ) )  
+  {
+    debugI( "Topic published: %s ", output.c_str() ); 
   }
+  else
+  {
+    debugW( "Topic failed to publish: %s ", output.c_str() );   
+  }
+ }

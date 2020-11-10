@@ -10,6 +10,8 @@
 //Use for client testing
 //#define _DISABLE_MQTT_
 
+//#define _TEST_RAM_ //no apparent memory leaks found. 
+
 //#define USE_REMOTE_COMPASS_FOR_DOME_ROTATION
 //#define USE_LOCAL_ENCODER_FOR_DOME_ROTATION
 #define USE_REMOTE_ENCODER_FOR_DOME_ROTATION
@@ -42,7 +44,9 @@
 #include <PubSubClient.h> //https://pubsubclient.knolleary.net/api.html
 #include "DebugSerial.h" 
 #include <GDBStub.h> //Debugging stub for GDB
+#define MAX_TIME_INACTIVE 0 //to turn off the de-activation of a telnet session
 #include "RemoteDebug.h"  //https://github.com/JoaoLopesF/RemoteDebug
+
 //Create a remote debug object
 RemoteDebug Debug;
 
@@ -98,7 +102,7 @@ enum I2CConst                { I2C_READ = 0x80, I2C_WRITE = 0x00 };
 #define ENCODER_H_PIN 6
 #define ENCODER_OPTIMIZE_INTERRUPTS
 #include <Encoder.h>
-const int defaultWheelDiameter = 60; //Encoder jockey wheel 
+const int defaultWheelDiameter = 61; //Encoder jockey wheel 
 const int defaultDomeDiameter = 2700; //My Dome diameter - change for yours. 
 const int defaultEncoderTicksPerRevolution = 400*4; //Encoder PPR is 400 but we detect every edge so *4 
 const int defaultEncoderCountsPerDomeRev = defaultEncoderTicksPerRevolution * (defaultDomeDiameter/defaultWheelDiameter);
@@ -151,7 +155,6 @@ int domeStatus = DOME_IDLE;
 int domeTargetStatus  = domeStatus;
 int domeLastStatus = domeStatus;
 int shutterStatus = SHUTTER_CLOSED;
-int shutterTargetStatus = shutterStatus;
 volatile boolean coarseTimerFlag = false;
 volatile boolean fineTimerFlag = false;
 volatile boolean timeoutTimerFlag = false;
@@ -178,7 +181,7 @@ WiFiClient mClient;  //Client for MQTT
 PubSubClient client(mClient);
 volatile bool callbackFlag = false;
 bool timeoutFlag = false;
-bool timerSet = false;
+volatile bool timerSet = false;
 
 //Encoder interface 
 #if defined USE_LOCAL_ENCODER_FOR_DOME_ROTATION
@@ -187,11 +190,15 @@ Encoder myEnc(ENCODER_A_PIN, ENCODER_B_PIN );
 
 //Hardware device system functions - reset/restart etc
 EspClass device;
+uint32_t originalRam;
+uint32_t lastRam;
 long int nowTime, startTime, indexTime;
-ETSTimer fineTimer, coarseTimer, timeoutTimer;
+
+ETSTimer fineTimer, coarseTimer, timeoutTimer, minuteTimer;
 void onCoarseTimer( void* ptr );
 void onFineTimer( void* ptr );
 void onTimeoutTimer( void* ptr );
+void onMinuteTimer( void* ptr );
 
 //Private web handler methods
 ;

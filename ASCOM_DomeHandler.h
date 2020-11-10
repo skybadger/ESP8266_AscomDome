@@ -328,6 +328,7 @@ void handleAbortSlewPut(void)
     domeStatus = DOME_ABORT;
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, "AbortSlew", Success, "" );
   }
+  root["value"] = connected; //return the current connected Client ID.
   root.printTo(message);
   debugI( "AbortSlewPut: %s", message.c_str() );    
   server.send(200, F("application/json"), message);
@@ -413,7 +414,9 @@ void handleFindHomePut(void)
      transID = (uint32_t)server.arg( argsToSearchFor[1] ).toInt();
 
    if ( connected != clientID ) 
+   {
      jsonResponseBuilder( root, clientID, transID, ++serverTransID, "FindHome", notConnected, "Not connected" );       
+   }
    else
    {
       //Set command to move to home.
@@ -504,12 +507,19 @@ void handleSetParkPut(void)
 void handleParkPut(void)
 {
    String message;
-   uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
-   uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
    DynamicJsonBuffer jsonBuffer(256);
    JsonObject& root = jsonBuffer.createObject();
 
-   //in this driver model, each device has a separate ip address ,so can only be one device. Hence ignore device-number
+   String argsToSearchFor[] = {"clientID","clientTransactionID",};
+   uint32_t clientID = 0;
+   uint32_t transID = 0;
+   
+  if( hasArgIC( argsToSearchFor[0], server, false ) )
+     clientID = (uint32_t)server.arg( argsToSearchFor[0] ).toInt();
+  
+  if( hasArgIC( argsToSearchFor[1], server, false ) )
+     transID = (uint32_t)server.arg( argsToSearchFor[1] ).toInt();
+    
    addDomeCmd( clientID, transID, "", CMD_DOME_SLEW, parkPosition );      
    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("Park"), Success, "" );    
    root.printTo(message);
@@ -538,7 +548,6 @@ void handleSlewToAltitudePut(void)
   if( hasArgIC( argsToSearchFor[2], server, false ) )
      location = (boolean) server.arg( argsToSearchFor[2]).toFloat();
    
-  //Removed test for DOME_IDLE since we handle this asynchronously
   if( connected != clientID ) 
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAltitude"), notConnected, "Client not connected" );    
   else if ( server.hasArg( argsToSearchFor[2] ) )
@@ -557,7 +566,7 @@ void handleSlewToAltitudePut(void)
 }
 
 /*
- * The handler receives target Azimuth in integer degrees
+ * The handler receives target Azimuth in real degrees
  */
 void handleSlewToAzimuthPut(void)
 {
@@ -583,15 +592,14 @@ void handleSlewToAzimuthPut(void)
      
   debugI( "SlewToAzimuthPut: %f", location );
  
-  //Removed DOME_IDLE dependency - we don't care since this will be an async call...
   if( connected != clientID ) 
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAzimuth"), notConnected, "Not connected" ); 
-  if( server.hasArg( argsToSearchFor[2] ) )
+  else if( server.hasArg( argsToSearchFor[2] ) )
   {
     //Set new slew location.
     normaliseFloat( location, 360.0F );
     debugD( "SlewToAzimuthPut: %f", location );
-    addDomeCmd( clientID, transID, "", CMD_DOME_SLEW, location );
+    addDomeCmd( clientID, transID, "SlewToAzimuthPut", CMD_DOME_SLEW, location );
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAzimuth"), Success, "" ); 
   }
   else 

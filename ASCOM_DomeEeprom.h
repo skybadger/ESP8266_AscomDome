@@ -193,7 +193,7 @@ void saveToEeprom( void )
     abortFlag = false; 
     homePosition = defaultHomePosition;
     parkPosition = defaultParkPosition;
-    connected = false;
+    connected = NOT_CONNECTED;
     slaved = false;
     slewing = false;
     domeStatus = DOME_IDLE;
