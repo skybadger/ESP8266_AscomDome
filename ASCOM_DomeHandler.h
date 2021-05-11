@@ -353,7 +353,9 @@ void handleShutterStatusGet(void)
 
   //anyone can get the shutter status.
   jsonResponseBuilder( root, clientID, transID, ++serverTransID, "ShutterStatus", Success, "" );
-  root["Value"] = shutterStatus;
+  
+  root.set<int>("Value", (int) shutterStatus );
+  //root.set<int>("Value", )
   //0 = Open, 1 = Closed, 2 = Opening, 3 = Closing, 4 = Shutter status error
   //JsonArray& offsets = root.createNestedArray("Value");
   root.printTo(message);
@@ -378,17 +380,25 @@ void handleCloseShutterPut(void)
   if( hasArgIC( argsToSearchFor[1], server, false ) )
      transID = (uint32_t)server.arg( argsToSearchFor[1] ).toInt();
 
-  if ( connected != clientID ) 
-  {
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, "CloseShutter", notConnected, "Not connected" );           
-  }
-  //in this driver model, each device has a separate ip address ,so can only be one device. hence ignore device-number
-  else 
-  {
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, "CloseShutter", Success, "" );
-    //Create new async command
-    addShutterCmd( clientID, transID, "", CMD_SHUTTER_CLOSE, 0 ); 
-  }
+   if( connected != clientID ) 
+      jsonResponseBuilder( root, clientID, transID, ++serverTransID, "CloseShutter", notConnected, "Client not connected" );    
+   else if ( shutterStatus == SHUTTER_CLOSED || shutterStatus == SHUTTER_CLOSING )
+   { 
+      jsonResponseBuilder( root, clientID, transID, ++serverTransID, "CloseShutter", Success, "" );    
+      debugD( "CloseShutterPut: Already closing or closed - skipped. " );              
+   }
+   else if( shutterStatus == SHUTTER_OPENING || shutterStatus == SHUTTER_OPEN )
+   {
+      //Set command to close shutter.
+      addShutterCmd( clientID, transID, "", CMD_SHUTTER_CLOSE, 0 ); 
+      debugD( "CloseShutterPut: Added async command to close" );        
+      jsonResponseBuilder( root, clientID, transID, ++serverTransID, "CloseShutter", Success, "" );    
+   }
+   else
+   {
+      jsonResponseBuilder( root, clientID, transID, ++serverTransID, "CloseShutter", invalidOperation, "Dome shutter not idle or errored" );       
+   } 
+  
   //JsonArray& offsets = root.createNestedArray("Value");
   root.printTo(message);
   debugI( "CloseShutterPut: %s", message.c_str() );        
@@ -448,17 +458,28 @@ void handleOpenShutterPut(void)
    //in this driver model,each device has a separate ip address ,so can only be one device. hence ignore device-number
    if( connected != clientID ) 
       jsonResponseBuilder( root, clientID, transID, ++serverTransID, "OpenShutter", notConnected, "Client not connected" );    
-   else if ( shutterStatus == SHUTTER_OPEN || shutterStatus == SHUTTER_OPENING) 
+   else if ( shutterStatus == SHUTTER_OPEN )
+   {
+      //We do this becuase the shutter reports open for any state but closed and we may stop it at any point
+      //Set command to open shutter.
+      addShutterCmd( clientID, transID, "", CMD_SHUTTER_OPEN, 0 );
+      debugD( "OpenShutterPut: Already open - requesting anyway. " );        
+   }
+   else if ( shutterStatus == SHUTTER_OPENING ) 
+   {
       jsonResponseBuilder( root, clientID, transID, ++serverTransID, "OpenShutter", Success, "" );    
-   else if( shutterStatus == SHUTTER_CLOSING )
+      debugD( "OpenShutterPut: Already opening - ignoring additional request." );            
+   }
+   else if( shutterStatus == SHUTTER_CLOSING || shutterStatus == SHUTTER_CLOSED )
    {
       //Set command to open shutter.
       addShutterCmd( clientID, transID, "", CMD_SHUTTER_OPEN, 0 );
+      debugD( "OpenShutterPut: Added async command to open" );        
       jsonResponseBuilder( root, clientID, transID, ++serverTransID, "OpenShutter", Success, "" );    
    }
    else
    {
-      jsonResponseBuilder( root, clientID, transID, ++serverTransID, "OpenShutter", invalidOperation, "Dome shutter not idle" );       
+      jsonResponseBuilder( root, clientID, transID, ++serverTransID, "OpenShutter", invalidOperation, "Dome shutter not idle or errored" );       
    }
    root.printTo(message);
    debugI( "OpenShutterPut: %s", message.c_str() );           
@@ -473,7 +494,6 @@ void handleOpenShutterPut(void)
 void handleSetParkPut(void)
 {
    String message;
-   int location = 0;
    DynamicJsonBuffer jsonBuffer(256);
    JsonObject& root = jsonBuffer.createObject();
 
@@ -551,10 +571,10 @@ void handleSlewToAltitudePut(void)
   if( connected != clientID ) 
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAltitude"), notConnected, "Client not connected" );    
   else if ( server.hasArg( argsToSearchFor[2] ) )
-  {
+  {\
     //Set new shutter altitude.
     normaliseFloat( location, SHUTTER_MAX_ALTITUDE );
-    addShutterCmd( clientId, transID, "", CMD_SHUTTER_OPEN, location );
+    addShutterCmd( clientID, transID, "altitude", CMD_SHUTTERVAR_SET, location );
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAltitude"), Success, "" );    
   }
   else
@@ -620,7 +640,6 @@ void handleSyncToAzimuthPut(void)
 {
    String message;
    float location=0;
-   int iTargetAzimuth = 0;
 
    DynamicJsonBuffer jsonBuffer(256);
    JsonObject& root = jsonBuffer.createObject();

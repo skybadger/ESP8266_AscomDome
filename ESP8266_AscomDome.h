@@ -25,11 +25,10 @@
 #undef USE_LOCAL_ENCODER_FOR_DOME_ROTATION
 #endif
 
-#include <Esp.h>                 //used for restart
+#include <Esp.h>                 //used for restart and cycle timer
 #include <ESP8266WiFi.h>         //https://links2004.github.io/Arduino/d3/d58/class_e_s_p8266_web_server.html
-#include <WiFiUdp.h>             //check whether required for NTP and DNS successful operation
+#include <WiFiUdp.h>             //Used for Alpaca Management
 #include <ESP8266WebServer.h>    //REST web server
-//#include "ESP8266WebServerEx.h"  //REST web server case-insensitive arguments handler
 #include "ESP8266HTTPUpdateServer.h"  //REST web server handllers for OTA firmware update
 
 //These two are for REST calls out. 
@@ -87,7 +86,8 @@ enum shutterCmd              { CMD_SHUTTER_ABORT=0, CMD_SHUTTER_OPEN=4, CMD_SHUT
 //enum motorSpeed: uint8_t     { MOTOR_SPEED_OFF=0, MOTOR_SPEED_SLOW_SLEW=120, MOTOR_SPEED_FAST_SLEW=240 };
 //enum motorDirection: uint8_t { MOTOR_DIRN_CW=0, MOTOR_DIRN_CCW=1 };
 enum I2CConst                { I2C_READ = 0x80, I2C_WRITE = 0x00 };  
-#define SHUTTER_MAX_ALTITUDE 110.0F
+#define SHUTTER_MAX_ALTITUDE 110
+#define SHUTTER_MIN_ALTITUDE 0
 
 //Dome Encoder information
 #ifdef USE_REMOTE_ENCODER_FOR_DOME_ROTATION
@@ -151,22 +151,29 @@ float currentAzimuth = 0.0F;    //+ve values are 0 N thro 90 E
 float bearing = 0.0F;
 float currentAltitude = 0.0F;
 float targetAltitude = 0.0F;
-int domeStatus = DOME_IDLE;
-int domeTargetStatus  = domeStatus;
-int domeLastStatus = domeStatus;
-int shutterStatus = SHUTTER_CLOSED;
+
+//State tracking
+enum domeState domeStatus         = DOME_IDLE;
+enum domeState domeTargetStatus   = domeStatus;
+enum domeState domeLastStatus     = domeStatus;
+enum shutterState shutterStatus   = SHUTTER_CLOSED;
+enum shutterState targetShutterStatus = SHUTTER_CLOSED;
+extern void publishFnStatus(void);
+
+//Timer flags
 volatile boolean coarseTimerFlag = false;
 volatile boolean fineTimerFlag = false;
 volatile boolean timeoutTimerFlag = false;
 
+//Cmd lists 
 #include <LinkedList.h>      //https://github.com/ivanseidel/LinkedList
 LinkedList <cmdItem_t*> *domeCmdList;
 LinkedList <cmdItem_t*> *shutterCmdList;
 LinkedList <cmdItem_t*> *cmdStatusList; // use to track async completion state. 
 
 //Functions added to custom setup page
-bool parkDomeOnDisconnect = false;
-bool closeShutterOnDisconnect = false;
+bool parkDomeOnDisconnect = true;
+bool closeShutterOnDisconnect = true;
 
 // Create an instance of the server - specify the port to listen on as an argument
 ESP8266WebServer server(80);
@@ -219,26 +226,38 @@ void timeoutTimerHandler(void);
 //ASCOM-dependent variables 
 unsigned int transactionId;
 unsigned int clientId;
-int connectionCtr = 0;
+int connectionCtr = 0; //variable to count number of times something has connected compared to disconnected. 
 extern const unsigned int NOT_CONNECTED;
 unsigned int connected = NOT_CONNECTED;
 const String DriverName = "Skybadger.ESPDome";
 const String DriverVersion = "1";
 const String DriverInfo = "Skybadger.ESPDome RESTful native device. ";
 const String Description = "Skybadger ESP2866-based wireless ASCOM Dome controller";
-const String InterfaceVersion = "2";
+const String InterfaceVersion = "3";
+const String DriverType = "ASCOM.Dome";
+
 //ALPACA support additions
-const int INSTANCE_NUMBER = 0001;
-const int GUID = 001002003004;
+//UDP Port can be edited in setup page
+#define ALPACA_DISCOVERY_PORT 32227
+int udpPort = ALPACA_DISCOVERY_PORT;
+WiFiUDP Udp;
+//espdom01 GUID - "0011-0000-0000-0001";
+char GUID[] = "0011-0000-0000-0001";
+const int defaultInstanceNumber = 1;
+int instanceNumber = 1;
 
 //setup later since we are allowing this to be dynamic via EEprom. 
 //pre-req for setup default function; 
 const char* defaultAscomName = "Skybadger Dome 01"; 
 char* ascomName = nullptr;
 
+//Mgmt Api Constants
+const int instanceVersion = 3; //the iteration version identifier for this driver. Update every major change - relate to your repo versioning
+char* Location = nullptr;
+
 //ASCOM variables
-const int defaultHomePosition = 180;
-const int defaultParkPosition = 180;
+const int defaultHomePosition = 0;
+const int defaultParkPosition = 0;
 bool atPark = false;
 bool atHome = false;
 int homePosition = defaultHomePosition;
@@ -250,7 +269,7 @@ const bool canPark = true;
 const bool canSetAzimuth = true;
 const bool canSetAltitude = false;
 const bool canSetPark = true;
-const bool canSetShutter = false;
+const bool canSetShutter = true;
 bool canSlave = false;
 const bool canSyncAzimuth = true;
 bool slaved = false;

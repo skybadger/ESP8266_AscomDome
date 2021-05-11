@@ -24,12 +24,18 @@ File to be included into relevant device REST setup
  //Status Event processing
  cmdItem_t* addDomeCmd( uint32_t clientId, uint32_t transId, String cmdName, enum domeCmd, int value );
  cmdItem_t* addShutterCmd( uint32_t clientId, uint32_t transId, String cmdName, enum shutterCmd, int value );
- void updateCmdResponseList( int shutterStatus );
- void onShutterSlew();
- void onShutterIdle();
+ void updateCmdResponseList( int transID );
+ 
+ //dome state handlers
  void onDomeSlew();
  void onDomeAbort();
  void onDomeIdle();
+ 
+ //Shutter state handlers
+ void onShutterIdle();
+ void shutterAltitude( int newAngle );
+ void shutterSlew( enum shutterCmd setting );
+ void shutterAbort( void );
 
   float normaliseFloat( float& input, float radix) 
   {
@@ -104,12 +110,13 @@ File to be included into relevant device REST setup
   {
     cmdItem_t* pCmd = nullptr;
     
+    enum domeCmd newCmd; 
     if ( domeCmdList->size() > 0 ) 
     {
       pCmd = domeCmdList->pop();
       debugI( "Popped new command: %i, value: %i", pCmd->cmd, pCmd->value );
-      domeTargetStatus = pCmd->cmd;
-      switch ( domeTargetStatus )
+      newCmd = (enum domeCmd ) pCmd->cmd;
+      switch ( newCmd )
       {
         case CMD_DOME_SLEW:
           targetAzimuth = (float) pCmd->value;
@@ -196,7 +203,6 @@ File to be included into relevant device REST setup
       //Stop!!
       //turn off motor
       myMotor.setSpeedDirection( speed = MOTOR_SPEED_OFF, direction );
-      domeStatus = DOME_IDLE;
 
       //Update the desired state to say we have finished.
       domeStatus = DOME_IDLE;
@@ -204,6 +210,9 @@ File to be included into relevant device REST setup
       debugI( "Dome stopped at target: %03f", localAzimuth);
       if ( lcdPresent )
         myLCD.writeLCD( 2, 0, "Slew complete." );
+
+      //Update MQTT to record last known position
+      publishFnStatus();
     }
     else if ( abs(distance) < slowAzimuthRange )
     {
@@ -237,7 +246,7 @@ File to be included into relevant device REST setup
     return;
    }
   
- void updateCmdResponseList( int shutterStatus )
+ void updateCmdResponseList( int transID )
  {
     //TODO - Client presents transaction Id and we can check list for status enum and update list to show complete
     //Idea is that if we have a client come back to check, we answer. 
@@ -274,123 +283,168 @@ File to be included into relevant device REST setup
       myLCD.writeLCD( 2, 0, "ABORT - dome halted." );
     
     // ? close shutter ?
+    //TODO add call to halt shutter actions here. 
     
     //Update status to idle to process normally.
     domeStatus = DOME_IDLE;
+    publishFnStatus();
     return;
   }
 
+//Function to issue commands to shutter when idle. Otherwise wait until state is open or closed. 
 void onShutterIdle()
 {
   String response = "";
   String uri = "http://";
-
-  //Get next command if there is one. 
+//enum shutterCmd              { CMD_SHUTTER_ABORT=0, CMD_SHUTTER_OPEN=4, CMD_SHUTTER_CLOSE=5, CMD_SHUTTERVAR_SET };
+  enum shutterCmd newCmd = CMD_SHUTTER_ABORT;
   cmdItem_t* pCmd = nullptr;
-  if ( shutterCmdList->size() > 0 ) 
+  
+  switch ( shutterStatus )
   {
-    pCmd = shutterCmdList->pop();
-    debugI("OnShutterIdle - new command popped: %i", pCmd->cmd );  
-    
-    switch ( pCmd->cmd )
-    {
-       case CMD_SHUTTER_OPEN: 
-       case CMD_SHUTTER_CLOSE:           
-          onShutterSlew();
-          break;
-       case CMD_SHUTTER_ABORT:
-          uri.concat( sensorHostname);
-          uri.concat("/shutter");
-          restQuery( uri, "status=abort", response, HTTP_PUT);
-          if( lcdPresent) 
-            myLCD.writeLCD( 2, 0, "DSH ABORT" );
-          break;
-       case CMD_SHUTTERVAR_SET:
-       default:
-        break;
-    }
-    freeCmd(pCmd); 
+     case SHUTTER_ERROR:
+     case SHUTTER_OPEN:
+     case SHUTTER_CLOSED:
+        //Get next command if there is one. 
+        if ( shutterCmdList->size() > 0 ) 
+        {
+          pCmd = shutterCmdList->pop();
+          newCmd = (enum shutterCmd) pCmd->cmd;
+          debugI("OnShutterIdle - new command popped: %i", newCmd );  
+
+          switch( newCmd )
+          {
+            case CMD_SHUTTER_ABORT: 
+            case CMD_SHUTTER_OPEN:  
+            case CMD_SHUTTER_CLOSE:
+                shutterSlew( newCmd );
+                updateCmdResponseList( pCmd->transId );            
+                break;
+            case CMD_SHUTTERVAR_SET:
+                if( pCmd->cmdName.equalsIgnoreCase( "altitude" ) && (pCmd->value >= SHUTTER_MIN_ALTITUDE ) && ( pCmd->value <= SHUTTER_MAX_ALTITUDE ) )
+                { //If its at either end then that is open or closed, not an altitude
+                  if ( ( pCmd->value > SHUTTER_MIN_ALTITUDE ) && ( pCmd->value < SHUTTER_MAX_ALTITUDE) )  
+                    shutterAltitude( pCmd->value );
+                }
+                updateCmdResponseList( pCmd->transId );                
+                break;
+            default:
+              break;
+          }
+          debugI("State %s outcome for shutter ", shutterStateNames[ shutterStatus ] );
+          free( pCmd ) ;
+       }  
+       break;
+     
+     //Wait for an idle state otherwise
+     case SHUTTER_OPENING:
+     case SHUTTER_CLOSING:
+       debugI("Shutter still opening or closing - waiting for idle to check for new state" );
+       break;
+     default: 
+       debugW("Unknown state %i requested for shutter ", targetShutterStatus );
+       break;         
   }
 }
-  
-  /* Function to hande shutter slew command. 
-     Uses rest aPi to talk to shutter controller on rotating dome section
-     Could instead be the roll off roof controller but you might build that into this, non-rotating controller instead.  
-   */
-  void onShutterSlew()
-  {
-    //check shutter state
-    int currentShutterStatus = SHUTTER_ERROR;
-    String outbuf;
+
+void shutterSlew( enum shutterCmd setting )
+{
+    String outbuf = "";
     String uri = "http://";
-    int response = 0;
-    DynamicJsonBuffer jsonBuff(256);
-
-    uri.concat( shutterHostname );
-    uri.concat( "/shutter" );
-    response = restQuery( uri, "" , outbuf, HTTP_GET );
-    JsonObject& root = jsonBuff.parse( outbuf );
+    String arg = "shutter=";
     
-    if ( response == 200 && root.success() && root.containsKey( "status" ) )
-      currentShutterStatus = root["status"];
+    uri.concat( shutterHostname );
+    uri.concat("/shutter");
 
-    debugI("OnShutterSlew - Shutter status update: %i", currentShutterStatus );
-    switch ( currentShutterStatus )
+    //debugD( "shutterSlew: setting: %s, %i", setting, setting.length() );
+    switch( setting )
     {
-      case SHUTTER_OPENING:
-      if ( currentShutterStatus == SHUTTER_OPEN  )
-      {
-        shutterStatus = SHUTTER_OPEN;
-        //Should now update command response list...
-        updateCmdResponseList( shutterStatus );
-      }
+      case CMD_SHUTTER_ABORT: arg.concat( "abort" );
         break;
-      case SHUTTER_CLOSING:
-      if ( currentShutterStatus == SHUTTER_CLOSED  )
-      {
-        shutterStatus = SHUTTER_CLOSED;
-        //Should now update command response list...
-        updateCmdResponseList( shutterStatus );
-      }
+      case CMD_SHUTTER_OPEN:  arg.concat( "open" );
         break;
+      case CMD_SHUTTER_CLOSE: arg.concat( "close" );
+        break;
+      default: 
+        debugE( "invalid shutterState provided to shutterSlew - ignoring" );
+      break;
+    }
+    debugD( "calling shutter with args: %s", arg.c_str() );
       
-      // do nothing for these - they are static, unless they have unexpectedly changed
-      case SHUTTER_OPEN:
-      if( currentShutterStatus != SHUTTER_OPEN )
+    if( restQuery( uri, arg, outbuf, HTTP_PUT ) == HTTP_CODE_OK )
+    {
+      debugD("Successfully issued new state %s to shutter", arg.c_str() );
+      if ( setting == CMD_SHUTTER_OPEN )
+        shutterStatus = SHUTTER_OPENING;
+      else if ( setting == CMD_SHUTTER_CLOSE )
+        shutterStatus = SHUTTER_CLOSING;
+      else
         shutterStatus = SHUTTER_ERROR;
-        //What are we going to do about it ?
-      case SHUTTER_CLOSED:
-      if( currentShutterStatus != SHUTTER_CLOSED )
-      {
-        shutterStatus = SHUTTER_ERROR;
-        //Should now update command response list...
-        updateCmdResponseList( shutterStatus );        
-      }
-      case SHUTTER_ERROR:  //bad state
-        //What are we going to do about it ?
-        //Alert
-        //Send email 
-        //etc
-        break;
-      default:
-        break;
-    }  
-  }
+      //Let normal status request update our state. 
+    }
+    else 
+    {
+      //what to do ?
+      debugW("Failed to send new state Cmd to shutter");
+      shutterStatus  = SHUTTER_ERROR;
+    }
+}
 
-  void onShutterAbort( void )
+void shutterAltitude( int newAngle )
+{
+    String outbuf = "";
+    String uri = "http:";
+    String arg = "altitude=";
+    
+    uri.concat( shutterHostname );
+    uri.concat("/shutter");
+    arg.concat( newAngle );
+        
+    debugD(" Setting up to send new altitude to shutter");
+    int response = restQuery( uri, arg, outbuf, HTTP_PUT);
+    if( response  != HTTP_CODE_OK)
+    {
+      //what to do ?
+      debugE("Failed to send new altitude to shutter, return HTTP code %i", response );
+      //Preserve existing state - no change
+      shutterStatus = SHUTTER_ERROR;
+    }
+    else 
+    {
+      debugD("Issued new altitude %i to shutter, currently at %i", newAngle, altitude );
+      if( newAngle > altitude && newAngle <= SHUTTER_MAX_ALTITUDE )     
+        shutterStatus = SHUTTER_OPENING;
+      else if ( newAngle < altitude && ( newAngle >= SHUTTER_MIN_ALTITUDE ) ) 
+        shutterStatus = SHUTTER_CLOSING;
+      else if ( newAngle == altitude && ( newAngle > SHUTTER_MIN_ALTITUDE ) && ( newAngle <= SHUTTER_MAX_ALTITUDE ) )
+        shutterStatus = SHUTTER_OPEN;
+      else 
+        shutterStatus = SHUTTER_CLOSED;
+    }
+}
+  
+  //Stop shutter moving. 
+  void shutterAbort( void )
   {
+    int response = 200;
     String outbuf = "";
     String uri = "http:";
     shutterCmdList->clear();
     uri.concat( sensorHostname );
     uri.concat("/shutter");
-    if( restQuery( uri, "status=abort", outbuf ,HTTP_PUT) != HTTP_CODE_OK)
+
+    response = restQuery( uri, "{\"status\":\"abort\"}", outbuf ,HTTP_PUT);
+    if( response != HTTP_CODE_OK)
     {
       //what to do ?
+      debugE("Failed to issue Abort to shutter, return HTTP response %i", response );
+      shutterStatus = SHUTTER_ERROR;
     }
-    debugW("Abort issued to shutter");
-    updateCmdResponseList( shutterStatus );
-    shutterStatus = SHUTTER_OPEN;//there is no idle state - so default to OPEN and let close if necessary
+    else 
+    {
+      debugI("Abort issued to shutter");
+      shutterStatus = SHUTTER_OPEN;
+    }
   } 
   
   void setupEncoder()
@@ -446,24 +500,28 @@ void onShutterIdle()
     hClient.setTimeout ( (uint16_t) 250 );    
     hClient.setReuse( true );    
     
-    debugI("restQuery request - uri: %s args:%s\n", host.c_str(), args.c_str() );
+    debugD("restQuery request - uri:[ %s ], args:[ %s ], method: %i", host.c_str(), args.c_str(), method );
     startTime = millis();
-    if ( hClient.begin( wClient, host) ) //host and args are separate, need to join them for a GET parameterised request.    //if ( hClient.begin( wClient, uri ) ) //uri must already have request args in it
+    //host and args are separate, need to join them for a GET parameterised request.    
+    //if ( hClient.begin( wClient, uri ) ) uri must already have request args in it
+    if ( hClient.begin( wClient, host) ) 
     {
       if( method == HTTP_GET )
       {
         httpCode = hClient.GET();
         endTime = millis();
 #if defined DEBUG_ESP_HTTP_CLIENT            
-        debugV( "Time for restQuery call(mS): %li\n", endTime-startTime );
+        debugV( "Time for restQuery GET call(mS): %li\n", endTime-startTime );
 #endif        
       }
       else if ( method == HTTP_PUT ) //variables are added as headers
       {
-        httpCode = hClient.PUT( args );        
+        //hClient.addHeader("Content-Type", "application/json"); 
+        hClient.addHeader("Content-Type", "application/x-www-form-urlencoded");
+        httpCode = hClient.PUT( args.c_str() );        
         endTime = millis();
 #if defined DEBUG_ESP_HTTP_CLIENT      
-        debugV("Time for restQuery call: %li mS\n", endTime-startTime );
+        debugV("Time for restQuery PUT call: %li mS\n", endTime-startTime );
 #endif        
       }
      
@@ -472,7 +530,7 @@ void onShutterIdle()
       {
         response = hClient.getString();
 #if defined DEBUG_ESP_HTTP_CLIENT      
-        debugV("HTTP rest query : %s\n", response.c_str() );
+        debugV("HTTP rest query response : %s\n", response.c_str() );
 #endif        
       }
       else 
@@ -527,6 +585,7 @@ void onShutterIdle()
     if ( response == HTTP_CODE_OK && root.success() && root.containsKey( "bearing" ) )
     {            
         localBearing = (float) root["bearing"];
+        lastBearing = localBearing;
 #if defined DEBUG_ESP_HTTP_CLIENT      
         debugD(" GetBearing: localBearing %f", localBearing );     
 #endif        
@@ -598,6 +657,7 @@ void onShutterIdle()
    return position/encoderTicksPerRevolution * 360.0F;
  } 
 #endif //Not remote
+
   /*
    * Rest call to retrieve shutter Status. 
    */ 
@@ -620,8 +680,10 @@ void onShutterIdle()
     {
       value = SHUTTER_ERROR;
       debugW("Shutter controller call not successful");
+      debugV("Shutter response: %i, parse result %i, json data %s", response, root.success(), outbuf.c_str() );
+
 #if defined DEBUG_ESP_HTTP_CLIENT      
-      debugD("Shutter response: %i, parse result %i, json data %s", response, root.success(), outbuf.c_str() );
+      debugV("Shutter response: %i, parse result %i, json data %s", response, root.success(), outbuf.c_str() );
 #endif      
     }
   return value;

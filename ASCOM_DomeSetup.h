@@ -50,9 +50,9 @@ void handlerStatus()
   
   //Status info
   root["time"]                  = timestamp;
-  root["dome status"]           = domeStatus;
+  root["dome status"]           = (int) domeStatus;
   root["dome status string"]    = domeStateNames[domeStatus];
-  root["shutter status"]        = shutterStatus;
+  root["shutter status"]        = (int) shutterStatus;
   root["shutter status string"] = shutterStateNames[shutterStatus];
   root["motor speed"]           = motorSpeed;
   root["motor direction"]       = motorDirection;
@@ -101,10 +101,14 @@ void handleHostnamePut( void )
   if( hasArgIC( argToSearchFor, server, false ) )
   {
     newName = server.arg( argToSearchFor);
+    debugD( "New name: %s", newName.c_str() );    
   }
   if( newName != NULL && newName.length() < MAX_NAME_LENGTH )
   {
     //save new hostname and cause reboot - requires eeprom read at setup to be in place.  
+    if ( myHostname != nullptr ) 
+      free( myHostname );
+    myHostname = (char*) calloc( MAX_NAME_LENGTH, sizeof(char));
     strcpy( myHostname, newName.c_str() );
     //Write new hostname to EEprom
     saveToEeprom();
@@ -137,11 +141,15 @@ void handleShutterNamePut( void )
   //throw error message
   if( hasArgIC( argToSearchFor, server, false ) )
   {
-    newName = server.arg( argToSearchFor);
+    newName = server.arg( argToSearchFor );
+    debugD( "New name: %s", newName.c_str() );
   }
   if( newName != NULL && newName.length() < MAX_NAME_LENGTH )
   {
-    //save new hostname and cause reboot - requires eeprom read at setup to be in place.  
+    //save new shutter hostname
+    if ( shutterHostname != nullptr )
+      free( shutterHostname );
+    shutterHostname = (char*)calloc( MAX_NAME_LENGTH, sizeof( char ) );
     strcpy( shutterHostname, newName.c_str() );
     //Write new hostname to EEprom
     saveToEeprom();    
@@ -170,10 +178,14 @@ void handleSensorNamePut( void )
   if( hasArgIC( argsToSearchFor[0], server, false ) )
   {
     newName = server.arg( argsToSearchFor[0]);
+    debugD( "New name: %s", newName.c_str() );    
   }
   if( newName != NULL && newName.length() < MAX_NAME_LENGTH )
   {
     //save new hostname - requires eeprom read at setup to be in place.  
+    if( sensorHostname != nullptr )
+      free( sensorHostname );
+    sensorHostname = (char*)calloc( MAX_NAME_LENGTH, sizeof( char ) );
     strcpy( sensorHostname, newName.c_str() );
     //Write new hostname to EEprom
     saveToEeprom();  

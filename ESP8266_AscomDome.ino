@@ -15,26 +15,28 @@
    
    Testing.
    Curl resting of command handlers for ALPACA appears good. Used with DeviceHub for get/can calls testing 
-   Need to test with ALPACA
+   Need to test with ALPACA - works fine
+   Need to test with ALPACA Management
+   Bug fixed when shutter and encoder not available - last bearing is set to static lastBearing = 0. Fixed. I think.
       
    Operating. 
    Check power demand and manage
    
    To do
-   1, Add MQTT for Bz, temp and dome orientation - not doing.
+   1, Add MQTT for dome orientation - not doing.
    2, dome setup to support calc of auto-track pointing - maybe
    3, Add list handler - done
    4, Update smd list to handle variable settings and fixup responses for async responses. Report to ascom community
    Test handler functions 
    5, Add url to query for status of async operations. Consider whether user just needs to call for status again. 
    6, Fix EEPROM handling - done. 
-   7, Add ALPACA mgmt API and UDP discovery call handling
+   7, Add ALPACA mgmt API and UDP discovery call handling - mostly done
    8, zero-justify seconds and minutes in sprintf time string.
    9, Fix LCD detection even when not present.. 
 
 To test:
  Download curl for your operating system. Linux variants and Windows powershell should already have it.
- e.g. curl -v -X PUT -d 'homePosition=270' http://EspDom01/API/v1/Dome/0/setHome
+ e.g. curl -v -X PUT -d "homePosition=270&ClientID=99&ClientTransactionID=99" http://EspDom01/API/v1/Dome/0/setHome
  Use the ALPACA REST API docs at <> to validate the dome behaviour. At some point there will be a script
 
 External Dependencies:
@@ -67,65 +69,15 @@ ESP8266-12 Huzzah
 #include "ASCOMAPICommon_rest.h"
 #include "ASCOMAPIDome_rest.h"
 #include "JSONHelperFunctions.h"
+#include "AlpacaManagement.h"
 #include "ASCOM_DomeCmds.h"
 #include "ASCOM_Domehandler.h"
 #include "ASCOM_DomeSetup.h"
 #include "ASCOM_DomeEeprom.h"
 
-void scanNet(void)
-{
-  int i;
-  int n;
-  WiFi.disconnect();
-  n = WiFi.scanNetworks(false, true);
-  if (n == 0) 
-  {
-    Serial.println("(no networks found)");
-  } 
-  else 
-  {
-    Serial.println(" networks found ");
-    for (int i = 0; i < n; ++i)
-    {
-      Serial.printf( "ID: %s, Strength: %i \n", WiFi.SSID(i).c_str(), WiFi.RSSI(i) );
-    }
-  }
-}
-
-void setupWifi(void)
-{
-  //Setup Wifi
-  int zz = 00;
-  WiFi.mode(WIFI_STA);
-  WiFi.hostname( myHostname );
-
-  scanNet( );
-  
-  WiFi.begin( ssid2, password2 );  Serial.println("Connecting");
-  while (WiFi.status() != WL_CONNECTED) 
-  {
-    delay(500);//This delay is essentially for the DHCP response. Shouldn't be required for static config.
-    Serial.print(".");
-    if ( zz++ > 200 )
-    {
-      Serial.println("Restarting to try to find a connection");
-      device.restart();
-    }
-  }
-  Serial.println("WiFi connected");
-  Serial.printf("SSID: %s, Signal strength %i dBm \n\r", WiFi.SSID().c_str(), WiFi.RSSI() );
-  Serial.printf("Hostname: %s\n\r",       WiFi.hostname().c_str() );
-  Serial.printf("IP address: %s\n\r",     WiFi.localIP().toString().c_str() );
-  Serial.printf("DNS address 0: %s\n\r",  WiFi.dnsIP(0).toString().c_str() );
-  Serial.printf("DNS address 1: %s\n\r",  WiFi.dnsIP(1).toString().c_str() );
-
-  //Setup sleep parameters
-  //wifi_set_sleep_type(LIGHT_SLEEP_T);
-  wifi_set_sleep_type(NONE_SLEEP_T);
-  delay(5000);
-
-  Serial.println("WiFi setup complete & connected");
-}
+void setup( void );
+void setupWifi( void );
+void publishFnStatus( void );
 
 void setup()
 {
@@ -219,7 +171,7 @@ void setup()
     Serial.println("No motor found on i2c bus");
 
   //Setup i2c to control LCD display
-  DEBUGSL1("Starting to configure LCD connection");
+  debugI("Starting to configure LCD connection");
   lcdPresent = ( myLCD.checkLCD() == 0 )? true: false;
   lcdPresent = false;//above check doesnt work - LCD currently not fitted. 
   if( lcdPresent )
@@ -228,11 +180,11 @@ void setup()
     myLCD.setCursor( 1, 1, I2CLCD::CURSOR_UNDERLINE );
     myLCD.setBacklight( true ); 
     myLCD.writeLCD( 4, 1 , "ASCOMDome ready" );
-    DEBUGSL1("LCD found and configured");
+    debugI("LCD found and configured");
   }
   else
   {
-    Serial.printf("LCD not found to configure.\n");  
+    Serial.printf("No LCD found on i2c bus.\n");  
   }
   
   //Use one of these to track the dome position
@@ -290,12 +242,14 @@ void setup()
 The JSON list of supported interface versions would be available through a GET to http://192.168.1.89:7843/management/apiversions
 The JSON list of configured ASCOM devices would be available through a GET to http://192.168.1.89:7843/management/v1/configureddevices
    */
-  //server.on("/management/apiversions",          HTTP_GET, handleNameGet ); //tested? NYI
-  //server.on("/management/v1/configureddevices", HTTP_GET, handleNameGet ); //tested? NYI - check vi url component is real
+  //Management API
+  server.on("/management/description",              HTTP_GET, handleMgmtDescription );
+  server.on("/management/apiversions",              HTTP_GET, handleMgmtVersions );
+  server.on("/management/v1/configureddevices",     HTTP_GET, handleMgmtConfiguredDevices );
   
   //Custom and setup handlers used by the custom setup form - currently there is no collection of devices.
-  server.on("/setup",            HTTP_GET, handleSetup); //Primary browser web page for the overall collection of devices
-  server.on("/setup​/v1​/dome/01​/setup", HTTP_GET, handleSetup);
+  server.on("/setup",            HTTP_GET, handleSetup);       //Primary browser web page for the overall collection of devices
+  server.on("/setup​/v1​/dome/01​/setup", HTTP_GET, handleSetup); //Browser web page for the instance 01
   
   //HTML forms don't support PUT -  they typically transform them to use GET instead.
   server.on("/Hostname",    HTTP_GET, handleHostnamePut );
@@ -316,7 +270,7 @@ The JSON list of configured ASCOM devices would be available through a GET to ht
   ets_timer_setfn( &fineTimer,    onFineTimer,    NULL ); 
   ets_timer_setfn( &coarseTimer,  onCoarseTimer,  NULL ); 
   ets_timer_setfn( &timeoutTimer, onTimeoutTimer, NULL ); 
-  ets_timer_setfn( &minuteTimer, onMinuteTimer, NULL ); 
+  //ets_timer_setfn( &minuteTimer, onMinuteTimer, NULL ); 
   
   domeCmdList    = new LinkedList <cmdItem_t*>();
   shutterCmdList = new LinkedList <cmdItem_t*>();
@@ -330,7 +284,7 @@ The JSON list of configured ASCOM devices would be available through a GET to ht
    
   //Get startup values
   domeStatus = DOME_IDLE;
-  shutterStatus = getShutterStatus ( shutterHostname );
+  shutterStatus = (enum shutterState) getShutterStatus ( shutterHostname );
   bearing = getBearing( sensorHostname );
   currentAzimuth = getAzimuth( bearing);
   
@@ -352,7 +306,7 @@ The JSON list of configured ASCOM devices would be available through a GET to ht
   lastRam = originalRam;
 #endif
 
-  debugW( "setup complete");
+  debugI( "setup complete");
 }
 
 void onFineTimer( void* pArg )
@@ -391,20 +345,20 @@ void loop()
   {
     bearing = getBearing( sensorHostname );
     currentAzimuth = getAzimuth( bearing);
-    debugD( "Loop: Bearing %03.2f, offset: %f, adjusted: %f\n", bearing, azimuthSyncOffset, currentAzimuth );
+    debugV( "Bearing %03.2f, offset: %f, adjusted: %f\n", bearing, azimuthSyncOffset, currentAzimuth );
     fineTimerFlag = false;
   }
   
   if ( coarseTimerFlag )
   {
     //Update domeStatus    
-    //getShutterStatus( shutterHostname );
-    debugV( "Loop: Dome %i Shutter %i\n", domeStatus, shutterStatus );
+    shutterStatus = (enum shutterState) getShutterStatus( shutterHostname );
+    debugV( "Dome %i Shutter %i\n", domeStatus, shutterStatus );
 
     // Main code here, to run repeatedly:
     //Handle state changes
-    //in dome  
-   
+    
+    //For dome  
     switch ( domeStatus )
     {
       case DOME_IDLE:    onDomeIdle();
@@ -414,19 +368,25 @@ void loop()
       case DOME_ABORT:   onDomeAbort();     
                          break;
       default:
+        domeStatus = DOME_ABORT; //error condition
         break;
     }
   
-    //in shutter
+    //For shutter
     switch( shutterStatus )
     {
+      //These are the idle states for the shutter
+      case SHUTTER_ERROR:
       case SHUTTER_CLOSED:
-      case SHUTTER_OPEN:   onShutterIdle();
+      case SHUTTER_OPEN:   
+                           onShutterIdle();
                            break;
+      //The shutter is currently doing things so wait until complete or error.
       case SHUTTER_OPENING:
-      case SHUTTER_CLOSING:onShutterSlew(); 
+      case SHUTTER_CLOSING: 
                            break;
       default:
+            shutterStatus = SHUTTER_ERROR;
            break;
     }
  
@@ -478,6 +438,9 @@ void loop()
   // Or
   //debugHandle(); // Equal to SerialDebug  
 
+  //Check for Alpaca Discovery packets
+  handleManagement();
+
 #if defined _TEST_RAM_    
     //Check heap for memory bugs 
     uint32_t ram = ESP.getFreeHeap();
@@ -489,15 +452,15 @@ void loop()
 #endif
 }
    
-  void coarseTimerHandler(void)
-  {
-    coarseTimerFlag = true;
-  }
-  
-  void fineTimerHandler(void)
-  {
-    fineTimerFlag = true;
-  }
+void coarseTimerHandler(void)
+{
+  coarseTimerFlag = true;
+}
+
+void fineTimerHandler(void)
+{
+  fineTimerFlag = true;
+}
   
 /* MQTT callback for subscription and topic.
  * Only respond to valid states ""
@@ -510,6 +473,41 @@ void callback(char* topic, byte* payload, unsigned int length)
   callbackFlag = true;  
  }
 
+void publishFnStatus( void )
+ {
+  String outTopic;
+  String output;
+  String timestamp;
+  
+  //publish to our device topic(s)
+  DynamicJsonBuffer jsonBuffer(256);  
+  JsonObject& root = jsonBuffer.createObject();
+
+  getTimeAsString2( timestamp );
+  root["time"] = timestamp;
+
+  // Once connected, publish an announcement...
+  root["hostname"] = myHostname;
+  root.printTo( output );
+  root["azimuth"] = azimuth;
+  root["altitude"] = altitude;
+  root["shutterStatus"] = (int) shutterStatus;
+  root["domeStatus"] = (int) domeStatus;
+  
+  outTopic = outFnTopic;
+  outTopic.concat( DriverType );
+  outTopic.concat("/");
+  outTopic.concat( myHostname );
+  
+  if( client.publish( outTopic.c_str(), output.c_str(), true ) )  
+  {
+    debugI( "Topic published: %s ", output.c_str() ); 
+  }
+  else
+  {
+    debugW( "Topic failed to publish: %s ", output.c_str() );   
+  }
+ }
 /*
  */
  void publishHealth( void )
@@ -545,3 +543,40 @@ void callback(char* topic, byte* payload, unsigned int length)
     debugW( "Topic failed to publish: %s ", output.c_str() );   
   }
  }
+
+void setupWifi( void )
+{
+  int zz = 0;
+  WiFi.mode(WIFI_STA);
+  WiFi.hostname( myHostname );  
+
+  WiFi.begin(ssid2, password2  );
+  Serial.print("Searching for WiFi..");
+  
+  while (WiFi.status() != WL_CONNECTED) 
+  {
+     delay(500);
+     Serial.print(".");
+   if (zz++ >= 400) 
+    {
+      device.restart();
+    }    
+  }
+
+  Serial.println("WiFi connected");
+  Serial.printf("SSID: %s, Signal strength %i dBm \n\r", WiFi.SSID().c_str(), WiFi.RSSI() );
+  Serial.printf("Hostname: %s\n\r",       WiFi.hostname().c_str() );
+  Serial.printf("IP address: %s\n\r",     WiFi.localIP().toString().c_str() );
+  Serial.printf("DNS address 0: %s\n\r",  WiFi.dnsIP(0).toString().c_str() );
+  Serial.printf("DNS address 1: %s\n\r",  WiFi.dnsIP(1).toString().c_str() );
+  delay(5000);
+
+  //Setup sleep parameters
+  //wifi_set_sleep_type(LIGHT_SLEEP_T);
+
+  //WiFi.mode(WIFI_NONE_SLEEP);
+  wifi_set_sleep_type(NONE_SLEEP_T);
+
+  Serial.println( "WiFi connected" );
+  delay(5000);
+}
