@@ -395,7 +395,7 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
   htmlForm.concat( myHostname );
   htmlForm += "/Goto\" method=\"PUT\" id=\"goto\" >\n";
   htmlForm += "<input type=\"number\" name=\"bearing\" max=\"360.0\" min=\"0.0\" value=\"";
-  htmlForm += parkPosition;
+  htmlForm += currentAzimuth;
   htmlForm += "\">\n";
   htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
   
@@ -406,7 +406,7 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
   htmlForm.concat(myHostname);
   htmlForm += "/Sync\" method=\"PUT\" id=\"sync\" >\n";
   htmlForm += "<input type=\"number\" name=\"syncOffset\" max=\"360.0\" min=\"0.0\" value=\"";
-  htmlForm += bearing;
+  htmlForm += azimuthSyncOffset;
   htmlForm += "\">\n";
   htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
   
@@ -441,6 +441,31 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
   //Elevation above centre
   //Dome radius
   //Distance from RA axis.
+  
+  //Park dome
+  htmlForm += "<div id=\"park\" >";
+  htmlForm += "<h2> Park dome </h2>\n";
+  htmlForm += "<form action=\"http://";
+  htmlForm.concat(myHostname);
+  htmlForm += "/park\" method=\"PUT\" id=\"actions\" >\n";
+  htmlForm += "<input type=\"button\" id=\"Park\" name=\"Park\" value=\"Park\" >\n";  
+  htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
+  
+  //Shutter Controls
+  htmlForm += "<div id=\"Shutter\" >";
+  htmlForm += "<h2> Shutter actions </h2>\n";
+  htmlForm += "<form action=\"http://";
+  htmlForm.concat(myHostname);
+  htmlForm += "/shutter\" method=\"PUT\" id=\"shutter\" >\n";
+  
+  //can add pre-sel based on current state later. 
+  htmlForm += "<input type=\"radio\" id=\"ShutterOpen\" name=\"Shutter\" value=\"Open\" >\n";  
+  htmlForm += "<label for=\"ShutterOpen\">Open</label><br>\n";
+  htmlForm += "<input type=\"radio\" id=\"ShutterClose\" name=\"Shutter\" value=\"Close\" >\n";  
+  htmlForm += "<label for=\"Shutterclose\">Close</label><br>\n";
+  htmlForm += "<input type=\"radio\" id=\"ShutterHalt\" name=\"Shutter\" value=\"Abort\" >\n";  
+  htmlForm += "<label for=\"ShutterHalt\">Abort</label><br>\n"; 
+  htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
   
   htmlForm += "</body>\n</html>\n";
   return htmlForm;

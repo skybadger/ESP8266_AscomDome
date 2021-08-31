@@ -243,7 +243,6 @@ void handleSlavedGet(void)
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
     DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, "Slaved", notImplemented, "Not Implemented" );    
     root["Value"] = slaved;
     root.printTo(message);
     debugI( "SlavedGet: %s", message.c_str() );
@@ -312,10 +311,11 @@ void handleAbortSlewPut(void)
   {
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, "AbortSlew", notConnected, "Client not connected" );
   }
-  else if( domeStatus != DOME_SLEWING  )
-  {
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, "AbortSlew", invalidOperation, "Not slewing" );       
-  }
+  //01/06/2021 MH commented out  - throwing exception causes conform to get upset. 
+  //else if( domeStatus != DOME_SLEWING  )
+  //{
+  //  jsonResponseBuilder( root, clientID, transID, ++serverTransID, "AbortSlew", invalidOperation, "Not slewing" );       
+  //}
   else
   {
     /* Just set status to DOME_ABORT and next top level loop will cause DOME_ABORT processing regardless of contents in 
@@ -569,13 +569,27 @@ void handleSlewToAltitudePut(void)
      location = (boolean) server.arg( argsToSearchFor[2]).toFloat();
    
   if( connected != clientID ) 
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAltitude"), notConnected, "Client not connected" );    
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAltitude"), notConnected, F("Client not connected") );    
+  //01/06/2021 added to respect canSetAltitude response for Conform
+  else if ( canSetAltitude == false ) 
+  {
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAltitude"), notImplemented, F("Slew to altitude not implemented (yet)") );    
+  }
   else if ( server.hasArg( argsToSearchFor[2] ) )
-  {\
-    //Set new shutter altitude.
-    normaliseFloat( location, SHUTTER_MAX_ALTITUDE );
-    addShutterCmd( clientID, transID, "altitude", CMD_SHUTTERVAR_SET, location );
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAltitude"), Success, "" );    
+  {
+    //01/06/2021 Added to align with slewtoAzimuth for Confirm compliance. 
+    if( location < SHUTTER_MIN_ALTITUDE || location > SHUTTER_MAX_ALTITUDE )
+    {
+      String shutterError = "New altitude out of range 0<=value<=";
+      shutterError.concat ( SHUTTER_MAX_ALTITUDE );
+      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAltitude"), invalidValue, shutterError.c_str() );    
+    }
+    else
+    {//Set new shutter altitude.
+      normaliseFloat( location, SHUTTER_MAX_ALTITUDE );
+      addShutterCmd( clientID, transID, "altitude", CMD_SHUTTERVAR_SET, location );
+      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAltitude"), Success, "" );    
+    }
   }
   else
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAltitude"), valueNotSet, F("Altitude not provided") );       
@@ -614,13 +628,23 @@ void handleSlewToAzimuthPut(void)
  
   if( connected != clientID ) 
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAzimuth"), notConnected, "Not connected" ); 
+  else if( canSetAzimuth == false ) 
+  {
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAzimuth"), notImplemented, "Not supported by dome" );
+  }
   else if( server.hasArg( argsToSearchFor[2] ) )
   {
-    //Set new slew location.
-    normaliseFloat( location, 360.0F );
-    debugD( "SlewToAzimuthPut: %f", location );
-    addDomeCmd( clientID, transID, "SlewToAzimuthPut", CMD_DOME_SLEW, location );
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAzimuth"), Success, "" ); 
+    //01/06/2021 Added to comply with Conform requirements
+    if( location < 0.0F || location > 360.0F )
+      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAzimuth"), invalidValue, "New azimuth out of 0<= value<=360 range" );  
+    else
+    {
+      //Set new slew location.
+      normaliseFloat( location, 360.0F );
+      debugD( "SlewToAzimuthPut: %f", location );
+      addDomeCmd( clientID, transID, "SlewToAzimuthPut", CMD_DOME_SLEW, location );
+      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAzimuth"), Success, "" ); 
+    }
   }
   else 
   {
@@ -658,24 +682,32 @@ void handleSyncToAzimuthPut(void)
      location = server.arg( argsToSearchFor[2]).toFloat();
 
   if( connected != clientID ) 
-      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SyncToAzimuth"), notConnected, "Not connected" );    
+      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SyncToAzimuth"), notConnected, F("Not connected") );    
   else if( server.hasArg( argsToSearchFor[2] ) )
   {
-    //Set new (actual) azimuth location.
-    normaliseFloat( location, 360.0F );
-    
-    //The offset is the difference between where the dome says it is currently pointing and where we are told it is pointing.
-    azimuthSyncOffset = (float) ( location - bearing );
-    debugD( "azimuthsync - input: %f, currentAz: %f, offset %f", location, currentAzimuth, azimuthSyncOffset);
-    //Because we can go out of range we do this again
-    normaliseFloat( azimuthSyncOffset, 360.0F );
-    debugD( "azimuthsync - normalised offset: %f ",  azimuthSyncOffset );
-    
-    addDomeCmd( clientID, transID, "azimuthSyncOffset", CMD_DOMEVAR_SET, azimuthSyncOffset );
-    //Tell the dome to move to the target azimuth using the updated correction - should be trivial.
-    addDomeCmd( clientID, transID, "", CMD_DOME_SLEW, (int) getAzimuth( bearing ) );
-    
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SyncToAzimuth"), Success, "" );    
+    //enforce limits by exception to satisfy Conform compliance
+    if( location < 0.0F || location > 360.0F ) 
+      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SyncToAzimuth"), invalidValue, F("Sync to value outside range 0<=value<=360") );    
+    else 
+    {
+      //Set new (actual) azimuth location.
+      normaliseFloat( location, 360.0F );
+      
+      //The offset is the difference between where the dome says it is currently pointing and where we are told it is pointing.
+      azimuthSyncOffset = (float) ( location - bearing );
+      debugD( "azimuthsync - input: %f, currentAz: %f, offset %f", location, currentAzimuth, azimuthSyncOffset);
+      //Because we can go out of range we do this again
+      normaliseFloat( azimuthSyncOffset, 360.0F );
+      debugD( "azimuthsync - normalised offset: %f ",  azimuthSyncOffset );
+      
+      addDomeCmd( clientID, transID, "azimuthSyncOffset", CMD_DOMEVAR_SET, azimuthSyncOffset );
+
+      //01/06/2021 Removed - results in potential unexpected motion after sync. 
+      //Tell the dome to move to the target azimuth using the updated correction - should be trivial.
+      //addDomeCmd( clientID, transID, "", CMD_DOME_SLEW, (int) getAzimuth( bearing ) );
+      
+      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SyncToAzimuth"), Success, "" );    
+    }
   }
   else
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, "SyncToAzimuth", valueNotSet, "Argument not found" );       

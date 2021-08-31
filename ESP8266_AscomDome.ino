@@ -23,7 +23,7 @@
    Check power demand and manage
    
    To do
-   1, Add MQTT for dome orientation - not doing.
+   1, Add MQTT for dome orientation - not done 
    2, dome setup to support calc of auto-track pointing - maybe
    3, Add list handler - done
    4, Update smd list to handle variable settings and fixup responses for async responses. Report to ascom community
@@ -58,6 +58,21 @@ ESP8266-12 Huzzah
   
   Motor controller - i2c
   LCD Display - i2c
+
+Change Log
+21/05/2021 Added last will and testament to MQTT and use of dirty sessions rather than fresh ones. 
+31/05/2021 Updated the setup handler page presentation to chunk the content  - needs testing. SPlits down page into a s etup of content transfers rather than 
+tries to send a whole page. 
+01/06/21 Added last reset reason and binary version info (date) to first publishHealth response
+01/06/21 Updated handleSlavedGet to return value of slaved setting. PUT command always returns NotImplementedException.
+01/06/2021 handleAbortSlewPut updated to remove InvalidOperation exception when Abort is called and system is not slewing
+01/06/2021 Updated slewToAltitudePut to respect canSetAltitude for Conform compliance. 
+           Also added exception handling for out of range values.
+01/06/2021 Updated handleSlewToAzimuthPut to enforce value limits by invalidValue Exception
+            Causes actual azimuth to be updated asynchronously - this may yet be too slow for Conform. 
+01/06/2021 Amended OnSlew to manage the zero hunting issue where the fast speed is selected for a small reversal slew. 
+Bugs
+Theres a bug in here somewhere which causes a reboot and a client clost connection occasionally enough to be a problem .
 */
 
 /////////////////////////////////////////////////////////////////////////////////
@@ -114,6 +129,10 @@ void setup()
   //In practice still need to use serial commands until debugger is up and running.. 
   debugE("Remote debugger enabled and operating");
 
+  //for use in debugging reset - may need to move 
+  debugE( "Device reset reason: %s/n", device.getResetReason().c_str() );
+  debugE( "device reset info: %s/n", device.getResetInfo().c_str() );
+
   //Setup I2C
 #if defined _ESP8266_01_
   //Pins mode and direction setup for i2c on ESP8266-01
@@ -148,7 +167,14 @@ void setup()
   DEBUGS1("Configuring MQTT connection to :");DEBUGSL1( MQTTServerName );
   client.setServer( MQTTServerName, 1883 );
   Serial.printf(" MQTT settings id: %s user: %s pwd: %s\n", thisID, pubsubUserID, pubsubUserPwd );
-  client.connect( thisID, pubsubUserID, pubsubUserPwd ); 
+  //client.connect( thisID, pubsubUserID, pubsubUserPwd ); 
+  //want to connect to a 'dirty' session not a clean one, that way we receive any outstanding messages waiting
+  //Also setup our last will message 
+  String lastWillTopic = outHealthTopic;
+  lastWillTopic.concat("/");
+  lastWillTopic.concat( myHostname ); 
+  client.connect( thisID, pubsubUserID, pubsubUserPwd, lastWillTopic.c_str(), 1, true, "Offline", false ); 
+    
   //Create a timer-based callback that causes this device to read the local i2C bus devices for data to publish.
   client.setCallback( callback );
   client.subscribe( inTopic );
@@ -249,7 +275,7 @@ The JSON list of configured ASCOM devices would be available through a GET to ht
   
   //Custom and setup handlers used by the custom setup form - currently there is no collection of devices.
   server.on("/setup",            HTTP_GET, handleSetup);       //Primary browser web page for the overall collection of devices
-  server.on("/setup​/v1​/dome/01​/setup", HTTP_GET, handleSetup); //Browser web page for the instance 01
+  server.on("/v1​/dome/01​/setup", HTTP_GET, handleSetup); //Browser web page for the instance 01
   
   //HTML forms don't support PUT -  they typically transform them to use GET instead.
   server.on("/Hostname",    HTTP_GET, handleHostnamePut );
@@ -345,13 +371,13 @@ void loop()
   {
     bearing = getBearing( sensorHostname );
     currentAzimuth = getAzimuth( bearing);
-    debugV( "Bearing %03.2f, offset: %f, adjusted: %f\n", bearing, azimuthSyncOffset, currentAzimuth );
+    debugI( "Bearing %03.2f, offset: %f, adjusted: %f\n", bearing, azimuthSyncOffset, currentAzimuth );
     fineTimerFlag = false;
   }
   
   if ( coarseTimerFlag )
   {
-    //Update domeStatus    
+    //Update our knowledge of shutter current status
     shutterStatus = (enum shutterState) getShutterStatus( shutterHostname );
     debugV( "Dome %i Shutter %i\n", domeStatus, shutterStatus );
 
@@ -426,6 +452,7 @@ void loop()
     {
       //publish results
       publishHealth();
+      publishFnStatus();
       callbackFlag = false;
     }
   }
@@ -434,9 +461,9 @@ void loop()
   server.handleClient();
 
   // Remote debug over WiFi
-  Debug.handle();
+  //Debug.handle();
   // Or
-  //debugHandle(); // Equal to SerialDebug  
+  debugHandle(); // Equal to SerialDebug  
 
   //Check for Alpaca Discovery packets
   handleManagement();
@@ -485,20 +512,19 @@ void publishFnStatus( void )
 
   getTimeAsString2( timestamp );
   root["time"] = timestamp;
-
-  // Once connected, publish an announcement...
   root["hostname"] = myHostname;
-  root.printTo( output );
   root["azimuth"] = azimuth;
   root["altitude"] = altitude;
   root["shutterStatus"] = (int) shutterStatus;
   root["domeStatus"] = (int) domeStatus;
-  
+  root.printTo( output );
+    
   outTopic = outFnTopic;
   outTopic.concat( DriverType );
   outTopic.concat("/");
   outTopic.concat( myHostname );
   
+  //publish with retention
   if( client.publish( outTopic.c_str(), output.c_str(), true ) )  
   {
     debugI( "Topic published: %s ", output.c_str() ); 
@@ -510,14 +536,14 @@ void publishFnStatus( void )
  }
 /*
  */
- void publishHealth( void )
+ void publishHealth(  )
  {
   String outTopic;
   String output;
   String timestamp;
   
   //publish to our device topic(s)
-  DynamicJsonBuffer jsonBuffer(256);  
+  DynamicJsonBuffer jsonBuffer(512);  
   JsonObject& root = jsonBuffer.createObject();
 
   getTimeAsString2( timestamp );
@@ -528,13 +554,23 @@ void publishFnStatus( void )
   if( connected != NOT_CONNECTED ) 
     root["message"] = "Dome connected & operating";
   else
-    root["message"] = "Dome ready for connection";
+    root["message"] = "Dome waiting for connection";
   root.printTo( output );
+
+  //do once after reboot only. 
+  if ( bootCount == 0 )
+  {
+    String buildVersion = String( __DATE__ );
+    root["version"] = buildVersion.c_str();
+    root[ "resetreason" ] = device.getResetReason().c_str();
+    root[ "resetinfo" ] = device.getResetInfo().c_str();
+    bootCount++;
+  }
   
   outTopic = outHealthTopic;
   outTopic.concat( myHostname );
   
-  if( client.publish( outTopic.c_str(), output.c_str() ) )  
+  if( client.publish( outTopic.c_str(), output.c_str(), true ) )  
   {
     debugI( "Topic published: %s ", output.c_str() ); 
   }
@@ -543,6 +579,7 @@ void publishFnStatus( void )
     debugW( "Topic failed to publish: %s ", output.c_str() );   
   }
  }
+
 
 void setupWifi( void )
 {

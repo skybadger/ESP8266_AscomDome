@@ -43,8 +43,9 @@
 #include <PubSubClient.h> //https://pubsubclient.knolleary.net/api.html
 #include "DebugSerial.h" 
 #include <GDBStub.h> //Debugging stub for GDB
-#define MAX_TIME_INACTIVE 0 //to turn off the de-activation of a telnet session
+//#define MAX_TIME_INACTIVE //to turn off the de-activation of a telnet session
 #include "RemoteDebug.h"  //https://github.com/JoaoLopesF/RemoteDebug
+int bootCount = 0;
 
 //Create a remote debug object
 RemoteDebug Debug;
@@ -75,7 +76,7 @@ time_t now; //use as 'gmtime(&now);'
 //Program constants
 #define MAX_NAME_LENGTH 100
 const int nameLengthLimit = MAX_NAME_LENGTH; //Default max length of names in char[]
-const int acceptableAzimuthError = 2; //Indicates how close to target we want to get before we say its done. 
+const int acceptableAzimuthError = 1; //Indicates how close to target we want to get before we say its done. 
 const int slowAzimuthRange = 10; //Indicates how close to target we want to get before we slow down to a crawl.
 enum domeState               { DOME_IDLE, DOME_SLEWING, DOME_ABORT };
 const char* domeStateNames[] = {"DOME_IDLE","DOME_SLEWING","DOME_ABORT"};
@@ -102,7 +103,7 @@ enum I2CConst                { I2C_READ = 0x80, I2C_WRITE = 0x00 };
 #define ENCODER_H_PIN 6
 #define ENCODER_OPTIMIZE_INTERRUPTS
 #include <Encoder.h>
-const int defaultWheelDiameter = 61; //Encoder jockey wheel 
+const float defaultWheelDiameter = 61.3; //Encoder jockey wheel 
 const int defaultDomeDiameter = 2700; //My Dome diameter - change for yours. 
 const int defaultEncoderTicksPerRevolution = 400*4; //Encoder PPR is 400 but we detect every edge so *4 
 const int defaultEncoderCountsPerDomeRev = defaultEncoderTicksPerRevolution * (defaultDomeDiameter/defaultWheelDiameter);
@@ -147,7 +148,7 @@ char* sensorHostname     = nullptr;
 bool abortFlag = false; 
 float azimuthSyncOffset = 0.0F; //+ve values means the dome is further round N through E than returned from the raw reading. 
 float targetAzimuth = 0.0F;
-float currentAzimuth = 0.0F;    //+ve values are 0 N thro 90 E
+float currentAzimuth = 0.0F;    //+ve values are 0 N thro 90 E to 360
 float bearing = 0.0F;
 float currentAltitude = 0.0F;
 float targetAltitude = 0.0F;

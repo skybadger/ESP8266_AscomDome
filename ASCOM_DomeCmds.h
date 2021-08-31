@@ -150,6 +150,9 @@ File to be included into relevant device REST setup
           {
               azimuthSyncOffset = (float) pCmd->value;
               saveToEeprom();
+              //01/06/2021 Updated to comply with requirement of updated Azimuth to be available after Sync. 
+              //May not be fast enough. 
+              currentAzimuth = bearing + azimuthSyncOffset;
           }
           domeStatus = DOME_IDLE;
           break;
@@ -179,7 +182,7 @@ File to be included into relevant device REST setup
    */
   void onDomeSlew( void )
   {
-    float distance = 0;
+    float distance = 0.0F;
     enum motorSpeed speed = MOTOR_SPEED_OFF;
     enum motorDirection direction = MOTOR_DIRN_CW; 
     float localAzimuth = 0.0F; 
@@ -188,8 +191,9 @@ File to be included into relevant device REST setup
       return;
 
     localAzimuth = getAzimuth( bearing );
-    distance = targetAzimuth - localAzimuth ;
-    debugD( "OnDomeSlew: current: %f, target: %f", localAzimuth, targetAzimuth );    
+    distance = targetAzimuth - localAzimuth;
+    
+    debugD( "OnDomeSlew: current: %f, target: %f", localAzimuth, targetAzimuth );
 
     //Whatever the state. 
     if( abs( localAzimuth - homePosition ) < acceptableAzimuthError )
@@ -197,8 +201,8 @@ File to be included into relevant device REST setup
     if( abs( localAzimuth - parkPosition ) < acceptableAzimuthError )
       atPark = true;
 
-    //Work out speed to turn dome
-    if( abs(distance) < acceptableAzimuthError )
+    //Work out direction and speed to turn dome
+    if( abs(distance ) < acceptableAzimuthError )
     {
       //Stop!!
       //turn off motor
@@ -210,11 +214,37 @@ File to be included into relevant device REST setup
       debugI( "Dome stopped at target: %03f", localAzimuth);
       if ( lcdPresent )
         myLCD.writeLCD( 2, 0, "Slew complete." );
-
-      //Update MQTT to record last known position
-      publishFnStatus();
+      
+      return; 
     }
-    else if ( abs(distance) < slowAzimuthRange )
+    
+    //01/06/2021 Amended to manage the zero hunting issue where the fast speed is selected for a small reversal slew. 
+    //check to see whether we mean : 
+    //from 4 to 356 = 352 or -8 after reversal or 
+    //from 356 to 4 = -352 or +8 after reversal
+
+    //we're not there yet so work out the direction. 
+    debugD( "OnDomeSlew: raw distance : %f, direction : %i", distance, direction  );    
+    if( ( distance >= 0.0F ) && ( distance <= 180.0F ) ) 
+    {
+      direction = MOTOR_DIRN_CW;
+    }
+    else if( distance > 180.0F )
+    {
+      direction = MOTOR_DIRN_CCW;
+      distance = 360 - distance;
+    }
+    else if ( ( distance > -180.0F ) && ( distance < 0.0F ) )
+    {
+      direction = MOTOR_DIRN_CCW;      
+    }
+    else //distance <= -180.0F
+    {
+      direction = MOTOR_DIRN_CW;
+      distance = 360 + distance;
+    }
+    
+    if ( distance < slowAzimuthRange )
     {
       speed = MOTOR_SPEED_SLOW_SLEW;
       debugD( "Dome speed reduced - distance: %f", (float) distance);
@@ -228,21 +258,11 @@ File to be included into relevant device REST setup
       if ( lcdPresent ) 
         myLCD.writeLCD( 2, 0, "Slew::Fast" );
     }
+    debugD( "OnDomeSlew: raw distance : %f, direction : %i, speed: %i", distance, direction, speed  );      
     
-    //Work out the direction. 
-    direction = ( distance >= 0.0F ) ? MOTOR_DIRN_CW: MOTOR_DIRN_CCW;
-    debugD( "Dome target distance & dirn: %f, %i", distance, direction );         
-
-    if ( abs(distance) > 180.0F )
-    {
-      //Swap direction and go the short route. 
-      direction = ( direction == MOTOR_DIRN_CW )? MOTOR_DIRN_CCW:MOTOR_DIRN_CW; 
-      debugD( "Dome direction reversed to %i", direction );         
-    }
-      
     myMotor.setSpeedDirection( speed, direction );
     myMotor.getSpeedDirection();
-    debugV("Motor returned - speed %u, direction: %u", ( uint8_t) myMotor.getSpeed(), (uint8_t) myMotor.getDirection() );
+    //debugV("Motor returned - speed %u, direction: %u", ( uint8_t) myMotor.getSpeed(), (uint8_t) myMotor.getDirection() );
     return;
    }
   
