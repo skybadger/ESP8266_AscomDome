@@ -33,4 +33,6 @@ Use http://api/v1/dome/0/setup to enter setup page for this device specifically.
 
 <h3>ToDo </h3>
 <p>There is a bug whereby the device will occassionally drop the connected status, probably caused by a reboot, which means the clients will need to re-connect to re-establish use of the dome. This happens up to several times a night and so far is proving hard to track down. 
+Update: this has been tracked down to the wifi stack exceeding its buffer - this happens when it receives data faster than it processes it. Since the program design already returns asynchronously for everything, the only thing that can be improved is to make the TCP stack async and move the http request to full async processing - removing a potential delay of up to 200ms. I'll try.. 
+
 </p>

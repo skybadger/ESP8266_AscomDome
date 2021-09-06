@@ -359,7 +359,7 @@ void onShutterIdle()
      //Wait for an idle state otherwise
      case SHUTTER_OPENING:
      case SHUTTER_CLOSING:
-       debugI("Shutter still opening or closing - waiting for idle to check for new state" );
+       debugI("Shutter opening or closing - waiting for idle to check for new state" );
        break;
      default: 
        debugW("Unknown state %i requested for shutter ", targetShutterStatus );
@@ -372,6 +372,7 @@ void shutterSlew( enum shutterCmd setting )
     String outbuf = "";
     String uri = "http://";
     String arg = "shutter=";
+    int errorCode = 200;
     
     uri.concat( shutterHostname );
     uri.concat("/shutter");
@@ -391,7 +392,7 @@ void shutterSlew( enum shutterCmd setting )
     }
     debugD( "calling shutter with args: %s", arg.c_str() );
       
-    if( restQuery( uri, arg, outbuf, HTTP_PUT ) == HTTP_CODE_OK )
+    if( (errorCode = restQuery( uri, arg, outbuf, HTTP_PUT )) == HTTP_CODE_OK )
     {
       debugD("Successfully issued new state %s to shutter", arg.c_str() );
       if ( setting == CMD_SHUTTER_OPEN )
@@ -404,9 +405,11 @@ void shutterSlew( enum shutterCmd setting )
     }
     else 
     {
-      //what to do ?
-      debugW("Failed to send new state Cmd to shutter");
-      shutterStatus  = SHUTTER_ERROR;
+      //what to do ? Could be temporary  - so check if we failed to connect or failed to action. 
+      // A Failure to action will result in a different response code - what ?. 
+      debugW("Failed to send new state Cmd to shutter, error %d", errorCode );
+      //TO - put cmd back into head of list for use next go around. 
+
     }
 }
 
@@ -578,6 +581,7 @@ void shutterAltitude( int newAngle )
    */
   float getBearing( String host)
   {
+    long int duration = millis();
     static int bearingRepeatCount = 0;
     const int bearingRepeatLimit = 10;
     static float lastBearing = bearing;
@@ -650,6 +654,8 @@ void shutterAltitude( int newAngle )
       debugW("GetBearing: no reading, using last  ");
       localBearing = lastBearing;
     }
+    duration = millis()-duration;
+    debugI( "request duration %li", duration);
     return localBearing;
   }
 #else //if local interface in use
@@ -684,6 +690,7 @@ void shutterAltitude( int newAngle )
   int getShutterStatus( String host )
   {
     String outbuf;
+    long int duration = millis();
     int value = 0;
     DynamicJsonBuffer jsonBuff(256);
 
@@ -706,6 +713,8 @@ void shutterAltitude( int newAngle )
       debugV("Shutter response: %i, parse result %i, json data %s", response, root.success(), outbuf.c_str() );
 #endif      
     }
+  duration = millis() - duration;
+  debugI( " duration: %li", duration );
   return value;
   }
 

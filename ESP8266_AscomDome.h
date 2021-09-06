@@ -2,7 +2,7 @@
 #define _ESP8266_ASCOMDOME_H_
 
 #define _DEBUG
-// #define DEBUG_ESP_HTTP_CLIENT(...) Serial.printf( __VA_ARGS__ ) // 
+#define DEBUG_ESP_HTTP_CLIENT(...) Serial.printf( __VA_ARGS__ ) // 
 
 #define _ESP8266_01_
 //define _ESP8266_12_
@@ -10,7 +10,11 @@
 //Use for client testing
 //#define _DISABLE_MQTT_
 
-//#define _TEST_RAM_ //no apparent memory leaks found. 
+//Use for client performance testing 
+#define DEBUG_ESP_HTTP_CLIENT
+
+//Used to test for memory leaks - no apparent memory leaks found. 
+//#define _TEST_RAM_ 
 
 //#define USE_REMOTE_COMPASS_FOR_DOME_ROTATION
 //#define USE_LOCAL_ENCODER_FOR_DOME_ROTATION
@@ -29,7 +33,7 @@
 #include <ESP8266WiFi.h>         //https://links2004.github.io/Arduino/d3/d58/class_e_s_p8266_web_server.html
 #include <WiFiUdp.h>             //Used for Alpaca Management
 #include <ESP8266WebServer.h>    //REST web server
-#include "ESP8266HTTPUpdateServer.h"  //REST web server handllers for OTA firmware update
+#include "ESP8266HTTPUpdateServer.h"  //REST web server handlers for OTA firmware update
 
 //These two are for REST calls out. 
 #include <WiFiClient.h>
@@ -43,7 +47,7 @@
 #include <PubSubClient.h> //https://pubsubclient.knolleary.net/api.html
 #include "DebugSerial.h" 
 #include <GDBStub.h> //Debugging stub for GDB
-//#define MAX_TIME_INACTIVE //to turn off the de-activation of a telnet session
+#define MAX_TIME_INACTIVE 0 //to turn off the de-activation of a telnet session
 #include "RemoteDebug.h"  //https://github.com/JoaoLopesF/RemoteDebug
 int bootCount = 0;
 

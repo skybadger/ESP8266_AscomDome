@@ -41,6 +41,7 @@ To test:
 
 External Dependencies:
 ArduinoJSON library 5.13 ( moving to 6 is a big change) 
+https://github.com/ivanseidel/LinkedList
 pubsub library for MQTT 
 ALPACA for ASCOM 6.5
 Expressif ESP8266 board library for arduino - configured for v2.5
@@ -130,8 +131,8 @@ void setup()
   debugE("Remote debugger enabled and operating");
 
   //for use in debugging reset - may need to move 
-  debugE( "Device reset reason: %s/n", device.getResetReason().c_str() );
-  debugE( "device reset info: %s/n", device.getResetInfo().c_str() );
+  debugE( "Device reset reason: %s", device.getResetReason().c_str() );
+  debugE( "device reset info: %s", device.getResetInfo().c_str() );
 
   //Setup I2C
 #if defined _ESP8266_01_
@@ -275,7 +276,7 @@ The JSON list of configured ASCOM devices would be available through a GET to ht
   
   //Custom and setup handlers used by the custom setup form - currently there is no collection of devices.
   server.on("/setup",            HTTP_GET, handleSetup);       //Primary browser web page for the overall collection of devices
-  server.on("/v1​/dome/01​/setup", HTTP_GET, handleSetup); //Browser web page for the instance 01
+  server.on("api/v1​/dome/01​/setup", HTTP_GET, handleSetup); //Browser web page for the instance 01
   
   //HTML forms don't support PUT -  they typically transform them to use GET instead.
   server.on("/Hostname",    HTTP_GET, handleHostnamePut );
@@ -325,7 +326,7 @@ The JSON list of configured ASCOM devices would be available through a GET to ht
   //ets_timer_arm_new( &timeoutTimer, 2500, 0/*one-shot*/, 1);
 
   //Show welcome message
-  Debug.setSerialEnabled(false);
+  Debug.setSerialEnabled(true);
 
 #if defined _TEST_RAM_
   originalRam = device.getFreeHeap();
@@ -513,8 +514,9 @@ void publishFnStatus( void )
   getTimeAsString2( timestamp );
   root["time"] = timestamp;
   root["hostname"] = myHostname;
-  root["azimuth"] = azimuth;
-  root["altitude"] = altitude;
+  root["azimuth"] = currentAzimuth;
+  root["altitude"] = currentAltitude;
+  root["syncOffset"] = azimuthSyncOffset;
   root["shutterStatus"] = (int) shutterStatus;
   root["domeStatus"] = (int) domeStatus;
   root.printTo( output );
