@@ -2,7 +2,6 @@
 #define _ESP8266_ASCOMDOME_H_
 
 #define _DEBUG
-#define DEBUG_ESP_HTTP_CLIENT(...) Serial.printf( __VA_ARGS__ ) // 
 
 #define _ESP8266_01_
 //define _ESP8266_12_
@@ -11,10 +10,10 @@
 //#define _DISABLE_MQTT_
 
 //Use for client performance testing 
-#define DEBUG_ESP_HTTP_CLIENT
+//#define DEBUG_ESP_HTTP_CLIENT
 
 //Used to test for memory leaks - no apparent memory leaks found. 
-//#define _TEST_RAM_ 
+#define _TEST_RAM_ 
 
 //#define USE_REMOTE_COMPASS_FOR_DOME_ROTATION
 //#define USE_LOCAL_ENCODER_FOR_DOME_ROTATION
@@ -46,13 +45,20 @@
 
 #include <PubSubClient.h> //https://pubsubclient.knolleary.net/api.html
 #include "DebugSerial.h" 
-#include <GDBStub.h> //Debugging stub for GDB
+//#include <GDBStub.h> //Debugging stub for GDB
+
+int bootCount = 0;
+//Manage the remote debug interface, it takes 6K of memory with all the strings 
+//#define DEBUG_DISABLED true
+//#define DEBUG_DISABLE_AUTO_FUNC true
+#define WEBSOCKET_DISABLED true           //No impact to memory requirement
+
 #define MAX_TIME_INACTIVE 0 //to turn off the de-activation of a telnet session
 #include "RemoteDebug.h"  //https://github.com/JoaoLopesF/RemoteDebug
-int bootCount = 0;
-
 //Create a remote debug object
+#ifndef DEBUG_DISABLED
 RemoteDebug Debug;
+#endif
 
 //Ntp dependencies - available from v2.4
 #include <time.h>
@@ -78,7 +84,13 @@ extern "C" {
 time_t now; //use as 'gmtime(&now);'
 
 //Program constants
-#define MAX_NAME_LENGTH 100
+#if !defined DEBUG_DISABLED
+const char* BuildVersionName PROGMEM = "LWIPv2 hi bandwidth, RDebug enabled \n";
+#else
+const char* BuildVersionName PROGMEM = "LWIPv2 hi bandwidth, RDebug disabled \n";
+#endif 
+
+#define MAX_NAME_LENGTH 40
 const int nameLengthLimit = MAX_NAME_LENGTH; //Default max length of names in char[]
 const int acceptableAzimuthError = 1; //Indicates how close to target we want to get before we say its done. 
 const int slowAzimuthRange = 10; //Indicates how close to target we want to get before we slow down to a crawl.
@@ -130,12 +142,12 @@ typedef struct {
   
 //defaults for setup before replacing with values read from eeprom
 //Should be const but compiler barfs when copying into an array for later use
-const char* defaultHostname        =   "espDOM01";
-const char* defaultShutterHostname =   "espDSH00.i-badger.co.uk";
+static const char* defaultHostname PROGMEM =   "espDOM00";
+static const char* defaultShutterHostname PROGMEM = "espDSH00.i-badger.co.uk";
 #if   defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION
-const char* defaultSensorHostname  =   "espsen01.i-badger.co.uk";         //Remote Compass host
+static const char* defaultSensorHostname PROGMEM = "espsen01.i-badger.co.uk";         //Remote Compass host
 #elif defined USE_REMOTE_ENCODER_FOR_DOME_ROTATION
-const char* defaultSensorHostname  =   "espENC01.i-badger.co.uk/encoder"; //Remote Encoder host
+static const char* defaultSensorHostname PROGMEM = "espENC01.i-badger.co.uk/encoder"; //Remote Encoder host
 #elif defined USE_LOCAL_COMPASS_FOR_DOME_ROTATION
 //Nada
 #endif //Encoder source host selection 
@@ -222,8 +234,8 @@ void setupEncoder();
 bool setupCompass(String url);
 #endif
 
-void saveToEeprom();   //Started - incomplete
-void readFromEeprom(); //Started - incomplete
+void saveToEeprom();
+void readFromEeprom();
 void fineTimerHandler(void);
 void coarseTimerHandler(void);
 void timeoutTimerHandler(void);
@@ -234,12 +246,12 @@ unsigned int clientId;
 int connectionCtr = 0; //variable to count number of times something has connected compared to disconnected. 
 extern const unsigned int NOT_CONNECTED;
 unsigned int connected = NOT_CONNECTED;
-const String DriverName = "Skybadger.ESPDome";
-const String DriverVersion = "1";
-const String DriverInfo = "Skybadger.ESPDome RESTful native device. ";
-const String Description = "Skybadger ESP2866-based wireless ASCOM Dome controller";
-const String InterfaceVersion = "3";
-const String DriverType = "ASCOM.Dome";
+static const char* DriverName PROGMEM    = "Skybadger.ESPDome";
+static const char* DriverVersion PROGMEM = "1";
+static const char* DriverInfo PROGMEM    = "Skybadger.ESPDome RESTful native device. ";
+static const char* Description PROGMEM   = "Skybadger ESP2866-based wireless ASCOM Dome controller";
+static const char* InterfaceVersion PROGMEM = "3";
+static const char* DriverType PROGMEM    = "ASCOM.Dome";
 
 //ALPACA support additions
 //UDP Port can be edited in setup page
@@ -247,13 +259,13 @@ const String DriverType = "ASCOM.Dome";
 int udpPort = ALPACA_DISCOVERY_PORT;
 WiFiUDP Udp;
 //espdom01 GUID - "0011-0000-0000-0001";
-char GUID[] = "0011-0000-0000-0001";
+static const char* GUID PROGMEM = "0011-0000-0000-0001";
 const int defaultInstanceNumber = 1;
 int instanceNumber = 1;
 
 //setup later since we are allowing this to be dynamic via EEprom. 
 //pre-req for setup default function; 
-const char* defaultAscomName = "Skybadger Dome 01"; 
+static const char* defaultAscomName PROGMEM = "Skybadger Dome 01"; 
 char* ascomName = nullptr;
 
 //Mgmt Api Constants

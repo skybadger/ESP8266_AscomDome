@@ -19,7 +19,7 @@ File to be included into relevant device REST setup
  void setupEncoder();
  bool setupCompass( String host );
  float getBearing( String host );
- int getShutterStatus( String host );
+ int getShutterStatus( String host , enum shutterState& );
   
  //Status Event processing
  cmdItem_t* addDomeCmd( uint32_t clientId, uint32_t transId, String cmdName, enum domeCmd, int value );
@@ -33,9 +33,9 @@ File to be included into relevant device REST setup
  
  //Shutter state handlers
  void onShutterIdle();
- void shutterAltitude( int newAngle );
- void shutterSlew( enum shutterCmd setting );
- void shutterAbort( void );
+ int shutterAltitude( int newAngle );
+ int shutterSlew( enum shutterCmd setting );
+ int shutterAbort( void );
 
   float normaliseFloat( float& input, float radix) 
   {
@@ -188,21 +188,35 @@ File to be included into relevant device REST setup
     float localAzimuth = 0.0F; 
       
     if( domeStatus != DOME_SLEWING )
+    {
+      slewing = false; //book-keeping
       return;
-
+    }
+      
+    //getAzimuth keeps the value in range and applies any sync offset to the raw bearing. 
     localAzimuth = getAzimuth( bearing );
-    distance = targetAzimuth - localAzimuth;
+    //359-1 = 358
+    //1-359 = -358
     
-    debugD( "OnDomeSlew: current: %f, target: %f", localAzimuth, targetAzimuth );
+    //normalise keeps the distance in range 0-360
+    distance = (targetAzimuth - localAzimuth);
+    //distance = normaliseFloat( distance, 360.0 );
+    debugD( "OnDomeSlew: current: %03.2f, target: %03.2f, distance %03.2f", localAzimuth, targetAzimuth, distance );
 
-    //Whatever the state. 
-    if( abs( localAzimuth - homePosition ) < acceptableAzimuthError )
+    //looking at the options for a-b < D where valid D might be small +ve, -ve or large +ve and large -ve    
+    //Updated 29/09/21 to address slow speed when starting near 0 and inaccurate home/park determination
+    float delta = 0.0F;
+    delta = abs( localAzimuth - homePosition );
+    if ( delta < acceptableAzimuthError || (360.0F - delta ) < acceptableAzimuthError ) 
       atHome = true;
-    if( abs( localAzimuth - parkPosition ) < acceptableAzimuthError )
+
+    delta = abs(localAzimuth - parkPosition);
+    if ( delta < acceptableAzimuthError || (360.0F - delta) < acceptableAzimuthError ) 
       atPark = true;
 
     //Work out direction and speed to turn dome
-    if( abs(distance ) < acceptableAzimuthError )
+    delta = abs(distance);
+    if( delta < acceptableAzimuthError || (360.0F - delta) < acceptableAzimuthError )
     {
       //Stop!!
       //turn off motor
@@ -284,15 +298,6 @@ File to be included into relevant device REST setup
    */ 
   void onDomeAbort( void )
   {
-    /*clear down command list
-    cmdItem_t* ptr = nullptr;
-    while( domeCmdList->size() > 0 ) 
-    {
-      ptr = domeCmdList->pop();
-      freeCmd(ptr);
-    }
-    */
-
     //turn off motor
     if( motorPresent )
       myMotor.setSpeedDirection( MOTOR_SPEED_OFF, MOTOR_DIRN_CW );
@@ -307,7 +312,6 @@ File to be included into relevant device REST setup
     
     //Update status to idle to process normally.
     domeStatus = DOME_IDLE;
-    publishFnStatus();
     return;
   }
 
@@ -337,22 +341,30 @@ void onShutterIdle()
             case CMD_SHUTTER_ABORT: 
             case CMD_SHUTTER_OPEN:  
             case CMD_SHUTTER_CLOSE:
-                shutterSlew( newCmd );
-                updateCmdResponseList( pCmd->transId );            
+                if( shutterSlew( newCmd ) != HTTP_CODE_OK )
+                {
+                  //put it back into head of list to retry next time around.
+                  shutterCmdList->unshift( pCmd );
+                }
+                else //else consume and free 
+                {
+                  updateCmdResponseList( pCmd->transId );            
+                  free( pCmd ) ;
+                }
                 break;
             case CMD_SHUTTERVAR_SET:
-                if( pCmd->cmdName.equalsIgnoreCase( "altitude" ) && (pCmd->value >= SHUTTER_MIN_ALTITUDE ) && ( pCmd->value <= SHUTTER_MAX_ALTITUDE ) )
+                if( pCmd->cmdName.equalsIgnoreCase( F("altitude") ) && (pCmd->value >= SHUTTER_MIN_ALTITUDE ) && ( pCmd->value <= SHUTTER_MAX_ALTITUDE ) )
                 { //If its at either end then that is open or closed, not an altitude
                   if ( ( pCmd->value > SHUTTER_MIN_ALTITUDE ) && ( pCmd->value < SHUTTER_MAX_ALTITUDE) )  
                     shutterAltitude( pCmd->value );
                 }
                 updateCmdResponseList( pCmd->transId );                
+                free( pCmd ) ;
                 break;
             default:
               break;
           }
           debugI("State %s outcome for shutter ", shutterStateNames[ shutterStatus ] );
-          free( pCmd ) ;
        }  
        break;
      
@@ -367,7 +379,10 @@ void onShutterIdle()
   }
 }
 
-void shutterSlew( enum shutterCmd setting )
+/*
+ * return HTTP_CODE_OK (200) for successful setting. 
+ */
+int shutterSlew( enum shutterCmd setting )
 {
     String outbuf = "";
     String uri = "http://";
@@ -380,19 +395,19 @@ void shutterSlew( enum shutterCmd setting )
     //debugD( "shutterSlew: setting: %s, %i", setting, setting.length() );
     switch( setting )
     {
-      case CMD_SHUTTER_ABORT: arg.concat( "abort" );
+      case CMD_SHUTTER_ABORT: arg.concat( F("abort") );
         break;
-      case CMD_SHUTTER_OPEN:  arg.concat( "open" );
+      case CMD_SHUTTER_OPEN:  arg.concat( F("open") );
         break;
-      case CMD_SHUTTER_CLOSE: arg.concat( "close" );
+      case CMD_SHUTTER_CLOSE: arg.concat( F("close") );
         break;
       default: 
         debugE( "invalid shutterState provided to shutterSlew - ignoring" );
       break;
     }
     debugD( "calling shutter with args: %s", arg.c_str() );
-      
-    if( (errorCode = restQuery( uri, arg, outbuf, HTTP_PUT )) == HTTP_CODE_OK )
+    errorCode = restQuery( uri, arg, outbuf, HTTP_PUT );  
+    if( errorCode == HTTP_CODE_OK )
     {
       debugD("Successfully issued new state %s to shutter", arg.c_str() );
       if ( setting == CMD_SHUTTER_OPEN )
@@ -406,14 +421,16 @@ void shutterSlew( enum shutterCmd setting )
     else 
     {
       //what to do ? Could be temporary  - so check if we failed to connect or failed to action. 
-      // A Failure to action will result in a different response code - what ?. 
+      // A Failure to action means we connected successfully but the device had a fault.  
       debugW("Failed to send new state Cmd to shutter, error %d", errorCode );
-      //TO - put cmd back into head of list for use next go around. 
-
     }
+    return errorCode;
 }
 
-void shutterAltitude( int newAngle )
+/*
+ * Return HTTP_CODE_OK (200) for success or other HTTP query response code for failure 
+ */
+int shutterAltitude( int newAngle )
 {
     String outbuf = "";
     String uri = "http:";
@@ -425,14 +442,7 @@ void shutterAltitude( int newAngle )
         
     debugD(" Setting up to send new altitude to shutter");
     int response = restQuery( uri, arg, outbuf, HTTP_PUT);
-    if( response  != HTTP_CODE_OK)
-    {
-      //what to do ?
-      debugE("Failed to send new altitude to shutter, return HTTP code %i", response );
-      //Preserve existing state - no change
-      shutterStatus = SHUTTER_ERROR;
-    }
-    else 
+    if( response == HTTP_CODE_OK )
     {
       debugD("Issued new altitude %i to shutter, currently at %i", newAngle, altitude );
       if( newAngle > altitude && newAngle <= SHUTTER_MAX_ALTITUDE )     
@@ -444,10 +454,20 @@ void shutterAltitude( int newAngle )
       else 
         shutterStatus = SHUTTER_CLOSED;
     }
+    else 
+    {
+      //what to do ?
+      debugE("Failed to send new altitude to shutter, return HTTP code %i", response );
+      //Preserve existing state - no change
+    }
+    return response;
 }
   
-  //Stop shutter moving. 
-  void shutterAbort( void )
+  /*
+   * Stop shutter moving. 
+   * Return HTTP_CODE_OK for good reponse and HTTP query codes for anything else. 
+   */
+  int shutterAbort( void )
   {
     int response = 200;
     String outbuf = "";
@@ -457,17 +477,18 @@ void shutterAltitude( int newAngle )
     uri.concat("/shutter");
 
     response = restQuery( uri, "{\"status\":\"abort\"}", outbuf ,HTTP_PUT);
-    if( response != HTTP_CODE_OK)
+    if( response == HTTP_CODE_OK)
     {
-      //what to do ?
-      debugE("Failed to issue Abort to shutter, return HTTP response %i", response );
-      shutterStatus = SHUTTER_ERROR;
+      debugI("Abort issued to shutter.");
+      //shutterStatus = ... it is what it is. 
     }
     else 
     {
-      debugI("Abort issued to shutter");
-      shutterStatus = SHUTTER_OPEN;
+      //what to do ?
+      debugE("Failed to issue Abort to shutter, return HTTP response %i", response );
+      //retain existing state
     }
+    return response;
   } 
   
   void setupEncoder()
@@ -540,7 +561,7 @@ void shutterAltitude( int newAngle )
       else if ( method == HTTP_PUT ) //variables are added as headers
       {
         //hClient.addHeader("Content-Type", "application/json"); 
-        hClient.addHeader("Content-Type", "application/x-www-form-urlencoded");
+        hClient.addHeader(F("Content-Type"), F("application/x-www-form-urlencoded") );
         httpCode = hClient.PUT( args.c_str() );        
         endTime = millis();
 #if defined DEBUG_ESP_HTTP_CLIENT      
@@ -686,12 +707,13 @@ void shutterAltitude( int newAngle )
 
   /*
    * Rest call to retrieve shutter Status. 
+     updated to address request failure by not going straight to ERROR. 
    */ 
-  int getShutterStatus( String host )
+  int getShutterStatus( String host, enum shutterState& outputState )
   {
     String outbuf;
     long int duration = millis();
-    int value = 0;
+    enum shutterState value = SHUTTER_ERROR;
     DynamicJsonBuffer jsonBuff(256);
 
     String uri = String( "http://" );
@@ -705,7 +727,7 @@ void shutterAltitude( int newAngle )
     }
     else
     {
-      value = SHUTTER_ERROR;
+      value = shutterStatus; //Report the last response in the meantime. 
       debugW("Shutter controller call not successful");
       debugV("Shutter response: %i, parse result %i, json data %s", response, root.success(), outbuf.c_str() );
 
@@ -713,9 +735,11 @@ void shutterAltitude( int newAngle )
       debugV("Shutter response: %i, parse result %i, json data %s", response, root.success(), outbuf.c_str() );
 #endif      
     }
-  duration = millis() - duration;
-  debugI( " duration: %li", duration );
-  return value;
+
+    duration = millis() - duration;
+    debugI( " duration: %li", duration );
+    outputState = value;
+    return response;
   }
 
 #endif

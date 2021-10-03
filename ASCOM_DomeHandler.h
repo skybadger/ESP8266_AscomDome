@@ -34,11 +34,11 @@ void handleAltitudeGet(void)
     String message;
     uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-    DynamicJsonBuffer jsonBuffer(256);
+    DynamicJsonBuffer jsonBuffer(128);
     JsonObject& root = jsonBuffer.createObject();
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, "AltitudeGet", Success, "" );    
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("AltitudeGet"), Success, "" );    
 
-
+    //TODO
     /*Check there is no pending altitude cmd that this needs to wait for. 
     cmdItemPtr *pCmd;
     for( int i=0; i< domeCmdList.size(); pCmd = domeCmdList[0] )
@@ -66,9 +66,9 @@ void handleAtHomeGet( void)
     String message;
     uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-    DynamicJsonBuffer jsonBuffer(256);
+    DynamicJsonBuffer jsonBuffer(128);
     JsonObject& root = jsonBuffer.createObject();
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, "AtHome", 0, "" );    
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("AtHome"), 0, "" );    
     root["Value"] = ( abs( currentAzimuth - homePosition ) <= acceptableAzimuthError )? atHome = true : atHome = false;
     //JsonArray& offsets = root.createNestedArray("Value");
     root.printTo(message);
@@ -82,9 +82,9 @@ void handleAtParkGet(void)
     String message;
     uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-    DynamicJsonBuffer jsonBuffer(256);
+    DynamicJsonBuffer jsonBuffer(128);
     JsonObject& root = jsonBuffer.createObject();
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID,"AtPark", 0, "" );    
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("AtPark"), 0, "" );    
     root["Value"] = ( abs( currentAzimuth - parkPosition) <= acceptableAzimuthError ) ? atPark = true : atPark = false;
     root.printTo(message);
     debugI("AtParkGet: %s", message.c_str() );
@@ -97,9 +97,9 @@ void handleAzimuthGet(void)
     String message;
     uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-    DynamicJsonBuffer jsonBuffer(256);
+    DynamicJsonBuffer jsonBuffer(128);
     JsonObject& root = jsonBuffer.createObject();
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, "Azimuth", 0, "" );    
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("Azimuth"), 0, "" );    
     root["Value"] = normaliseFloat( currentAzimuth, 360.0);
     //JsonArray& offsets = root.createNestedArray("Value");
     root.printTo(message);
@@ -115,7 +115,7 @@ void handleCanFindHomeGet(void)
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
     DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, "CanFindHome", 0, "" );    
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("CanFindHome"), 0, "" );    
     root["Value"] = canFindHome;
     //JsonArray& offsets = root.createNestedArray("Value");
     root.printTo(message);
@@ -133,7 +133,7 @@ void handleCanParkGet(void)
     DynamicJsonBuffer jsonBuff(256);
     JsonObject& root = jsonBuff.createObject();
 
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, "CanPark", 0, "" );    
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("CanPark"), 0, "" );    
     root["Value"] = canPark;
     //JsonArray& offsets = root.createNestedArray("Value");
     root.printTo(message);
@@ -149,7 +149,7 @@ void handleCanSetAltitudeGet(void)
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
     DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, "CanSetAltitude", 0, "" );    
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("CanSetAltitude"), 0, "" );    
     root["Value"] = canSetAltitude;
     //JsonArray& offsets = root.createNestedArray("Value");
     root.printTo(message);
@@ -165,7 +165,7 @@ void handleCanSetAzimuthGet(void)
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
     DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, "CanSetAzimuth", Success, "" );    
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("CanSetAzimuth"), Success, "" );    
     root["Value"] = canSetAzimuth;
     root.printTo(message);
     debugI( "CanSetAzimuthGet: %s", message.c_str() );
@@ -180,7 +180,7 @@ void handleCanSetParkGet(void)
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
     DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, "CanSetPark", 0, "" );    
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("CanSetPark"), 0, "" );    
     root["Value"] = canSetPark;
     root.printTo(message);
     debugI( "CanSetParkGet: %s", message.c_str() );
@@ -195,7 +195,7 @@ void handleCanSetShutterGet(void)
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
     DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, "CanSetShutter", Success, "" );    
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("CanSetShutter"), Success, "" );    
     root["Value"] = canSetShutter;
     //JsonArray& offsets = root.createNestedArray("Value");
     root.printTo(message);
@@ -211,7 +211,7 @@ void handleCanSlaveGet(void)
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
     DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, "CanSlave", Success, "" );
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("CanSlave"), Success, "" );
     root["Value"] = canSlave;
     root.printTo(message);
     debugI( "CanSlaveGet: %s", message.c_str() );
@@ -227,7 +227,7 @@ void handleCanSyncAzimuthGet(void)
     DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
     
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, "CanSyncAzimuth", Success, "" );    
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("CanSyncAzimuth"), Success, "" );    
     root["Value"] = canSyncAzimuth;
     root.printTo(message);
     debugI( "CanSyncAzimuthGet: %s", message.c_str() );
@@ -259,7 +259,7 @@ void handleSlavedPut(void)
     DynamicJsonBuffer jsonBuffer(256);
     JsonObject& root = jsonBuffer.createObject();
     
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, "Slaved", notImplemented, "Not Implemented" );    
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("Slaved"), notImplemented, F("Not Implemented") );    
     root["Value"] = false;
     root.printTo(message);
     debugI( "SlavedPut: %s", message.c_str() );
@@ -283,10 +283,10 @@ void handleSlewingGet(void)
   if( hasArgIC( argsToSearchFor[1], server, false ) )
      transID = (uint32_t)server.arg( argsToSearchFor[1] ).toInt();
 
-  jsonResponseBuilder( root, clientID, transID, ++serverTransID, "Slewing", Success, "" );    
+  jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("Slewing"), Success, "" );    
   root["Value"] = ( domeStatus == DOME_SLEWING ) ? true:false;
   root.printTo(message);
-  debugI( "SlewingGet: %s", message.c_str() );
+  debugD( "SlewingGet: %s", message.c_str() );
   server.send(200, F("application/json"), message);
   return ; 
 }
@@ -309,12 +309,12 @@ void handleAbortSlewPut(void)
 
   if( connected != clientID )
   {
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, "AbortSlew", notConnected, "Client not connected" );
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("AbortSlew"), notConnected, F("Client not connected") );
   }
   //01/06/2021 MH commented out  - throwing exception causes conform to get upset. 
   //else if( domeStatus != DOME_SLEWING  )
   //{
-  //  jsonResponseBuilder( root, clientID, transID, ++serverTransID, "AbortSlew", invalidOperation, "Not slewing" );       
+  //  jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("AbortSlew"), invalidOperation, F("Not slewing") );       
   //}
   else
   {
@@ -326,7 +326,7 @@ void handleAbortSlewPut(void)
       //addDomeCmd( clientID, transID, "", CMD_DOME_ABORT, 0 );
     */
     domeStatus = DOME_ABORT;
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, "AbortSlew", Success, "" );
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("AbortSlew"), Success, "" );
   }
   root["value"] = connected; //return the current connected Client ID.
   root.printTo(message);
@@ -352,7 +352,7 @@ void handleShutterStatusGet(void)
      transID = (uint32_t)server.arg( argsToSearchFor[1] ).toInt();
 
   //anyone can get the shutter status.
-  jsonResponseBuilder( root, clientID, transID, ++serverTransID, "ShutterStatus", Success, "" );
+  jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("ShutterStatus"), Success, "" );
   
   root.set<int>("Value", (int) shutterStatus );
   //root.set<int>("Value", )
@@ -381,10 +381,10 @@ void handleCloseShutterPut(void)
      transID = (uint32_t)server.arg( argsToSearchFor[1] ).toInt();
 
    if( connected != clientID ) 
-      jsonResponseBuilder( root, clientID, transID, ++serverTransID, "CloseShutter", notConnected, "Client not connected" );    
+      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("CloseShutter"), notConnected, F("Client not connected") );    
    else if ( shutterStatus == SHUTTER_CLOSED || shutterStatus == SHUTTER_CLOSING )
    { 
-      jsonResponseBuilder( root, clientID, transID, ++serverTransID, "CloseShutter", Success, "" );    
+      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("CloseShutter"), Success, "" );    
       debugD( "CloseShutterPut: Already closing or closed - skipped. " );              
    }
    else if( shutterStatus == SHUTTER_OPENING || shutterStatus == SHUTTER_OPEN )
@@ -392,11 +392,11 @@ void handleCloseShutterPut(void)
       //Set command to close shutter.
       addShutterCmd( clientID, transID, "", CMD_SHUTTER_CLOSE, 0 ); 
       debugD( "CloseShutterPut: Added async command to close" );        
-      jsonResponseBuilder( root, clientID, transID, ++serverTransID, "CloseShutter", Success, "" );    
+      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("CloseShutter"), Success, "" );    
    }
    else
    {
-      jsonResponseBuilder( root, clientID, transID, ++serverTransID, "CloseShutter", invalidOperation, "Dome shutter not idle or errored" );       
+      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("CloseShutter"), invalidOperation, F("Dome shutter not idle or errored") );       
    } 
   
   //JsonArray& offsets = root.createNestedArray("Value");
@@ -425,13 +425,13 @@ void handleFindHomePut(void)
 
    if ( connected != clientID ) 
    {
-     jsonResponseBuilder( root, clientID, transID, ++serverTransID, "FindHome", notConnected, "Not connected" );       
+     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("FindHome"), notConnected, F("Not connected") );       
    }
    else
    {
       //Set command to move to home.
       addDomeCmd( clientID, transID, "", CMD_DOME_SLEW, homePosition ); 
-      jsonResponseBuilder( root, clientID, transID, ++serverTransID, "FindHome", Success, "" );
+      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("FindHome"), Success, "" );
    }
    root.printTo(message);
    debugI( "FindHomePut: %s", message.c_str() );        
@@ -457,7 +457,7 @@ void handleOpenShutterPut(void)
    
    //in this driver model,each device has a separate ip address ,so can only be one device. hence ignore device-number
    if( connected != clientID ) 
-      jsonResponseBuilder( root, clientID, transID, ++serverTransID, "OpenShutter", notConnected, "Client not connected" );    
+      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("OpenShutter"), notConnected, F("Client not connected") );    
    else if ( shutterStatus == SHUTTER_OPEN )
    {
       //We do this becuase the shutter reports open for any state but closed and we may stop it at any point
@@ -467,7 +467,7 @@ void handleOpenShutterPut(void)
    }
    else if ( shutterStatus == SHUTTER_OPENING ) 
    {
-      jsonResponseBuilder( root, clientID, transID, ++serverTransID, "OpenShutter", Success, "" );    
+      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("OpenShutter"), Success, "" );    
       debugD( "OpenShutterPut: Already opening - ignoring additional request." );            
    }
    else if( shutterStatus == SHUTTER_CLOSING || shutterStatus == SHUTTER_CLOSED )
@@ -475,11 +475,11 @@ void handleOpenShutterPut(void)
       //Set command to open shutter.
       addShutterCmd( clientID, transID, "", CMD_SHUTTER_OPEN, 0 );
       debugD( "OpenShutterPut: Added async command to open" );        
-      jsonResponseBuilder( root, clientID, transID, ++serverTransID, "OpenShutter", Success, "" );    
+      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("OpenShutter"), Success, "" );    
    }
    else
    {
-      jsonResponseBuilder( root, clientID, transID, ++serverTransID, "OpenShutter", invalidOperation, "Dome shutter not idle or errored" );       
+      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("OpenShutter"), invalidOperation, F("Dome shutter not idle or errored") );       
    }
    root.printTo(message);
    debugI( "OpenShutterPut: %s", message.c_str() );           
@@ -626,17 +626,19 @@ void handleSlewToAzimuthPut(void)
      
   debugI( "SlewToAzimuthPut: %f", location );
  
-  if( connected != clientID ) 
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAzimuth"), notConnected, "Not connected" ); 
+  if( connected != clientID )
+  {
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAzimuth"), notConnected, F("Not connected") ); 
+  }
   else if( canSetAzimuth == false ) 
   {
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAzimuth"), notImplemented, "Not supported by dome" );
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAzimuth"), notImplemented, F("Not supported by dome") );
   }
   else if( server.hasArg( argsToSearchFor[2] ) )
   {
     //01/06/2021 Added to comply with Conform requirements
     if( location < 0.0F || location > 360.0F )
-      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAzimuth"), invalidValue, "New azimuth out of 0<= value<=360 range" );  
+      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAzimuth"), invalidValue, F("New azimuth out of 0<= value<=360 range") );  
     else
     {
       //Set new slew location.
@@ -648,7 +650,7 @@ void handleSlewToAzimuthPut(void)
   }
   else 
   {
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, "SlewToAzimuth", valueNotSet, "Azimuth argument not found" );
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAzimuth"), valueNotSet, F("Azimuth argument not found") );
   }
 
   root.printTo(message);
@@ -710,7 +712,7 @@ void handleSyncToAzimuthPut(void)
     }
   }
   else
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, "SyncToAzimuth", valueNotSet, "Argument not found" );       
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SyncToAzimuth"), valueNotSet, F("Argument not found") );       
 
   root.printTo(message);
   debugI( "SyncToAzimuthPut: %s", message.c_str() );    

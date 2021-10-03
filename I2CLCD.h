@@ -48,7 +48,7 @@ class I2CLCD {
       byte inData;
       bool readComplete = false;
 
-      DEBUGS1("CheckLCD:: Using address ");DEBUGSL1( _address );
+      DEBUGS1(F("CheckLCD:: Using address ") );DEBUGSL1( _address );
       
       // request 1 bytes from slave device - returns the version id held in register 3
       _tw.beginTransmission( _address );   
@@ -65,7 +65,7 @@ class I2CLCD {
          readComplete = true;
       }
       
-      DEBUGS1("CheckLCD:: written data - response code: ");DEBUGSL2( (int) inData, DEC );
+      DEBUGS1( F("CheckLCD:: written data - response code: "));DEBUGSL2( (int) inData, DEC );
       return (uint8_t) inData; //should be non-zero version number, otherwise not present.
   }
         
@@ -79,7 +79,7 @@ class I2CLCD {
       length = letters.length() + 1; 
       if ( ( buf = (byte*) calloc( sizeof(char), length ) ) == nullptr )
       {
-        DEBUGSL1("WriteLCD:: calloc failed - quitting call.");
+        DEBUGSL1(F("WriteLCD:: calloc failed - quitting call."));
         return 4;
       }
       letters.toCharArray( (char*) buf, length );
@@ -119,7 +119,7 @@ class I2CLCD {
       _tw.write( (byte) 0 );    // 0 register
       _tw.write( (byte) 12 );   // CLS cmd
       errorCode = _tw.endTransmission();    // Transmit queued content
-      //DEBUGS1("ClearScreen:: written data - response code: ");DEBUGSL1( errorCode );
+      //DEBUGS1(F("ClearScreen:: written data - response code: "));DEBUGSL1( errorCode );
       return errorCode;
   }
   
@@ -138,7 +138,7 @@ class I2CLCD {
       _tw.beginTransmission( _address ); // transmit to device
       _tw.write( outData , 2);     // backlight on/off command
       errorCode = _tw.endTransmission();       // stop transmitting
-      //DEBUGS1("ClearScreen:: written data - response code: ");DEBUGSL1( errorCode );
+      //DEBUGS1(F("ClearScreen:: written data - response code: "));DEBUGSL1( errorCode );
       return errorCode;
   }
 
@@ -164,7 +164,7 @@ class I2CLCD {
       _tw.beginTransmission( _address ); // transmit to device
       _tw.write( outData, 4 );   // cmd
       _tw.endTransmission();  // stop transmitting
-      //DEBUGS1("SetCursor row/col:: written data - response code: ");DEBUGSL1( errorCode );
+      //DEBUGS1(F("SetCursor row/col:: written data - response code: "));DEBUGSL1( errorCode );
 
       //Set cursor mode to solid, blink or underline
       outData = new byte[2];
@@ -188,7 +188,7 @@ class I2CLCD {
       _tw.beginTransmission( _address ); // transmit to device
       _tw.write( outData, 2 );   // cmd
       errorCode = _tw.endTransmission();  // stop transmitting
-      //DEBUGS1("SetCursor type:: written data - response code: ");DEBUGSL1( errorCode );
+      //DEBUGS1(F("SetCursor type:: written data - response code: "));DEBUGSL1( errorCode );
       return errorCode;
    }
 };     

@@ -32,7 +32,7 @@ void handlerNotFound()
   uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
   DynamicJsonBuffer jsonBuffer(250);
   JsonObject& root = jsonBuffer.createObject();
-  jsonResponseBuilder( root, clientID, transID, ++serverTransID, "HandlerNotFound", invalidOperation , "No REST handler found for argument - check ASCOM Dome v2 specification" );    
+  jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("HandlerNotFound"), invalidOperation , F("No REST handler found for argument - check ASCOM Dome v2 specification") );    
   root["Value"] = 0;
   root.printTo(message);
   server.send(responseCode, F("application/json"), message);
@@ -50,6 +50,7 @@ void handlerStatus()
   
   //Status info
   root["time"]                  = timestamp;
+  root["build version"]         = String(__DATE__) + FPSTR(BuildVersionName);
   root["dome status"]           = (int) domeStatus;
   root["dome status string"]    = domeStateNames[domeStatus];
   root["shutter status"]        = (int) shutterStatus;
@@ -68,8 +69,8 @@ void handlerRestart() //PUT or GET
 {
   //Trying to do a redirect to the rebooted host so we pick up from where we left off. 
   server.sendHeader( WiFi.hostname().c_str(), String("/status"), true);
-  server.send ( 302, F("text/html"), "<!Doctype html><html>Redirecting for restart</html>");
-  debugW("Reboot requested");
+  server.send ( 302, F("text/html"), F( "<!Doctype html><html>Redirecting for restart</html>"));
+  debugW( "Reboot requested");
   device.restart();
 }
 
@@ -95,7 +96,7 @@ void handleHostnamePut( void )
   
   debugURI( errMsg );
   DEBUGSL1 (errMsg);
-  DEBUGSL1( "Entered handleHostnamePut" );
+  DEBUGSL1( F("Entered handleHostnamePut") );
   
   //throw error message
   if( hasArgIC( argToSearchFor, server, false ) )
@@ -116,14 +117,15 @@ void handleHostnamePut( void )
     //Send response 
     //Trying to do a redirect to the rebooted host so we pick up from where we left off. 
     server.sendHeader( WiFi.hostname().c_str(), String("/setup"), true);
-    server.send ( 302, F("text/html"), "<!Doctype html><html>Redirecting for restart</html>");
+    server.send ( 302, F("text/html"), F("<!Doctype html><html>Redirecting for restart</html>") );
     device.reset();
   }
   else
   {
-    errMsg = "handleHostnamePut: Error handling new hostname";
+    errMsg = F("handleHostnamePut: Error handling new hostname");
     debugI( "%s", errMsg.c_str() );
     form = setupFormBuilder( form, errMsg );
+    server.sendHeader( WiFi.hostname().c_str(), String("/setup"), true);
     server.send( 200, F("text/html"), form ); 
   }
 }
@@ -156,7 +158,7 @@ void handleShutterNamePut( void )
   }
   else
   {
-    errMsg = "handleShutterNamePut: Error handling new hostname - check length";
+    errMsg = F("handleShutterNamePut: Error handling new hostname - check length");
     debugI( "%s", errMsg.c_str() );
   }
   form = setupFormBuilder( form, errMsg );
@@ -192,11 +194,12 @@ void handleSensorNamePut( void )
   }
   else
   {
-    errMsg = "Error handling new hostname - check length";
+    errMsg = F("Error handling new hostname - check length");
     debugI( "%s", errMsg.c_str() );
   }
   //Send response 
   form = setupFormBuilder( form, errMsg );
+  server.sendHeader( WiFi.hostname().c_str(), String("/setup"), true);
   server.send( 200, F("text/html"), form ); 
   return;
 }
@@ -225,7 +228,7 @@ void handleDomeGoto( void )
   }  
   else
   {
-    errMsg = String("Goto position not in range 0-360");
+    errMsg = String(F("Goto position not in range 0-360"));
     debugI("%s", errMsg.c_str() );
   }
   form = setupFormBuilder( form, errMsg );
@@ -261,11 +264,11 @@ void handleSyncOffsetPut( void)
       normaliseFloat( offsetVal, 360.0F );
 
       //Add to list at top.
-      addDomeCmd( 100, 1000, "azimuthSyncOffset" , CMD_DOMEVAR_SET, offsetVal );
+      addDomeCmd( 100, 1000, F("azimuthSyncOffset") , CMD_DOMEVAR_SET, offsetVal );
     }
     else
     {
-      errMsg = String("Goto position not in range 0-360");
+      errMsg = String(F("Goto position not in range 0-360"));
       debugI("%s",errMsg.c_str() );
     }
   }
@@ -290,7 +293,7 @@ void handleHomePositionPut(void)
     }
     else
     {
-      errMsg = String("New home position not within range of 0 - 360");
+      errMsg = String(F("New home position not within range of 0 - 360"));
       debugI("%s", errMsg.c_str() );
     }
   }  
@@ -311,13 +314,14 @@ void handleParkPositionPut(void)
   if( hasArgIC( argsToSearchFor[0], server, false ) )
   {
     newPark  = server.arg(argsToSearchFor[0]).toInt();
-    if ( newPark >= 0 && newPark <= 360)
+    if ( newPark >= 0 && newPark < 360 )
     {
       parkPosition = newPark;
+      saveToEeprom();
     }
     else
     {
-      errMsg = String("New Park position not within range of 0 - 360");
+      errMsg = String(F("New Park position not within range of 0 - 360"));
       debugI("%s", errMsg.c_str() );
     }
   }  
@@ -336,101 +340,101 @@ void handleParkPositionPut(void)
  */
 String& setupFormBuilder( String& htmlForm, String& errMsg )
 {
-  htmlForm = "<!DOCTYPE HTML><html><head></head><meta></meta><body><div id=\"ErrorMsg\" >\n";
+  htmlForm = F("<!DOCTYPE HTML><html><head></head><meta></meta><body><div id=\"ErrorMsg\" >\n");
   if( errMsg != NULL && errMsg.length() > 0 ) 
   {
-    htmlForm +="<b background='red' >";
+    htmlForm +=F("<b background='red' >");
     htmlForm.concat( errMsg );
-    htmlForm += "</b>";
+    htmlForm += F("</b>");
   }
-  htmlForm += "</div>\n";
+  htmlForm += F("</div>\n");
   
   //Hostname
-  htmlForm += "<div id=\"hostnameset\" >";
-  htmlForm += "<h2> Enter new hostname for ASCOM Dome driver host</h2>\n";
-  htmlForm += "<form action=\"http://";
+  htmlForm += F("<div id=\"hostnameset\" >");
+  htmlForm += F("<h2> Enter new hostname for ASCOM Dome driver host</h2>\n");
+  htmlForm += F("<form action=\"http://");
   htmlForm.concat( myHostname );
-  htmlForm += "/Hostname\" method=\"PUT\" id=\"hostname\" >\n";
-  htmlForm += "Changing the hostname will cause the dome hardware to reboot and may change the address!\n<br>";
-  htmlForm += "<input type=\"text\" name=\"hostname\" value=\"";
+  htmlForm += F("/Hostname\" method=\"PUT\" id=\"hostname\" >\n");
+  htmlForm += F("Changing the hostname will cause the dome hardware to reboot and may change the address!\n<br>");
+  htmlForm += F("<input type=\"text\" name=\"hostname\" value=\"");
   htmlForm.concat( myHostname );
-  htmlForm += "\" maxlength=\"";
+  htmlForm += F("\" maxlength=\"");
   htmlForm += MAX_NAME_LENGTH;
-  htmlForm += "\" >\n";
-  htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
+  htmlForm += F("\" >\n");
+  htmlForm += F("<input type=\"submit\" value=\"submit\">\n</form></div>\n");
   
   //Shutter controller hostname
-  htmlForm += "<div id=\"Shutternameset\" >";
-  htmlForm += "<form action=\"http://";
+  htmlForm += F("<div id=\"Shutternameset\" >");
+  htmlForm += F("<form action=\"http://");
   htmlForm.concat( myHostname );
-  htmlForm += "/ShutterName\" method=\"PUT\" id=\"shutterhostname\" >\n";
-  htmlForm += "<h2> Enter new URL path \<hostname\>/\<path\> for Shutter controller </h2>\n";
-  htmlForm += "<input type=\"text\" name=\"shutterhostname\" value=\"";
+  htmlForm += F("/ShutterName\" method=\"PUT\" id=\"shutterhostname\" >\n");
+  htmlForm += F("<h2> Enter new URL path \<hostname\>/\<path\> for Shutter controller </h2>\n");
+  htmlForm += F("<input type=\"text\" name=\"shutterhostname\" value=\"");
   htmlForm.concat( shutterHostname );
-  htmlForm += "\" maxlength=\"";
+  htmlForm += F("\" maxlength=\"");
   htmlForm += MAX_NAME_LENGTH;
-  htmlForm += "\" >\n";
-  htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
+  htmlForm += F("\" >\n");
+  htmlForm += F("<input type=\"submit\" value=\"submit\">\n</form></div>\n");
   
 #if defined USE_REMOTE_ENCODER_FOR_DOME_ROTATION  || defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION  
   //Device name - do we really want to enable this to be changed ? Yes, and the url to be updatable too. 
-  htmlForm += "<div id=\"Bearingsensorname\" >";
-  htmlForm += "<form action=\"http://";
+  htmlForm += F("<div id=\"Bearingsensorname\" >");
+  htmlForm += F("<form action=\"http://");
   htmlForm.concat( myHostname );
-  htmlForm += "/SensorName\" method=\"PUT\" id=\"bearingsensorname\" >\n";
-  htmlForm += "<h2> Enter new URL \<hostname\>/\<path\> for Dome orientation sensor </h2>\n";
-  htmlForm += "<p> Rest response returned must return a 'bearing' entry in json form</p>\n";
-  htmlForm += "<input type=\"text\" name=\"bearingsensorname\" value=\"";
+  htmlForm += F("/SensorName\" method=\"PUT\" id=\"bearingsensorname\" >\n");
+  htmlForm += F("<h2> Enter new URL \<hostname\>/\<path\> for Dome orientation sensor </h2>\n");
+  htmlForm += F("<p> Rest response returned must return a 'bearing' entry in json form</p>\n");
+  htmlForm += F("<input type=\"text\" name=\"bearingsensorname\" value=\"");
   htmlForm.concat( sensorHostname );
-  htmlForm += "\" maxlength=\"";
+  htmlForm += F("\" maxlength=\"");
   htmlForm += MAX_NAME_LENGTH;
-  htmlForm += "\" >\n";
-  htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
+  htmlForm += F("\" >\n");
+  htmlForm += F("<input type=\"submit\" value=\"submit\">\n</form></div>\n");
 #endif
 
   //Dome goto position
-  htmlForm += "<div id=\"gotoset\" >";
-  htmlForm += "<h2> Enter bearing to move dome to </h2>\n";
-  htmlForm += "<form action=\"http://";
+  htmlForm += F("<div id=\"gotoset\" >");
+  htmlForm += F("<h2> Enter bearing to move dome to </h2>\n");
+  htmlForm += F("<form action=\"http://");
   htmlForm.concat( myHostname );
-  htmlForm += "/Goto\" method=\"PUT\" id=\"goto\" >\n";
-  htmlForm += "<input type=\"number\" name=\"bearing\" max=\"360.0\" min=\"0.0\" value=\"";
+  htmlForm += F("/Goto\" method=\"PUT\" id=\"goto\" >\n");
+  htmlForm += F("<input type=\"number\" name=\"bearing\" max=\"360.0\" min=\"0.0\" value=\"");
   htmlForm += currentAzimuth;
-  htmlForm += "\">\n";
-  htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
+  htmlForm += F("\">\n");
+  htmlForm += F("<input type=\"submit\" value=\"submit\">\n</form></div>\n");
   
   //Dome sync offset
-  htmlForm += "<div id=\"syncset\" >";
-  htmlForm += "<h2> Enter actual position for dome to sync to </h2>\n";
-  htmlForm += "<form action=\"http://";
+  htmlForm += F("<div id=\"syncset\" >");
+  htmlForm += F("<h2> Enter actual position for dome to sync to </h2>\n");
+  htmlForm += F("<form action=\"http://");
   htmlForm.concat(myHostname);
-  htmlForm += "/Sync\" method=\"PUT\" id=\"sync\" >\n";
-  htmlForm += "<input type=\"number\" name=\"syncOffset\" max=\"360.0\" min=\"0.0\" value=\"";
+  htmlForm += F("/Sync\" method=\"PUT\" id=\"sync\" >\n");
+  htmlForm += F("<input type=\"number\" name=\"syncOffset\" max=\"360.0\" min=\"0.0\" value=\"");
   htmlForm += azimuthSyncOffset;
-  htmlForm += "\">\n";
-  htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
+  htmlForm += F("\">\n");
+  htmlForm += F("<input type=\"submit\" value=\"submit\">\n</form></div>\n");
   
   //Dome home position
-  htmlForm += "<div id=\"homeset\" >";
-  htmlForm += "<h2> Enter new home position for dome </h2>\n";
-  htmlForm += "<form action=\"http://";
+  htmlForm += F("<div id=\"homeset\" >");
+  htmlForm += F("<h2> Enter new home position for dome </h2>\n");
+  htmlForm += F("<form action=\"http://");
   htmlForm.concat(myHostname);
-  htmlForm += "/Home\" method=\"PUT\" id=\"home\" >\n";
-  htmlForm += "<input type=\"number\" name=\"homePosition\" max=\"360.0\" min=\"0.0\" value=\"";
+  htmlForm += F("/Home\" method=\"PUT\" id=\"home\" >\n");
+  htmlForm += F("<input type=\"number\" name=\"homePosition\" max=\"360.0\" min=\"0.0\" value=\"");
   htmlForm += homePosition;
-  htmlForm += "\">\n";  
-  htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
+  htmlForm += F("\">\n");  
+  htmlForm += F("<input type=\"submit\" value=\"submit\">\n</form></div>\n");
   
   //Dome park position
-  htmlForm += "<div id=\"parkset\" >";
-  htmlForm += "<h2> Enter new Park position for dome </h2>\n";
-  htmlForm += "<form action=\"http://";
+  htmlForm += F("<div id=\"parkset\" >");
+  htmlForm += F("<h2> Enter new Park position for dome </h2>\n");
+  htmlForm += F("<form action=\"http://");
   htmlForm.concat(myHostname);
-  htmlForm += "/Park\" method=\"PUT\" id=\"park\" >\n";
-  htmlForm += "<input type=\"number\" name=\"parkPosition\" max=\"360.0\" min=\"0.0\" value=\"";
+  htmlForm += F("/Park\" method=\"PUT\" id=\"park\" >\n");
+  htmlForm += F("<input type=\"number\" name=\"parkPosition\" max=\"360.0\" min=\"0.0\" value=\"");
   htmlForm += parkPosition;
-  htmlForm += "\">\n";  
-  htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
+  htmlForm += F("\">\n");  
+  htmlForm += F("<input type=\"submit\" value=\"submit\">\n</form></div>\n");
   
   //Consider also - for later, for systems that don't calc this for us, we 
   //may have to do it ourselves
@@ -443,31 +447,31 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
   //Distance from RA axis.
   
   //Park dome
-  htmlForm += "<div id=\"park\" >";
-  htmlForm += "<h2> Park dome </h2>\n";
-  htmlForm += "<form action=\"http://";
+  htmlForm += F("<div id=\"park\" >");
+  htmlForm += F("<h2> Park dome </h2>\n");
+  htmlForm += F("<form action=\"http://");
   htmlForm.concat(myHostname);
-  htmlForm += "/park\" method=\"PUT\" id=\"actions\" >\n";
-  htmlForm += "<input type=\"button\" id=\"Park\" name=\"Park\" value=\"Park\" >\n";  
-  htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
+  htmlForm += F("/park\" method=\"PUT\" id=\"actions\" >\n");
+  htmlForm += F("<input type=\"button\" id=\"Park\" name=\"Park\" value=\"Park\" >\n");  
+  htmlForm += F("<input type=\"submit\" value=\"submit\">\n</form></div>\n");
   
   //Shutter Controls
-  htmlForm += "<div id=\"Shutter\" >";
-  htmlForm += "<h2> Shutter actions </h2>\n";
-  htmlForm += "<form action=\"http://";
+  htmlForm += F("<div id=\"Shutter\" >");
+  htmlForm += F("<h2> Shutter actions </h2>\n");
+  htmlForm += F("<form action=\"http://");
   htmlForm.concat(myHostname);
-  htmlForm += "/shutter\" method=\"PUT\" id=\"shutter\" >\n";
+  htmlForm += F("/shutter\" method=\"PUT\" id=\"shutter\" >\n");
   
   //can add pre-sel based on current state later. 
-  htmlForm += "<input type=\"radio\" id=\"ShutterOpen\" name=\"Shutter\" value=\"Open\" >\n";  
-  htmlForm += "<label for=\"ShutterOpen\">Open</label><br>\n";
-  htmlForm += "<input type=\"radio\" id=\"ShutterClose\" name=\"Shutter\" value=\"Close\" >\n";  
-  htmlForm += "<label for=\"Shutterclose\">Close</label><br>\n";
-  htmlForm += "<input type=\"radio\" id=\"ShutterHalt\" name=\"Shutter\" value=\"Abort\" >\n";  
-  htmlForm += "<label for=\"ShutterHalt\">Abort</label><br>\n"; 
-  htmlForm += "<input type=\"submit\" value=\"submit\">\n</form></div>\n";
+  htmlForm += F("<input type=\"radio\" id=\"ShutterOpen\" name=\"Shutter\" value=\"Open\" >\n");  
+  htmlForm += F("<label for=\"ShutterOpen\">Open</label><br>\n");
+  htmlForm += F("<input type=\"radio\" id=\"ShutterClose\" name=\"Shutter\" value=\"Close\" >\n");  
+  htmlForm += F("<label for=\"Shutterclose\">Close</label><br>\n");
+  htmlForm += F("<input type=\"radio\" id=\"ShutterHalt\" name=\"Shutter\" value=\"Abort\" >\n");  
+  htmlForm += F("<label for=\"ShutterHalt\">Abort</label><br>\n"); 
+  htmlForm += F("<input type=\"submit\" value=\"submit\">\n</form></div>\n");
   
-  htmlForm += "</body>\n</html>\n";
+  htmlForm += F("</body>\n</html>\n");
   return htmlForm;
 }
 
