@@ -25,6 +25,7 @@ File to be included into relevant device REST setup
  cmdItem_t* addDomeCmd( uint32_t clientId, uint32_t transId, String cmdName, enum domeCmd, int value );
  cmdItem_t* addShutterCmd( uint32_t clientId, uint32_t transId, String cmdName, enum shutterCmd, int value );
  void updateCmdResponseList( int transID );
+ void freeCmd( cmdItem_t* cmd );
  
  //dome state handlers
  void onDomeSlew();
@@ -35,7 +36,7 @@ File to be included into relevant device REST setup
  void onShutterIdle();
  int shutterAltitude( int newAngle );
  int shutterSlew( enum shutterCmd setting );
- int shutterAbort( void );
+ //int shutterAbort( void ); //deprecated
 
   float normaliseFloat( float& input, float radix) 
   {
@@ -65,90 +66,142 @@ File to be included into relevant device REST setup
     return output;  
   }
 
-  
+ /*
+ * @brief create a new dome command list entry
+ */
   cmdItem_t* addDomeCmd( uint32_t clientId, uint32_t transId, String cmdName, enum domeCmd newCmd, int value )
   {
       //Create new command
       cmdItem_t* pCmd = (cmdItem_t*) calloc( sizeof( cmdItem_t ), 1); 
+
+      //Create copy buffer for the command name
+      char* cptr = (char*) calloc( sizeof( char), cmdName.length() + 1 );
+      strncpy( cptr, cmdName.c_str(), cmdName.length() );
+      cptr[cmdName.length()] = '\0';
+
       //Add to list 
-      pCmd->cmdName = cmdName;
+      pCmd->cmdName = cptr;
       pCmd->cmd = (int) newCmd;
       pCmd->value = value;
       pCmd->clientId = clientId;
       pCmd->transId = transId; 
-      domeCmdList->add( pCmd );
       
-      debugI( "Cmd pushed: %i", newCmd ); 
+      domeCmdList->add( pCmd );
+      debugI( "Cmd pushed: %i", (int) newCmd ); 
       return pCmd;
   }
 
+/*
+ * @brief create a new shutter command list entry
+ */ 
   cmdItem_t* addShutterCmd( uint32_t clientId, uint32_t transId, String cmdName, enum shutterCmd newCmd, int value )
   {
       //Create new command
       cmdItem_t* pCmd = (cmdItem_t*) calloc( sizeof( cmdItem_t ), 1); 
+
+      //Create copy buffer for the command name
+      char* cptr = (char*) calloc( sizeof( char ), cmdName.length() +1 );
+      strncpy( cptr, cmdName.c_str(), cmdName.length() );
+      cptr[cmdName.length()] = '\0';   
+      
       //Add to list 
-      pCmd->cmdName = cmdName;
+      pCmd->cmdName = cptr;
       pCmd->cmd = (int) newCmd;
       pCmd->value = value;
       pCmd->clientId = clientId;
       pCmd->transId = transId; 
       shutterCmdList->add( pCmd );
 
-      debugI( "Cmd pushed: %i", newCmd ); 
+      debugI( "Cmd pushed: %i", (int) newCmd ); 
       return pCmd;
   }
 
   void freeCmd( cmdItem_t* ptr) 
   {
-    ptr->cmdName = ""; //was a String - does it need setting to a null ptr to destroy without loss ? 
-    free( ptr );
+    //Safely release cmd memory
+    //Clean up any memory dependencies
+    if( ptr->cmdName != nullptr )
+      free( ptr->cmdName );
+
+    if( ptr != nullptr ) 
+      free( (cmdItem_t*) ptr ); 
+    
+    debugV( "Cmd freed" ); 
+    return;
   }
   
   /* Handle the command list - we've already checked we are idle at this point.
    */
   void onDomeIdle( void )
   {
-    cmdItem_t* pCmd = nullptr;
-    
+    cmdItem_t* pCmd = nullptr;    
     enum domeCmd newCmd; 
+    
     if ( domeCmdList->size() > 0 ) 
     {
       pCmd = domeCmdList->pop();
-      debugI( "Popped new command: %i, value: %i", pCmd->cmd, pCmd->value );
+      debugI( "Popped new command: %i, value: %i", (int) pCmd->cmd, (int) pCmd->value );
       newCmd = (enum domeCmd ) pCmd->cmd;
+      String cmd = "";
       switch ( newCmd )
       {
+        // HOME and PARK are handled by slew commands but these entries satify the compiler warnings. 
+        case CMD_DOME_HOME:
+          targetAzimuth = (float) homePosition;
+          domeStatus = DOME_SLEWING;
+          onDomeSlew();
+          break;
+
+        case CMD_DOME_PARK:
+          targetAzimuth = (float) homePosition;
+          domeStatus = DOME_SLEWING;
+          onDomeSlew();
+          break;
+          
         case CMD_DOME_SLEW:
           targetAzimuth = (float) pCmd->value;
           domeStatus = DOME_SLEWING;
           onDomeSlew();
           break;
+
         case CMD_DOME_ABORT:
           onDomeAbort();
+          domeStatus = DOME_IDLE;
+          targetAzimuth = currentAzimuth;
           break;
+        
         case CMD_DOMEVAR_SET:
           //Did this so that dome variables aren't updated while waiting for commands that preceeded them to execute.   
           if ( pCmd->cmdName == nullptr )
           {
             debugW( "DOME_VAR_SET nullptr command name");
           }
-          else if ( pCmd->cmdName == "" )
+          else 
+          {
+            cmd = String( pCmd->cmdName );
+            debugD( "DOME_VAR_SET new command name: %s", pCmd->cmdName );            
+          }
+          
+          if ( strlen( pCmd->cmdName) == 0 )
           {
             debugW( "DOME_VAR_SET empty command name");            
           }
-          else if( pCmd->cmdName.equalsIgnoreCase( "parkPosition") )
+          else if( cmd.equalsIgnoreCase( F("parkPosition")) )
           {
-              parkPosition = (float) pCmd->value;
+              parkPosition = (int) pCmd->value;
+              debugI( "DOME_VAR_SET new park position : %i ", parkPosition );
               saveToEeprom();
           }
-          else if ( pCmd->cmdName.equalsIgnoreCase( "homePosition") )
+          else if ( cmd.equalsIgnoreCase( F("homePosition")) )
           {
-              homePosition = (float) pCmd->value;
+              homePosition = (int) pCmd->value;
+              debugI( "DOME_VAR_SET new home position : %i ", homePosition );
               saveToEeprom();
           }
-          else if ( pCmd->cmdName.equalsIgnoreCase( "azimuthSyncOffset") )
+          else if ( cmd.equalsIgnoreCase( F("azimuthSyncOffset") ) )
           {
               azimuthSyncOffset = (float) pCmd->value;
+              debugI( "DOME_VAR_SET new sync offset : %f ", azimuthSyncOffset  );
               saveToEeprom();
               //01/06/2021 Updated to comply with requirement of updated Azimuth to be available after Sync. 
               //May not be fast enough. 
@@ -206,13 +259,6 @@ File to be included into relevant device REST setup
     //looking at the options for a-b < D where valid D might be small +ve, -ve or large +ve and large -ve    
     //Updated 29/09/21 to address slow speed when starting near 0 and inaccurate home/park determination
     float delta = 0.0F;
-    delta = abs( localAzimuth - homePosition );
-    if ( delta < acceptableAzimuthError || (360.0F - delta ) < acceptableAzimuthError ) 
-      atHome = true;
-
-    delta = abs(localAzimuth - parkPosition);
-    if ( delta < acceptableAzimuthError || (360.0F - delta) < acceptableAzimuthError ) 
-      atPark = true;
 
     //Work out direction and speed to turn dome
     delta = abs(distance);
@@ -225,7 +271,7 @@ File to be included into relevant device REST setup
       //Update the desired state to say we have finished.
       domeStatus = DOME_IDLE;
 
-      debugI( "Dome stopped at target: %03f", localAzimuth);
+      debugI( "Dome stopped at target: %03.1f", localAzimuth);
       if ( lcdPresent )
         myLCD.writeLCD( 2, 0, "Slew complete." );
       
@@ -238,7 +284,7 @@ File to be included into relevant device REST setup
     //from 356 to 4 = -352 or +8 after reversal
 
     //we're not there yet so work out the direction. 
-    debugD( "OnDomeSlew: raw distance : %f, direction : %i", distance, direction  );    
+    debugD( "OnDomeSlew: raw distance : %f, direction : %i", distance, (int) direction  );    
     if( ( distance >= 0.0F ) && ( distance <= 180.0F ) ) 
     {
       direction = MOTOR_DIRN_CW;
@@ -258,7 +304,7 @@ File to be included into relevant device REST setup
       distance = 360 + distance;
     }
     
-    if ( distance < slowAzimuthRange )
+    if ( abs(distance) < slowAzimuthRange )
     {
       speed = MOTOR_SPEED_SLOW_SLEW;
       debugD( "Dome speed reduced - distance: %f", (float) distance);
@@ -272,11 +318,11 @@ File to be included into relevant device REST setup
       if ( lcdPresent ) 
         myLCD.writeLCD( 2, 0, "Slew::Fast" );
     }
-    debugD( "OnDomeSlew: raw distance : %f, direction : %i, speed: %i", distance, direction, speed  );      
+    debugD( "OnDomeSlew: raw distance : %f, direction : %i, speed: %i", distance, (int) direction, (int) speed  );      
     
     myMotor.setSpeedDirection( speed, direction );
-    myMotor.getSpeedDirection();
-    //debugV("Motor returned - speed %u, direction: %u", ( uint8_t) myMotor.getSpeed(), (uint8_t) myMotor.getDirection() );
+    //myMotor.getSpeedDirection();
+    //debugV("Motor returned - speed %u, direction: %u", ( uint) myMotor.getSpeed(), (uint) myMotor.getDirection() );
     return;
    }
   
@@ -323,6 +369,7 @@ void onShutterIdle()
 //enum shutterCmd              { CMD_SHUTTER_ABORT=0, CMD_SHUTTER_OPEN=4, CMD_SHUTTER_CLOSE=5, CMD_SHUTTERVAR_SET };
   enum shutterCmd newCmd = CMD_SHUTTER_ABORT;
   cmdItem_t* pCmd = nullptr;
+  String cmd;
   
   switch ( shutterStatus )
   {
@@ -334,7 +381,7 @@ void onShutterIdle()
         {
           pCmd = shutterCmdList->pop();
           newCmd = (enum shutterCmd) pCmd->cmd;
-          debugI("OnShutterIdle - new command popped: %i", newCmd );  
+          debugI("OnShutterIdle - new command popped: %s", shutterCmdNames[(int)newCmd] );  
 
           switch( newCmd )
           {
@@ -348,23 +395,42 @@ void onShutterIdle()
                 }
                 else //else consume and free 
                 {
+                  //Clean up 
                   updateCmdResponseList( pCmd->transId );            
-                  free( pCmd ) ;
+                  freeCmd( pCmd ) ;
+                  //clear down
+                  if( newCmd == CMD_SHUTTER_ABORT )
+                    shutterCmdList->clear();           //TODO this is a memory leak - fortunately rare and under our control
                 }
                 break;
             case CMD_SHUTTERVAR_SET:
-                if( pCmd->cmdName.equalsIgnoreCase( F("altitude") ) && (pCmd->value >= SHUTTER_MIN_ALTITUDE ) && ( pCmd->value <= SHUTTER_MAX_ALTITUDE ) )
-                { //If its at either end then that is open or closed, not an altitude
-                  if ( ( pCmd->value > SHUTTER_MIN_ALTITUDE ) && ( pCmd->value < SHUTTER_MAX_ALTITUDE) )  
-                    shutterAltitude( pCmd->value );
+                if( pCmd->cmdName != nullptr && strlen( pCmd->cmdName ) > 0 ) 
+                {
+                  cmd = String( pCmd->cmdName );
+                  if( cmd.equalsIgnoreCase( F("altitude") ) && ( (int) pCmd->value >= SHUTTER_MIN_ALTITUDE ) && ( (int) pCmd->value <= SHUTTER_MAX_ALTITUDE ) )
+                  { //If its at either end then that is open or closed, not an altitude
+                     if( shutterAltitude( (int)pCmd->value ) != HTTP_CODE_OK )
+                     {
+                        //In range but call failed - try again by reloading for next time. 
+                        shutterCmdList->unshift( pCmd );
+                     }
+                     else
+                     {
+                        updateCmdResponseList( pCmd->transId );                
+                        freeCmd( pCmd ) ;
+                     }                     
+                  }
+                  else
+                  {
+                    debugW( "Shutter cmd altitude out of range: %i ", (int) pCmd->value);                    
+                    freeCmd( pCmd ) ; //Ignore and delete
+                  }
                 }
-                updateCmdResponseList( pCmd->transId );                
-                free( pCmd ) ;
                 break;
             default:
               break;
           }
-          debugI("State %s outcome for shutter ", shutterStateNames[ shutterStatus ] );
+          debugI("State outcome for shutter: %s ", shutterStateNames[ (int) shutterStatus ] );
        }  
        break;
      
@@ -374,7 +440,7 @@ void onShutterIdle()
        debugI("Shutter opening or closing - waiting for idle to check for new state" );
        break;
      default: 
-       debugW("Unknown state %i requested for shutter ", targetShutterStatus );
+       debugW("Unknown state requested for shutter: %s ", shutterStateNames[(int) targetShutterStatus] );
        break;         
   }
 }
@@ -392,7 +458,7 @@ int shutterSlew( enum shutterCmd setting )
     uri.concat( shutterHostname );
     uri.concat("/shutter");
 
-    //debugD( "shutterSlew: setting: %s, %i", setting, setting.length() );
+    debugD( "shutterSlew: setting: %s", shutterCmdNames[(int) setting] );
     switch( setting )
     {
       case CMD_SHUTTER_ABORT: arg.concat( F("abort") );
@@ -402,27 +468,29 @@ int shutterSlew( enum shutterCmd setting )
       case CMD_SHUTTER_CLOSE: arg.concat( F("close") );
         break;
       default: 
-        debugE( "invalid shutterState provided to shutterSlew - ignoring" );
+        debugE( "invalid shutterState provided to shutterSlew: %i - ignoring", (int) setting );
       break;
-    }
-    debugD( "calling shutter with args: %s", arg.c_str() );
+    }   
+
     errorCode = restQuery( uri, arg, outbuf, HTTP_PUT );  
     if( errorCode == HTTP_CODE_OK )
     {
-      debugD("Successfully issued new state %s to shutter", arg.c_str() );
+      debugV("Successfully issued new state '%s' to shutter", arg.c_str() );
       if ( setting == CMD_SHUTTER_OPEN )
         shutterStatus = SHUTTER_OPENING;
       else if ( setting == CMD_SHUTTER_CLOSE )
         shutterStatus = SHUTTER_CLOSING;
-      else
-        shutterStatus = SHUTTER_ERROR;
-      //Let normal status request update our state. 
+      else if( setting == CMD_SHUTTER_ABORT )
+      {
+         if( shutterStatus == SHUTTER_OPENING || shutterStatus == SHUTTER_OPEN || shutterStatus == SHUTTER_CLOSING )
+           shutterStatus = SHUTTER_OPEN;
+         else 
+           shutterStatus = SHUTTER_CLOSED;
+      }
     }
     else 
     {
-      //what to do ? Could be temporary  - so check if we failed to connect or failed to action. 
-      // A Failure to action means we connected successfully but the device had a fault.  
-      debugW("Failed to send new state Cmd to shutter, error %d", errorCode );
+      debugW("Failed to send new state Cmd to shutter, error %d", (int) errorCode );
     }
     return errorCode;
 }
@@ -457,7 +525,7 @@ int shutterAltitude( int newAngle )
     else 
     {
       //what to do ?
-      debugE("Failed to send new altitude to shutter, return HTTP code %i", response );
+      debugW("Failed to send new altitude to shutter, return HTTP code %i", response );
       //Preserve existing state - no change
     }
     return response;
@@ -466,34 +534,40 @@ int shutterAltitude( int newAngle )
   /*
    * Stop shutter moving. 
    * Return HTTP_CODE_OK for good reponse and HTTP query codes for anything else. 
-   */
+   * Now handled in shutterSlew above. 
+
   int shutterAbort( void )
   {
     int response = 200;
     String outbuf = "";
     String uri = "http:";
-    shutterCmdList->clear();
+    //shutterCmdList->clear();
     uri.concat( sensorHostname );
     uri.concat("/shutter");
 
+    debugV("Abort issued to shutter.");
     response = restQuery( uri, "{\"status\":\"abort\"}", outbuf ,HTTP_PUT);
     if( response == HTTP_CODE_OK)
     {
-      debugI("Abort issued to shutter.");
-      //shutterStatus = ... it is what it is. 
+      debugV("Abort successful.");
+      if( shutterStatus == SHUTTER_OPENING || shutterStatus == SHUTTER_CLOSING || shutterStatus == SHUTTER_OPEN )
+        shutterStatus = SHUTTER_OPEN;
+      else
+      {
+        shutterStatus = SHUTTER_CLOSED;
+      }
     }
     else 
     {
-      //what to do ?
-      debugE("Failed to issue Abort to shutter, return HTTP response %i", response );
       //retain existing state
+      debugW("Failed to issue Abort to shutter, return HTTP response %i", response );
     }
     return response;
   } 
-  
+*/  
   void setupEncoder()
   {
-    //TODO 
+    //TODO if we ever have a locally-attached encoder. 
     return;
   }
  
@@ -511,22 +585,22 @@ int shutterAltitude( int newAngle )
     compassURL.concat( "/bearing" );
     response = restQuery( compassURL, "", output, HTTP_GET );
 #if defined DEBUG_ESP_HTTP_CLIENT      
-    debugD( "[HTTPClient response ] response code: %i, response: %s", response, output.c_str() );
+    debugD( "[HTTPClient response ] response code: %i, response: %s", (int) response, output.c_str() );
 #endif    
     JsonObject& root = jsonBuff.parse( output );
     
-    if ( response == HTTP_CODE_OK && root.success() && root.containsKey("bearing") )
+    if ( response == HTTP_CODE_OK && root.success() && root.containsKey(F("bearing")) )
     {
       value = (float) root.get<float>("bearing"); //initialise current setting
       status = true;
     }
     else
     {
-      debugE( "Shutter compass bearing call not successful, response: %i", response );
+      debugE( "Shutter compass bearing call not successful, response: %i", (int) response );
 #if defined DEBUG_ESP_HTTP_CLIENT      
       debugV( "bearing json content: %s", output.c_str() );
 #endif      
-      debugE( "JSON parsing status: %i", root.success() );
+      debugW( "JSON parsing status: %i", (int) root.success() );
     }
     return status;
   }
@@ -540,11 +614,11 @@ int shutterAltitude( int newAngle )
     int httpCode = 0;
     long int startTime;
     long int endTime;
-    //HTTPClient hClient;
+    //HTTPClient hClient; //uses a global 
     hClient.setTimeout ( (uint16_t) 250 );    
-    hClient.setReuse( true );    
+    hClient.setReuse( HTTP_CLIENT_REUSE );    
     
-    debugD("restQuery request - uri:[ %s ], args:[ %s ], method: %i", host.c_str(), args.c_str(), method );
+    debugD("restQuery request - uri:%s, args:%s, method: %i", host.c_str(), args.c_str(), (int) method );
     startTime = millis();
     //host and args are separate, need to join them for a GET parameterised request.    
     //if ( hClient.begin( wClient, uri ) ) uri must already have request args in it
@@ -553,22 +627,19 @@ int shutterAltitude( int newAngle )
       if( method == HTTP_GET )
       {
         httpCode = hClient.GET();
-        endTime = millis();
-#if defined DEBUG_ESP_HTTP_CLIENT            
-        debugV( "Time for restQuery GET call(mS): %li\n", endTime-startTime );
-#endif        
       }
       else if ( method == HTTP_PUT ) //variables are added as headers
       {
         //hClient.addHeader("Content-Type", "application/json"); 
         hClient.addHeader(F("Content-Type"), F("application/x-www-form-urlencoded") );
         httpCode = hClient.PUT( args.c_str() );        
-        endTime = millis();
-#if defined DEBUG_ESP_HTTP_CLIENT      
-        debugV("Time for restQuery PUT call: %li mS\n", endTime-startTime );
-#endif        
       }
-     
+
+      endTime = millis();
+#if defined DEBUG_ESP_HTTP_CLIENT            
+        debugV( "Time for restQuery call(mS): %li\n", (long int) endTime-startTime );
+#endif        
+
       // file found at server ?
       if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) 
       {
@@ -584,19 +655,19 @@ int shutterAltitude( int newAngle )
 #endif        
         ;;
       } 
-      hClient.end();
     }
     else
     {
        debugE("restQuery Unable to open connection");
     }  
+    hClient.end();
     return httpCode;
   }
   
 #if defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION || defined USE_REMOTE_ENCODER_FOR_DOME_ROTATION
   /*
    * Function to determine bearing of dome - just return a sane value to the caller. Let the caller handler sync offsets. 
-   * Note that if we don this right we can point this at any device that returns a 'bearing' in the rest response as long as the url is
+   * Note that if we do this right we can point this at any device that returns a 'bearing' in the rest response as long as the url is
    * setup correctly in the setup pages. 
    * That means the 'host' string is no longer strictly just a hostname. 
    */
@@ -610,12 +681,12 @@ int shutterAltitude( int newAngle )
     int response = 0;
     String outbuf = "";
     String path = "";
-    DynamicJsonBuffer jsonBuff(256);    
+    DynamicJsonBuffer jsonBuff(250);    
     
     //Update the bearing
-    path = String( "http://" );
+    path = String( F("http://") );
     path += host;
-    path += "/bearing";
+    path += F("/bearing");
 #if defined DEBUG_ESP_HTTP_CLIENT      
     debugV("GetBearing using remote device - host path: %s \n", path.c_str() );
     debugV("GetBearing setup - host uri: %s \n", host.c_str() );
@@ -627,56 +698,51 @@ int shutterAltitude( int newAngle )
     
     //Sometimes we get a good HTTP code but still no body... 
     JsonObject& root = jsonBuff.parse( outbuf );
-    if ( response == HTTP_CODE_OK && root.success() && root.containsKey( "bearing" ) )
+    if ( response == HTTP_CODE_OK ) 
     {            
+      if( root.success() && root.containsKey( "bearing" ) )
+      {
         localBearing = (float) root["bearing"];
         lastBearing = localBearing;
-#if defined DEBUG_ESP_HTTP_CLIENT      
+
         debugD(" GetBearing: localBearing %f", localBearing );     
-#endif        
 
 #if defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION        
-      //this isnt the right thing to do if its due to not getting a rest response in time from a busy device. 
-      /*
-      if ( lastBearing == bearing ) //We do this to check for sensor freeze
-      {
-        bearingRepeatCount ++;
-        debugW(" GetBearing: Sensor stuck %i detected @ %f\n", bearingRepeatCount, bearing );
-        
-        //reset the compass by resetting the target device
-        if ( bearingRepeatCount > bearingRepeatLimit ) 
-        {  
-          uri = "http://";
-          uri.concat( host );
-          uri.concat( "/reset" );
+        //this isnt the right thing to do if its due to not getting a rest response in time from a busy device. 
+        if ( lastBearing == bearing ) //We do this to check for sensor freeze
+        {
+          bearingRepeatCount ++;
+          debugW(" GetBearing: Sensor stuck %i detected @ %f\n", bearingRepeatCount, bearing );
           
-          response = restQuery( uri, "", outbuf, HTTP_PUT );
-          debugW(" GetBearing: Compass reset attempted !");
-          if (myLCD.present ) 
-            myLCD.writeLCD( 2, 0, "Compass reset !");
-          bearingRepeatCount = 0;
+          //reset the compass by resetting the target device
+          if ( bearingRepeatCount > bearingRepeatLimit ) 
+          {  
+            uri = "http://";
+            uri.concat( host );
+            uri.concat( "/reset" );
+            
+            response = restQuery( uri, "", outbuf, HTTP_PUT );
+            debugW(" GetBearing: Compass reset attempted !");
+            if (myLCD.present ) 
+              myLCD.writeLCD( 2, 0, "Compass reset !");
+            bearingRepeatCount = 0;
+          }
         }
+        else
+        {
+          bearingRepeatCount = 0;            
+        }
+#endif      
       }
-      else //good value not stuck 
-      */
+      else //can't retrieve the bearing
       {
-#if defined DEBUG_ESP_HTTP_CLIENT      
-        debugV(" GetBearing: Reading obtained %f\n", localBearing );
-#endif       
-        bearingRepeatCount = 0;
-      }
-#endif      
-    }
-    else //can't retrieve the bearing
-    {
-#if defined DEBUG_ESP_HTTP_CLIENT      
-      debugV( "GetBearing: response code: %i, parse success: %i, json data: %s", response, root.success(), outbuf.c_str() );
-#endif      
-      debugW("GetBearing: no reading, using last  ");
+      debugV( "Response code: %i, parse success: %i, json data: %s", response, (int) root.success(), outbuf.c_str() );
+      debugW( "No reading, using last  ");
       localBearing = lastBearing;
-    }
+      }
+    }//HTTP_CODE_OK
     duration = millis()-duration;
-    debugI( "request duration %li", duration);
+    debugI( "request duration %li", (long int) duration);
     return localBearing;
   }
 #else //if local interface in use
@@ -714,30 +780,34 @@ int shutterAltitude( int newAngle )
     String outbuf;
     long int duration = millis();
     enum shutterState value = SHUTTER_ERROR;
-    DynamicJsonBuffer jsonBuff(256);
+    DynamicJsonBuffer jsonBuff(250);
 
-    String uri = String( "http://" );
+    String uri = String( F("http://") );
     uri.concat( host );
-    uri.concat( "/shutter" );
+    uri.concat( F("/shutter") );
     int response = restQuery( uri , "", outbuf, HTTP_GET  );
-    JsonObject& root = jsonBuff.parse( outbuf ); 
-    if ( response == HTTP_CODE_OK && root.success() && root.containsKey("status") )
+    
+    if( response == HTTP_CODE_OK ) 
     {
-      value = ( enum shutterState) root.get<int>("status");    
-    }
-    else
-    {
-      value = shutterStatus; //Report the last response in the meantime. 
-      debugW("Shutter controller call not successful");
-      debugV("Shutter response: %i, parse result %i, json data %s", response, root.success(), outbuf.c_str() );
-
-#if defined DEBUG_ESP_HTTP_CLIENT      
-      debugV("Shutter response: %i, parse result %i, json data %s", response, root.success(), outbuf.c_str() );
-#endif      
+      JsonObject& root = jsonBuff.parse( outbuf ); 
+      if ( root.success() && root.containsKey("status") )
+      {
+        value = ( enum shutterState) root.get<int>("status");
+      }
+      else
+      {
+        value = shutterStatus; //Report the last response in the meantime. 
+        debugW("Shutter controller call not successful, buffer: %s", outbuf.c_str() );
+        debugV("Shutter response: %i, parse result %i, json data %s", (int) response, (int) root.success(), outbuf.c_str() );
+  
+  #if defined DEBUG_ESP_HTTP_CLIENT      
+        Serial.printf( "Shutter response: %i, parse result %i, json data %s\n", response, (int) root.success(), outbuf.c_str() );
+  #endif      
+      }
     }
 
     duration = millis() - duration;
-    debugI( " duration: %li", duration );
+    debugI( " duration: %li", (long int) duration );
     outputState = value;
     return response;
   }

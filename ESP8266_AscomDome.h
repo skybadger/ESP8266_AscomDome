@@ -8,11 +8,14 @@
 
 //Use for client testing
 //#define _DISABLE_MQTT_
+//#define DEBUG_MQTT
 
 //Use for client performance testing 
 //#define DEBUG_ESP_HTTP_CLIENT
+#define DEBUG_ESP
+#define HTTP_CLIENT_REUSE true
 
-//Used to test for memory leaks - no apparent memory leaks found. 
+//Used to test for memory leaks.
 #define _TEST_RAM_ 
 
 //#define USE_REMOTE_COMPASS_FOR_DOME_ROTATION
@@ -84,10 +87,11 @@ extern "C" {
 time_t now; //use as 'gmtime(&now);'
 
 //Program constants
+#define VERSION R1.31
 #if !defined DEBUG_DISABLED
-const char* BuildVersionName PROGMEM = "LWIPv2 hi bandwidth, RDebug enabled \n";
+const char* BuildVersionName PROGMEM = "LWIPv2 lo memory, RDebug enabled \n";
 #else
-const char* BuildVersionName PROGMEM = "LWIPv2 hi bandwidth, RDebug disabled \n";
+const char* BuildVersionName PROGMEM = "LWIPv2 lo memory, RDebug disabled \n";
 #endif 
 
 #define MAX_NAME_LENGTH 40
@@ -95,11 +99,12 @@ const int nameLengthLimit = MAX_NAME_LENGTH; //Default max length of names in ch
 const int acceptableAzimuthError = 1; //Indicates how close to target we want to get before we say its done. 
 const int slowAzimuthRange = 10; //Indicates how close to target we want to get before we slow down to a crawl.
 enum domeState               { DOME_IDLE, DOME_SLEWING, DOME_ABORT };
-const char* domeStateNames[] = {"DOME_IDLE","DOME_SLEWING","DOME_ABORT"};
+const char* domeStateNames[] = { "DOME_IDLE","DOME_SLEWING","DOME_ABORT" };
 enum domeCmd                 { CMD_DOME_ABORT=0, CMD_DOME_SLEW=1, CMD_DOME_PARK=2, CMD_DOME_HOME=3, CMD_DOMEVAR_SET };
 enum shutterState            { SHUTTER_OPEN, SHUTTER_CLOSED, SHUTTER_OPENING, SHUTTER_CLOSING, SHUTTER_ERROR }; //ASCOM defined constants.
 const char* shutterStateNames[] = {"SHUTTER_OPEN","SHUTTER_CLOSED","SHUTTER_OPENING", "SHUTTER_CLOSING", "SHUTTER_ERROR" };
 enum shutterCmd              { CMD_SHUTTER_ABORT=0, CMD_SHUTTER_OPEN=4, CMD_SHUTTER_CLOSE=5, CMD_SHUTTERVAR_SET };
+const char* shutterCmdNames[] = { "SHUTTER_ABORT", "SHUTTER_OPEN", "SHUTTER_CLOSE", "SHUTTERVAR_SET" };
 //enum motorSpeed: uint8_t     { MOTOR_SPEED_OFF=0, MOTOR_SPEED_SLOW_SLEW=120, MOTOR_SPEED_FAST_SLEW=240 };
 //enum motorDirection: uint8_t { MOTOR_DIRN_CW=0, MOTOR_DIRN_CCW=1 };
 enum I2CConst                { I2C_READ = 0x80, I2C_WRITE = 0x00 };  
@@ -134,7 +139,7 @@ int lastPosition = 0;
 //Struct to describe cmd items, used to add cmds to async processing cmd list for completion in request order. 
 typedef struct {
   int cmd;
-  String cmdName; //Is this legit or does it need managing more ? From a calloc/free pointof view? 
+  char* cmdName;
   int value;
   long int clientId;
   long int transId;
@@ -172,7 +177,6 @@ float targetAltitude = 0.0F;
 //State tracking
 enum domeState domeStatus         = DOME_IDLE;
 enum domeState domeTargetStatus   = domeStatus;
-enum domeState domeLastStatus     = domeStatus;
 enum shutterState shutterStatus   = SHUTTER_CLOSED;
 enum shutterState targetShutterStatus = SHUTTER_CLOSED;
 extern void publishFnStatus(void);
@@ -217,6 +221,8 @@ EspClass device;
 uint32_t originalRam;
 uint32_t lastRam;
 long int nowTime, startTime, indexTime;
+unsigned long int debugId = 0; //Seed a debug log ID 
+#define  _TEST_RAM_
 
 ETSTimer fineTimer, coarseTimer, timeoutTimer, minuteTimer;
 void onCoarseTimer( void* ptr );
@@ -275,8 +281,8 @@ char* Location = nullptr;
 //ASCOM variables
 const int defaultHomePosition = 0;
 const int defaultParkPosition = 0;
-bool atPark = false;
-bool atHome = false;
+//bool atPark = false; Dynamically detected from current position. 
+//bool atHome = false;
 int homePosition = defaultHomePosition;
 int parkPosition = defaultParkPosition;
 int altitude = 0;

@@ -66,11 +66,22 @@ void handleAtHomeGet( void)
     String message;
     uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
+    boolean tempHome = false;
     DynamicJsonBuffer jsonBuffer(128);
     JsonObject& root = jsonBuffer.createObject();
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("AtHome"), 0, "" );    
-    root["Value"] = ( abs( currentAzimuth - homePosition ) <= acceptableAzimuthError )? atHome = true : atHome = false;
-    //JsonArray& offsets = root.createNestedArray("Value");
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("AtHome"), 0, "" );  
+    float delta = currentAzimuth - homePosition;
+      
+    if ( ( abs ( delta ) <= acceptableAzimuthError ) || (( 360.0 - abs( delta )) <= acceptableAzimuthError ) )
+    {
+      tempHome = true;
+    }
+    else 
+    {
+      tempHome = false;
+    }
+    root["Value"] = tempHome;
+    // replaced .. root["Value"] = ( abs( currentAzimuth - homePosition ) <= acceptableAzimuthError )? atHome = true : atHome = false;
     root.printTo(message);
     debugI( "AtHomeGet : %s", message.c_str() );
     server.send(200, F("application/json"), message);
@@ -82,10 +93,21 @@ void handleAtParkGet(void)
     String message;
     uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
     uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
+    boolean tempPark = false;
     DynamicJsonBuffer jsonBuffer(128);
     JsonObject& root = jsonBuffer.createObject();
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("AtPark"), 0, "" );    
-    root["Value"] = ( abs( currentAzimuth - parkPosition) <= acceptableAzimuthError ) ? atPark = true : atPark = false;
+    float delta = currentAzimuth - parkPosition;
+    
+    if ( ( abs ( delta ) <= acceptableAzimuthError ) || (( 360.0 - abs( delta )) <= acceptableAzimuthError ) )
+    {
+      tempPark = true;
+    }
+    else 
+    {
+      tempPark = false;
+    }
+    root["Value"] = tempPark;
     root.printTo(message);
     debugI("AtParkGet: %s", message.c_str() );
     server.send(200, F("application/json"), message);
@@ -381,7 +403,7 @@ void handleCloseShutterPut(void)
      transID = (uint32_t)server.arg( argsToSearchFor[1] ).toInt();
 
    if( connected != clientID ) 
-      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("CloseShutter"), notConnected, F("Client not connected") );    
+      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("CloseShutter"), notConnected, F("Not the connected client") );    
    else if ( shutterStatus == SHUTTER_CLOSED || shutterStatus == SHUTTER_CLOSING )
    { 
       jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("CloseShutter"), Success, "" );    
@@ -457,7 +479,7 @@ void handleOpenShutterPut(void)
    
    //in this driver model,each device has a separate ip address ,so can only be one device. hence ignore device-number
    if( connected != clientID ) 
-      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("OpenShutter"), notConnected, F("Client not connected") );    
+      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("OpenShutter"), notConnected, F("Not the connected client") );    
    else if ( shutterStatus == SHUTTER_OPEN )
    {
       //We do this becuase the shutter reports open for any state but closed and we may stop it at any point
@@ -508,12 +530,12 @@ void handleSetParkPut(void)
      transID = (uint32_t)server.arg( argsToSearchFor[1] ).toInt();
     
   if( connected != clientID )
-      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SetPark"), notConnected, "Not connected" );    
+      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SetPark"), notConnected, F("Not the connected client") );    
   else
   {
     //Set new park location.
     parkPosition = currentAzimuth;
-    addDomeCmd( clientID, transID, "parkPosition", CMD_DOMEVAR_SET, parkPosition );      
+    addDomeCmd( clientID, transID, F("parkPosition"), CMD_DOMEVAR_SET, parkPosition );      
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SetPark"), Success, "" );    
   }
 
@@ -569,7 +591,7 @@ void handleSlewToAltitudePut(void)
      location = (boolean) server.arg( argsToSearchFor[2]).toFloat();
    
   if( connected != clientID ) 
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAltitude"), notConnected, F("Client not connected") );    
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAltitude"), notConnected, F("Not the connected client") );    
   //01/06/2021 added to respect canSetAltitude response for Conform
   else if ( canSetAltitude == false ) 
   {
@@ -628,7 +650,7 @@ void handleSlewToAzimuthPut(void)
  
   if( connected != clientID )
   {
-    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAzimuth"), notConnected, F("Not connected") ); 
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAzimuth"), notConnected, F("Not the connected client") ); 
   }
   else if( canSetAzimuth == false ) 
   {
@@ -644,7 +666,7 @@ void handleSlewToAzimuthPut(void)
       //Set new slew location.
       normaliseFloat( location, 360.0F );
       debugD( "SlewToAzimuthPut: %f", location );
-      addDomeCmd( clientID, transID, "SlewToAzimuthPut", CMD_DOME_SLEW, location );
+      addDomeCmd( clientID, transID, F("SlewToAzimuthPut"), CMD_DOME_SLEW, location );
       jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAzimuth"), Success, "" ); 
     }
   }
@@ -684,7 +706,7 @@ void handleSyncToAzimuthPut(void)
      location = server.arg( argsToSearchFor[2]).toFloat();
 
   if( connected != clientID ) 
-      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SyncToAzimuth"), notConnected, F("Not connected") );    
+      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SyncToAzimuth"), notConnected, F("Not the connected client") );    
   else if( server.hasArg( argsToSearchFor[2] ) )
   {
     //enforce limits by exception to satisfy Conform compliance
@@ -697,12 +719,12 @@ void handleSyncToAzimuthPut(void)
       
       //The offset is the difference between where the dome says it is currently pointing and where we are told it is pointing.
       azimuthSyncOffset = (float) ( location - bearing );
-      debugD( "azimuthsync - input: %f, currentAz: %f, offset %f", location, currentAzimuth, azimuthSyncOffset);
+      debugD( "azimuthsync - input: %3.2f, currentAz: %3.2f, offset %3.2f", location, currentAzimuth, azimuthSyncOffset);
       //Because we can go out of range we do this again
       normaliseFloat( azimuthSyncOffset, 360.0F );
       debugD( "azimuthsync - normalised offset: %f ",  azimuthSyncOffset );
       
-      addDomeCmd( clientID, transID, "azimuthSyncOffset", CMD_DOMEVAR_SET, azimuthSyncOffset );
+      addDomeCmd( clientID, transID, F("azimuthSyncOffset"), CMD_DOMEVAR_SET, int( azimuthSyncOffset ) );
 
       //01/06/2021 Removed - results in potential unexpected motion after sync. 
       //Tell the dome to move to the target azimuth using the updated correction - should be trivial.

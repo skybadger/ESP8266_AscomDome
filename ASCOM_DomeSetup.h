@@ -68,9 +68,9 @@ void handlerStatus()
 void handlerRestart() //PUT or GET
 {
   //Trying to do a redirect to the rebooted host so we pick up from where we left off. 
-  server.sendHeader( WiFi.hostname().c_str(), String("/status"), true);
+  server.sendHeader( WiFi.hostname().c_str(), String(F("/status") ), true);
   server.send ( 302, F("text/html"), F( "<!Doctype html><html>Redirecting for restart</html>"));
-  debugW( "Reboot requested");
+  debugW( "Reboot requested" );
   device.restart();
 }
 
@@ -92,7 +92,7 @@ void handleHostnamePut( void )
   String form;
   String errMsg;
   String newName;
-  String argToSearchFor = "hostname";
+  String argToSearchFor = F("hostname");
   
   debugURI( errMsg );
   DEBUGSL1 (errMsg);
@@ -116,7 +116,7 @@ void handleHostnamePut( void )
     
     //Send response 
     //Trying to do a redirect to the rebooted host so we pick up from where we left off. 
-    server.sendHeader( WiFi.hostname().c_str(), String("/setup"), true);
+    server.sendHeader( WiFi.hostname().c_str(), String(F("/setup")), true);
     server.send ( 302, F("text/html"), F("<!Doctype html><html>Redirecting for restart</html>") );
     device.reset();
   }
@@ -125,7 +125,7 @@ void handleHostnamePut( void )
     errMsg = F("handleHostnamePut: Error handling new hostname");
     debugI( "%s", errMsg.c_str() );
     form = setupFormBuilder( form, errMsg );
-    server.sendHeader( WiFi.hostname().c_str(), String("/setup"), true);
+    server.sendHeader( WiFi.hostname().c_str(), String(F("/setup")), true);
     server.send( 200, F("text/html"), form ); 
   }
 }
@@ -247,15 +247,15 @@ void handleSyncOffsetPut( void)
   String localName;
   String errMsg;
   float newGoto = 0;
-  String argsToSearchFor[] = { "syncOffset" };
+  String argsToSearchFor[] = { "syncValue" };
   
-  debugI( "Entered handleSyncOffsetPut");
+  debugI( "Entered ");
   float offsetVal = 0.0F;
   
   if( hasArgIC( argsToSearchFor[0], server, false ) )
   {
     localName = server.arg(argsToSearchFor[0]);
-    newGoto = (int) localName.toFloat();    
+    newGoto = localName.toFloat();    
  
     //range should be limited in HTML form constraints
     if ( newGoto >= 0.0F && newGoto <=360.0F )
@@ -263,12 +263,13 @@ void handleSyncOffsetPut( void)
       offsetVal = newGoto - bearing;
       normaliseFloat( offsetVal, 360.0F );
 
-      //Add to list at top.
-      addDomeCmd( 100, 1000, F("azimuthSyncOffset") , CMD_DOMEVAR_SET, offsetVal );
+      //Add to list.
+      addDomeCmd( 100, 1000, F("azimuthSyncOffset") , CMD_DOMEVAR_SET, (int) offsetVal );
+      debugI( " updated sync value is %f from %f ", offsetVal, newGoto );
     }
     else
     {
-      errMsg = String(F("Goto position not in range 0-360"));
+      errMsg = String(F("Goto position not in range 0-360.0"));
       debugI("%s",errMsg.c_str() );
     }
   }
@@ -283,13 +284,15 @@ void handleHomePositionPut(void)
   String form;
   int newHome;
   
-  debugI( "Entered handleHomePositionPut" );
+  debugI( "Entered "  );
   if( hasArgIC( argsToSearchFor[0], server, false ) )
   {
-    newHome  = server.arg(argsToSearchFor[0]).toInt();
+    newHome  = (int) server.arg(argsToSearchFor[0]).toInt();
     if ( newHome >= 0 && newHome <= 360)
     {
       homePosition = newHome;
+      debugI( "Updated home position: %i", homePosition );
+      saveToEeprom();
     }
     else
     {
@@ -313,7 +316,7 @@ void handleParkPositionPut(void)
   debugI( "handleParkPositionPut" );
   if( hasArgIC( argsToSearchFor[0], server, false ) )
   {
-    newPark  = server.arg(argsToSearchFor[0]).toInt();
+    newPark  = (int) server.arg(argsToSearchFor[0]).toInt();
     if ( newPark >= 0 && newPark < 360 )
     {
       parkPosition = newPark;
@@ -409,7 +412,7 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
   htmlForm += F("<form action=\"http://");
   htmlForm.concat(myHostname);
   htmlForm += F("/Sync\" method=\"PUT\" id=\"sync\" >\n");
-  htmlForm += F("<input type=\"number\" name=\"syncOffset\" max=\"360.0\" min=\"0.0\" value=\"");
+  htmlForm += F("<input type=\"number\" name=\"syncValue\" max=\"360.0\" min=\"0.0\" value=\"");
   htmlForm += azimuthSyncOffset;
   htmlForm += F("\">\n");
   htmlForm += F("<input type=\"submit\" value=\"submit\">\n</form></div>\n");

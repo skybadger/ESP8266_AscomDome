@@ -36,7 +36,7 @@ void readFromEeprom()
   char ch;
   int i = 0;
   String input;
-  for ( i = 0; i < 500 ; i++ )
+  for ( i = 0; i < eepromSize ; i++ )
   {
     ch = (char) EEPROM.read( i );
     if ( ch == '\0' )
@@ -61,7 +61,11 @@ void readFromEeprom()
   addr += ( sizeof( int ) );
   EEPROMReadAnything( addr, altitude );
   addr += ( sizeof( int ) );
-  
+
+  //Make assumption that park position was where we stopped the dome last. 
+  currentAzimuth = parkPosition;
+  //TODO Set encoder current position
+
   //Now read back strings
   DEBUGS1( F("Starting address for strings: ") );DEBUGSL1( addr );
   
@@ -190,8 +194,8 @@ void saveToEeprom( void )
     currentAltitude = 0;
     targetAltitude = 0;
     altitude = 0;
-    atPark = false;
-    atHome = false;
+    //atPark = false; Dynamically determined
+    //atHome = false;
     abortFlag = false; 
     homePosition = defaultHomePosition;
     parkPosition = defaultParkPosition;
