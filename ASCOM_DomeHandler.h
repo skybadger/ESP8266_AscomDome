@@ -329,16 +329,19 @@ void handleAbortSlewPut(void)
   if( hasArgIC( argsToSearchFor[1], server, false ) )
      transID = (uint32_t)server.arg( argsToSearchFor[1] ).toInt();
 
+#if defined ACCEPT_CONNECTED_CLIENT_ONLY
   if( connected != clientID )
   {
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("AbortSlew"), notConnected, F("Client not connected") );
   }
+  
   //01/06/2021 MH commented out  - throwing exception causes conform to get upset. 
   //else if( domeStatus != DOME_SLEWING  )
   //{
   //  jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("AbortSlew"), invalidOperation, F("Not slewing") );       
   //}
   else
+#endif
   {
     /* Just set status to DOME_ABORT and next top level loop will cause DOME_ABORT processing regardless of contents in 
        command stack. Next command will then be popped. Desirable behaviour ?
@@ -402,9 +405,12 @@ void handleCloseShutterPut(void)
   if( hasArgIC( argsToSearchFor[1], server, false ) )
      transID = (uint32_t)server.arg( argsToSearchFor[1] ).toInt();
 
+#if defined ACCEPT_CONNECTED_CLIENT_ONLY
    if( connected != clientID ) 
       jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("CloseShutter"), notConnected, F("Not the connected client") );    
-   else if ( shutterStatus == SHUTTER_CLOSED || shutterStatus == SHUTTER_CLOSING )
+   else 
+#endif
+   if ( shutterStatus == SHUTTER_CLOSED || shutterStatus == SHUTTER_CLOSING )
    { 
       jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("CloseShutter"), Success, "" );    
       debugD( "CloseShutterPut: Already closing or closed - skipped. " );              
@@ -445,11 +451,13 @@ void handleFindHomePut(void)
   if( hasArgIC( argsToSearchFor[1], server, false ) )
      transID = (uint32_t)server.arg( argsToSearchFor[1] ).toInt();
 
+#if defined ACCEPT_CONNECTED_CLIENT_ONLY
    if ( connected != clientID ) 
    {
      jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("FindHome"), notConnected, F("Not connected") );       
    }
    else
+#endif
    {
       //Set command to move to home.
       addDomeCmd( clientID, transID, "", CMD_DOME_SLEW, homePosition ); 
@@ -477,12 +485,15 @@ void handleOpenShutterPut(void)
   if( hasArgIC( argsToSearchFor[1], server, false ) )
      transID = (uint32_t)server.arg( argsToSearchFor[1] ).toInt();
    
+ #if defined ACCEPT_CONNECTED_CLIENT_ONLY
    //in this driver model,each device has a separate ip address ,so can only be one device. hence ignore device-number
    if( connected != clientID ) 
       jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("OpenShutter"), notConnected, F("Not the connected client") );    
-   else if ( shutterStatus == SHUTTER_OPEN )
+   else 
+ #endif
+   if ( shutterStatus == SHUTTER_OPEN )
    {
-      //We do this becuase the shutter reports open for any state but closed and we may stop it at any point
+      //We do this because the shutter reports open for any state but closed and we may stop it at any point
       //Set command to open shutter.
       addShutterCmd( clientID, transID, "", CMD_SHUTTER_OPEN, 0 );
       debugD( "OpenShutterPut: Already open - requesting anyway. " );        
@@ -529,9 +540,11 @@ void handleSetParkPut(void)
   if( hasArgIC( argsToSearchFor[1], server, false ) )
      transID = (uint32_t)server.arg( argsToSearchFor[1] ).toInt();
     
+ #if defined ACCEPT_CONNECTED_CLIENT_ONLY
   if( connected != clientID )
       jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SetPark"), notConnected, F("Not the connected client") );    
   else
+ #endif
   {
     //Set new park location.
     parkPosition = currentAzimuth;
@@ -562,8 +575,17 @@ void handleParkPut(void)
   if( hasArgIC( argsToSearchFor[1], server, false ) )
      transID = (uint32_t)server.arg( argsToSearchFor[1] ).toInt();
     
-   addDomeCmd( clientID, transID, "", CMD_DOME_SLEW, parkPosition );      
-   jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("Park"), Success, "" );    
+#if defined ACCEPT_CONNECTED_CLIENT_ONLY
+  if( connected != clientID ) 
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAltitude"), notConnected, F("Not the connected client") );    
+  //01/06/2021 added to respect canSetAltitude response for Conform
+  else 
+#endif 
+   {
+    addDomeCmd( clientID, transID, "", CMD_DOME_SLEW, parkPosition );      
+    jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("Park"), Success, "" );    
+   }
+
    root.printTo(message);
    debugI( "ParkPut: %s", message.c_str() );
    server.send(200, "text/json", message);
@@ -590,10 +612,13 @@ void handleSlewToAltitudePut(void)
   if( hasArgIC( argsToSearchFor[2], server, false ) )
      location = (boolean) server.arg( argsToSearchFor[2]).toFloat();
    
+#if defined ACCEPT_CONNECTED_CLIENT_ONLY
   if( connected != clientID ) 
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAltitude"), notConnected, F("Not the connected client") );    
   //01/06/2021 added to respect canSetAltitude response for Conform
-  else if ( canSetAltitude == false ) 
+  else 
+#endif 
+  if ( canSetAltitude == false ) 
   {
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAltitude"), notImplemented, F("Slew to altitude not implemented (yet)") );    
   }
@@ -615,6 +640,7 @@ void handleSlewToAltitudePut(void)
   }
   else
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAltitude"), valueNotSet, F("Altitude not provided") );       
+  
   root.printTo(message);
   debugI( "SlewToAltitudePut: %s", message.c_str() );    
   server.send(200, F("application/json"), message);
@@ -648,11 +674,14 @@ void handleSlewToAzimuthPut(void)
      
   debugI( "SlewToAzimuthPut: %f", location );
  
+#if defined ACCEPT_CONNECTED_CLIENT_ONLY
   if( connected != clientID )
   {
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAzimuth"), notConnected, F("Not the connected client") ); 
   }
-  else if( canSetAzimuth == false ) 
+  else 
+#endif
+  if( canSetAzimuth == false ) 
   {
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAzimuth"), notImplemented, F("Not supported by dome") );
   }
@@ -705,9 +734,12 @@ void handleSyncToAzimuthPut(void)
   if( hasArgIC( argsToSearchFor[2], server, false ) )
      location = server.arg( argsToSearchFor[2]).toFloat();
 
+#if defined ACCEPT_CONNECTED_CLIENT_ONLY
   if( connected != clientID ) 
       jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SyncToAzimuth"), notConnected, F("Not the connected client") );    
-  else if( server.hasArg( argsToSearchFor[2] ) )
+  else 
+#endif
+  if( server.hasArg( argsToSearchFor[2] ) )
   {
     //enforce limits by exception to satisfy Conform compliance
     if( location < 0.0F || location > 360.0F ) 

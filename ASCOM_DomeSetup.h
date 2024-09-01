@@ -46,7 +46,7 @@ void handlerStatus()
   DynamicJsonBuffer jsonBuffer(250);
   JsonObject& root = jsonBuffer.createObject();
 
-  getTimeAsString( timestamp );
+  getTimeAsString2( timestamp );
   
   //Status info
   root["time"]                  = timestamp;
@@ -162,6 +162,7 @@ void handleShutterNamePut( void )
     debugI( "%s", errMsg.c_str() );
   }
   form = setupFormBuilder( form, errMsg );
+  
   server.send( 200, F("text/html"), form ); 
 }
 
@@ -333,6 +334,23 @@ void handleParkPositionPut(void)
   return;
 }
 
+void handleParkActionPut( void )
+{
+  String form;
+  String errMsg;
+  String value;
+  int newGoto = 0;
+  
+  debugI( "Entered handleParkActionPut"  );
+
+  //move to currently set park position
+  //Add to list at top.
+  addDomeCmd( 100, 1000, "", CMD_DOME_PARK, parkPosition );
+
+  form = setupFormBuilder( form, errMsg );
+  server.send( 200, F("text/html"), form );
+}
+
 /*
  * Handler for setup dialog - issue call to <hostname>/setup and receive a webpage
  * Fill in form and submit and handler for each form button will store the variables and return the same page.
@@ -433,14 +451,14 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
   htmlForm += F("<h2> Enter new Park position for dome </h2>\n");
   htmlForm += F("<form action=\"http://");
   htmlForm.concat(myHostname);
-  htmlForm += F("/Park\" method=\"PUT\" id=\"park\" >\n");
+  htmlForm += F("/ParkSet\" method=\"PUT\" id=\"park\" >\n");
   htmlForm += F("<input type=\"number\" name=\"parkPosition\" max=\"360.0\" min=\"0.0\" value=\"");
   htmlForm += parkPosition;
   htmlForm += F("\">\n");  
   htmlForm += F("<input type=\"submit\" value=\"submit\">\n</form></div>\n");
   
   //Consider also - for later, for systems that don't calc this for us, we 
-  //may have to do it ourselves
+  //may have to do it ourselves - except then we need to know where the scope is too. . 
 
   //Auto-tracking enable
   //W of pier
@@ -454,11 +472,12 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
   htmlForm += F("<h2> Park dome </h2>\n");
   htmlForm += F("<form action=\"http://");
   htmlForm.concat(myHostname);
-  htmlForm += F("/park\" method=\"PUT\" id=\"actions\" >\n");
+  htmlForm += F("/ParkAction\" method=\"PUT\" id=\"actions\" >\n");
   htmlForm += F("<input type=\"button\" id=\"Park\" name=\"Park\" value=\"Park\" >\n");  
   htmlForm += F("<input type=\"submit\" value=\"submit\">\n</form></div>\n");
   
   //Shutter Controls
+  /*NYI
   htmlForm += F("<div id=\"Shutter\" >");
   htmlForm += F("<h2> Shutter actions </h2>\n");
   htmlForm += F("<form action=\"http://");
@@ -466,6 +485,11 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
   htmlForm += F("/shutter\" method=\"PUT\" id=\"shutter\" >\n");
   
   //can add pre-sel based on current state later. 
+  htmlForm += F("<div id=\"shutter\" >");
+  htmlForm += F("<h2> Activate shutter </h2>\n");
+  htmlForm += F("<form action=\"http://");
+  htmlForm.concat(myHostname);
+  htmlForm += F("/ShutterAction\" method=\"PUT\" id=\"shutterActions\" >\n");
   htmlForm += F("<input type=\"radio\" id=\"ShutterOpen\" name=\"Shutter\" value=\"Open\" >\n");  
   htmlForm += F("<label for=\"ShutterOpen\">Open</label><br>\n");
   htmlForm += F("<input type=\"radio\" id=\"ShutterClose\" name=\"Shutter\" value=\"Close\" >\n");  
@@ -473,7 +497,7 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
   htmlForm += F("<input type=\"radio\" id=\"ShutterHalt\" name=\"Shutter\" value=\"Abort\" >\n");  
   htmlForm += F("<label for=\"ShutterHalt\">Abort</label><br>\n"); 
   htmlForm += F("<input type=\"submit\" value=\"submit\">\n</form></div>\n");
-  
+  */
   htmlForm += F("</body>\n</html>\n");
   return htmlForm;
 }

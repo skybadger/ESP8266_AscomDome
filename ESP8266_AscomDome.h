@@ -1,26 +1,49 @@
 #ifndef _ESP8266_ASCOMDOME_H_
 #define _ESP8266_ASCOMDOME_H_
 
-#define _DEBUG
-
+//State what the target hardware is - determines use of pins for I2C for instance. 
 #define _ESP8266_01_
-//define _ESP8266_12_
+//define _ESP8266_12_   
 
-//Use for client testing
-//#define _DISABLE_MQTT_
-//#define DEBUG_MQTT
-
-//Use for client performance testing 
+//Use for client detailed performance & functional testing 
 //#define DEBUG_ESP_HTTP_CLIENT
-#define DEBUG_ESP
-#define HTTP_CLIENT_REUSE true
+#define _DEBUG
+#define DEBUG_ESP               //Enables basic debugging statements for ESP
+#define HTTP_CLIENT_REUSE true  //Re-use the existing connection or not for subsequent comms within a session 
+//Use for client testing
+//#define _DISABLE_MQTT_        //Disable the MQTT handling segments. 
+//#define DEBUG_MQTT            //enable low-level MQTT connection debugging statements.    
+#include "DebugSerial.h" 
+
+//Flag to specify whether code checks for connected client ID on motion command requests or not 
+//added to support reboots of dome controller due to un-diagnosed power brownouts which Voyager doesn't get to see and therefore loses control of the dome. 
+//Doing this means the dome will come up and still accept calls from anyone... as long as it reads the encoder and the encoder stays running, we maintain our position knowledge
+//If using a local direct attached device, have to assume positional knowledge will be lost too. 
+#define ACCEPT_CONNECTED_CLIENT_ONLY
+
+//remote debugging 
+//Manage the remote debug interface, it takes 6K of memory with all the strings even when not in use but loaded
+//#define DEBUG_DISABLED
+//#define DEBUG_DISABLE_AUTO_FUNC true    //Turn on or off the auto function labelling feature .
+#define WEBSOCKET_DISABLED true           //No impact to memory requirement
+#define MAX_TIME_INACTIVE 0               //to turn off the de-activation of a telnet session
+#include "RemoteDebug.h"  //https://github.com/JoaoLopesF/RemoteDebug
 
 //Used to test for memory leaks.
-#define _TEST_RAM_ 
+//#define _TEST_RAM_ //turn on RAM check settings
+//#define _MEMLEAK_CHECK 
+//#define _MEMLEAK_CHECK_DEBUG 
 
+#define _ENABLE_BEARING //Turn off loop segment for bearing update if not set. 
+#define _ENABLE_SHUTTER // Turn off loop segment for shutter handling if not set. 
+#define _ENABLE_DOME    //Turn off segment for dome handling if not set. 
+
+//Select a method of getting positional feedback on dome rotation. 
 //#define USE_REMOTE_COMPASS_FOR_DOME_ROTATION
 //#define USE_LOCAL_ENCODER_FOR_DOME_ROTATION
 #define USE_REMOTE_ENCODER_FOR_DOME_ROTATION
+
+#include "SkybadgerStrings.h"
 
 //Manage different Encoder pinout variants of the ESP8266
 #ifdef _ESP8266_12_ 
@@ -47,17 +70,11 @@
 #include <EEPROMAnything.h>
 
 #include <PubSubClient.h> //https://pubsubclient.knolleary.net/api.html
-#include "DebugSerial.h" 
+
 //#include <GDBStub.h> //Debugging stub for GDB
 
 int bootCount = 0;
-//Manage the remote debug interface, it takes 6K of memory with all the strings 
-//#define DEBUG_DISABLED true
-//#define DEBUG_DISABLE_AUTO_FUNC true
-#define WEBSOCKET_DISABLED true           //No impact to memory requirement
 
-#define MAX_TIME_INACTIVE 0 //to turn off the de-activation of a telnet session
-#include "RemoteDebug.h"  //https://github.com/JoaoLopesF/RemoteDebug
 //Create a remote debug object
 #ifndef DEBUG_DISABLED
 RemoteDebug Debug;
@@ -87,11 +104,11 @@ extern "C" {
 time_t now; //use as 'gmtime(&now);'
 
 //Program constants
-#define VERSION R1.31
+#define VERSION R1.4
 #if !defined DEBUG_DISABLED
-const char* BuildVersionName PROGMEM = "LWIPv2 lo memory, RDebug enabled \n";
+const char* BuildVersionName PROGMEM = " LWIPv2 lo memory, RDebug enabled \n";
 #else
-const char* BuildVersionName PROGMEM = "LWIPv2 lo memory, RDebug disabled \n";
+const char* BuildVersionName PROGMEM = " LWIPv2 lo memory, RDebug disabled \n";
 #endif 
 
 #define MAX_NAME_LENGTH 40
@@ -105,7 +122,7 @@ enum shutterState            { SHUTTER_OPEN, SHUTTER_CLOSED, SHUTTER_OPENING, SH
 const char* shutterStateNames[] = {"SHUTTER_OPEN","SHUTTER_CLOSED","SHUTTER_OPENING", "SHUTTER_CLOSING", "SHUTTER_ERROR" };
 enum shutterCmd              { CMD_SHUTTER_ABORT=0, CMD_SHUTTER_OPEN=4, CMD_SHUTTER_CLOSE=5, CMD_SHUTTERVAR_SET };
 const char* shutterCmdNames[] = { "SHUTTER_ABORT", "SHUTTER_OPEN", "SHUTTER_CLOSE", "SHUTTERVAR_SET" };
-//enum motorSpeed: uint8_t     { MOTOR_SPEED_OFF=0, MOTOR_SPEED_SLOW_SLEW=120, MOTOR_SPEED_FAST_SLEW=240 };
+//enum motorSpeed: uint8_t     { MOTOR_SPEED_OFF=0, MOTOR_SPEED_SLOW_SLEW=120, MOTOR_SPEED_FAST_SLEW=180 };
 //enum motorDirection: uint8_t { MOTOR_DIRN_CW=0, MOTOR_DIRN_CCW=1 };
 enum I2CConst                { I2C_READ = 0x80, I2C_WRITE = 0x00 };  
 #define SHUTTER_MAX_ALTITUDE 110
@@ -185,8 +202,10 @@ extern void publishFnStatus(void);
 volatile boolean coarseTimerFlag = false;
 volatile boolean fineTimerFlag = false;
 volatile boolean timeoutTimerFlag = false;
+volatile boolean watchdogTimerFlag = false;
+static int blockedTarget;
 
-//Cmd lists 
+//Cmd lists used to queue commands 
 #include <LinkedList.h>      //https://github.com/ivanseidel/LinkedList
 LinkedList <cmdItem_t*> *domeCmdList;
 LinkedList <cmdItem_t*> *shutterCmdList;
@@ -224,11 +243,16 @@ long int nowTime, startTime, indexTime;
 unsigned long int debugId = 0; //Seed a debug log ID 
 #define  _TEST_RAM_
 
-ETSTimer fineTimer, coarseTimer, timeoutTimer, minuteTimer;
+ETSTimer fineTimer; 
+ETSTimer coarseTimer;
+ETSTimer timeoutTimer;
+ETSTimer minuteTimer; 
+ETSTimer watchdogTimer; //watchdog for dome stuck. 
+
 void onCoarseTimer( void* ptr );
 void onFineTimer( void* ptr );
 void onTimeoutTimer( void* ptr );
-void onMinuteTimer( void* ptr );
+void onWatchdogTimer( void* ptr );
 
 //Private web handler methods
 ;
@@ -242,9 +266,10 @@ bool setupCompass(String url);
 
 void saveToEeprom();
 void readFromEeprom();
-void fineTimerHandler(void);
-void coarseTimerHandler(void);
-void timeoutTimerHandler(void);
+void fineTimerHandler(void); //sensor loop
+void coarseTimerHandler(void); //command loop
+void timeoutTimerHandler(void); //MQTT loop
+void watchdogTimerHandler(void); //
 
 //ASCOM-dependent variables 
 unsigned int transactionId;
@@ -257,17 +282,20 @@ static const char* DriverVersion PROGMEM = "1";
 static const char* DriverInfo PROGMEM    = "Skybadger.ESPDome RESTful native device. ";
 static const char* Description PROGMEM   = "Skybadger ESP2866-based wireless ASCOM Dome controller";
 static const char* InterfaceVersion PROGMEM = "3";
-static const char* DriverType PROGMEM    = "ASCOM.Dome";
+static const char* DriverType PROGMEM    = "Dome"; //Must be a valid ASCOM type to be recognised by UDP discovery. 
 
 //ALPACA support additions
 //UDP Port can be edited in setup page
 #define ALPACA_DISCOVERY_PORT 32227
 int udpPort = ALPACA_DISCOVERY_PORT;
 WiFiUDP Udp;
-//espdom01 GUID - "0011-0000-0000-0001";
+//espdom00 GUID - "0011-0000-0000-0000"; prototype
+//espdom01 GUID - "0011-0000-0000-0001"; working
 static const char* GUID PROGMEM = "0011-0000-0000-0001";
+
+//Use when there are multple instances for this device - not very likely for a dome.
 const int defaultInstanceNumber = 1;
-int instanceNumber = 1;
+int instanceNumber = defaultInstanceNumber;
 
 //setup later since we are allowing this to be dynamic via EEprom. 
 //pre-req for setup default function; 
@@ -279,12 +307,12 @@ const int instanceVersion = 3; //the iteration version identifier for this drive
 char* Location = nullptr;
 
 //ASCOM variables
-const int defaultHomePosition = 0;
-const int defaultParkPosition = 0;
-//bool atPark = false; Dynamically detected from current position. 
-//bool atHome = false;
+const int defaultHomePosition = 180;  //change as you need
+const int defaultParkPosition = 356;  //change as you need. 
 int homePosition = defaultHomePosition;
 int parkPosition = defaultParkPosition;
+//bool atPark = false; Dynamically detected from current position. 
+//bool atHome = false;
 int altitude = 0;
 int azimuth = 0; 
 const bool canFindHome = true; 
@@ -296,7 +324,7 @@ const bool canSetShutter = true;
 bool canSlave = false;
 const bool canSyncAzimuth = true;
 bool slaved = false;
-bool slewing = false;
+bool slewing = false; //Not used - uses domeStatus instead. 
 
 //Attached I2C device address list
 //const uint8_t compassAddr = 0x0d; - no longer an attached device - remove in the fullness.

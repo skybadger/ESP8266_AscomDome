@@ -35,6 +35,10 @@
    9, Fix LCD detection even when not present.. 
    10, Fix atPark and atHome to handle wrapped locations - done
    11, Fix error handling for failed remote calls to shutter - done
+   12, Provide option to not use connected client id for use in brownouts. 
+   13, Adjust slow rate to almost max rate. 
+   14, add call to set slow rates and max rates via API. 
+   15, Add action to backup crawling over lockups and attempt at full speed. 
 
 To test:
  Download curl for your operating system. Linux variants and Windows powershell should already have it.
@@ -78,7 +82,7 @@ tries to send a whole page.
 02/10/2021 Fixed a bug where a call to shutter may fail and return error rather than keeping last state. Now tracks response state. Error state upsets Voyager. 
 26/10/2021 Changed free(pCmd) to freeCmd( pCmd) since it appears to be leaking memory by not releasing Strings properly. chnaged Strings to char* & free xplicitly.
 26/10/2021 //TODO do similar while loop to detect encoder readiness. - done
-16/11/2021 Added lots of debugV statemetns to get to bottom of memory leak. 
+16/11/2021 Added lots of debugV statements to get to bottom of memory leak. 
 Bugs
 Theres a bug in here somewhere which causes a reboot and a client clost connection occasionally enough to be a problem, causing Voyager to lose 'connected' state
 remedy is to re-issue call to connect using curl by hand using Voyager's last clientID. Or fix at source. 
@@ -86,13 +90,13 @@ checkout : https://arduino-esp8266.readthedocs.io/en/latest/PROGMEM.html#declare
 F("myString") stores the string into PROGMEM and makes accessible to string functions that can manage access to that memory
 Serial.println( F("myString") ) is ok
 Serial.printf_P( PSTR("myString") ) is needed as too the progmem functions for more extensive string loading into heap memory from flash. 
+22/11/2021 Memleak bug apparently fixed by moving hClient.end() to end of statements in restQuery - it was occassionally being missed caused by a certain combination of errors.
+leads to memory in rest queries not being released and memory decreasing by about 1300 bytes per miss. 
 */
 
 /////////////////////////////////////////////////////////////////////////////////
 
 //Internal variables
-#include "SkybadgerStrings.h"
-#include "DebugSerial.h"
 #include "ESP8266_AscomDome.h"   //App variables - pulls in the other include files - its all in there.
 #include "Skybadger_common_funcs.h"
 #include "ASCOMAPICommon_rest.h"
@@ -117,13 +121,12 @@ void setup()
   int response = 403;
   
   //Minimise serial to one pin only. 
-  Serial.begin( 230400, SERIAL_8N1, SERIAL_TX_ONLY);
+  Serial.begin( 115200, SERIAL_8N1, SERIAL_TX_ONLY);
   Serial.println(F("ESP starting."));
   //gdbstub_init();
   delay(500); 
 
   //Start time
-  //configTime(TZ_SEC, DST_MN, String(timeServer1).c_str(), String(timeServer2).c_str(), String(timeServer3).c_str() );
   configTime(TZ_SEC, DST_MN, timeServer1, timeServer2, timeServer3 );
   Serial.println( F("Time Services setup") );
       
@@ -151,8 +154,8 @@ void setup()
 #endif
 
   //for use in debugging reset - may need to move 
-  Serial.printf_P( PSTR( "Device reset reason: %s" ), device.getResetReason().c_str() );
-  Serial.printf_P( PSTR( "device reset info: %s" ),   device.getResetInfo().c_str() );
+  Serial.printf_P( PSTR( "Device reset reason: %s\n" ), device.getResetReason().c_str() );
+  Serial.printf_P( PSTR( "device reset info: %s\n" ),   device.getResetInfo().c_str() );
 
   //Setup I2C
 #if defined _ESP8266_01_
@@ -164,7 +167,7 @@ void setup()
   //I2C setup SDA pin 0, SCL pin 2
   //Normally Wire.begin(0, 2);
   Wire.begin( 2,0 /*0, 2*/);  
-  Serial.println( F( "Configured pins for ESP8266-01") );
+  Serial.println( F( "Configured pins for ESP8266-01\n") );
 #else //__ESP8266_12_
   //Pins mode and direction setup for i2c on ESP8266-12
   pinMode(4, INPUT_PULLUP);
@@ -175,7 +178,7 @@ void setup()
   //setup pins 13, 14, 15 for encoder (only need two + home if available.)
   pinMode(12, INPUT_PULLUP);
   pinMode(13, INPUT_PULLUP);
-  Serial.println( F("Configured pins for ESP8266-12") );
+  Serial.println( F("Configured pins for ESP8266-12\n") );
 #endif
   Wire.setClock(100000 );//100KHz target rate is a bit hopeful for this device 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -185,23 +188,23 @@ void setup()
 
 ////////////////////////////////////////////////////////////////////////////////////////
   //Open a connection to MQTT
-  //Values are in PROGMEM, hence the string conversion. 
   //MQTTServerName is in EEProm, as too ThisID.
-  DEBUGS1( F("Configuring MQTT connection to :")) ;DEBUGSL1( MQTTServerName );
+  Serial.printf_P( PSTR( ("Configuring MQTT connection to :%s\n") ), MQTTServerName );
   client.setServer( MQTTServerName, 1883 );
-  Serial.printf_P( PSTR(" MQTT settings id: %s user: %s pwd: %s\n"), thisID, String(pubsubUserID).c_str(), String(pubsubUserPwd).c_str() );
+  Serial.printf_P( PSTR(" MQTT settings id: %s user: %s pwd: %s\n"), thisID, pubsubUserID, pubsubUserPwd );
 
   //want to connect to a 'dirty' session not a clean one, that way we receive any outstanding messages waiting
   //Also setup our last will message 
-  String lastWillTopic = String(outHealthTopic);  //PROGMEM
+  String lastWillTopic = String(outHealthTopic);
   lastWillTopic.concat( myHostname ); 
-  client.connect( thisID, String(pubsubUserID).c_str(), String(pubsubUserPwd).c_str(), lastWillTopic.c_str(), 1, true, "Offline", false ); 
+  client.connect( thisID, pubsubUserID, pubsubUserPwd, lastWillTopic.c_str(), 1, true, "Offline", false ); 
     
   //Create a timer-based callback that causes this device to read the local i2C bus devices for data to publish.
   client.setCallback( callback );
-  client.subscribe( String(inTopic).c_str() ); //PROGMEM
-  DEBUGS1("Configured MQTT subscription connection: "); DEBUGSL1( String(inTopic).c_str() );
-   
+  client.subscribe( inTopic );
+  Serial.printf_P(PSTR("Configured MQTT subscription connection: %s\n"), inTopic );
+  publishHealth();
+     
   //Setup the sensors
   motorPresent = myMotor.check();
   if ( motorPresent )
@@ -211,10 +214,10 @@ void setup()
     motorSpeed = MOTOR_SPEED_OFF;
     motorDirection = MOTOR_DIRN_CW;
     myMotor.getSpeedDirection();
-    Serial.printf_P( PSTR("motor initialised - speed: %u, direction: %u"), myMotor.getSpeed(), myMotor.getDirection() );
+    Serial.printf_P( PSTR("motor initialised - speed: %u, direction: %u\n"), myMotor.getSpeed(), myMotor.getDirection() );
   }
   else
-    Serial.println( F("No motor found on i2c bus") );
+    Serial.println( F("No motor found on i2c bus\n") );
 
   //Setup i2c to control LCD display
   debugI("Starting to configure LCD connection");
@@ -298,25 +301,28 @@ The JSON list of configured ASCOM devices would be available through a GET to ht
   server.on(F("api/v1​/dome/0​/setup"), HTTP_GET, handleSetup); //Browser web page for the instance - 0-indexed 
   
   //HTML forms don't support PUT -  they typically transform them to use GET instead.
-  server.on(F("/Hostname"),    HTTP_GET, handleHostnamePut );
-  server.on(F("/ShutterName"), HTTP_GET, handleShutterNamePut );
-  server.on(F("/SensorName"),  HTTP_GET, handleSensorNamePut );
-  server.on(F("/Park"),        HTTP_GET, handleParkPositionPut );
-  server.on(F("/Home"),        HTTP_GET, handleHomePositionPut );
-  server.on(F("/Goto"),        HTTP_GET, handleDomeGoto );
-  server.on(F("/Sync"),        HTTP_GET, handleSyncOffsetPut );
-  server.on(F("/restart"),                handlerRestart );
-  server.on(F("/status"),                 handlerStatus );
-  server.on(F("/"),                       handlerStatus);
+  //form commands
+  server.on(F("/Hostname"),    handleHostnamePut );
+  server.on(F("/ShutterName"), handleShutterNamePut );
+  server.on(F("/SensorName"),  handleSensorNamePut );
+  server.on(F("/ParkSet"),     handleParkPositionPut );
+  server.on(F("/ParkAction"),  handleParkActionPut );
+//  server.on(F("/ShutterAction"),handleShutterActionPut );
+  server.on(F("/Home"),        handleHomePositionPut );
+  server.on(F("/Goto"),        handleDomeGoto );
+  server.on(F("/Sync"),        handleSyncOffsetPut );
+  server.on(F("/restart"),     handlerRestart );
+  server.on(F("/status"),      handlerStatus );
+  server.on(F("/"),            handlerStatus);
   
   server.onNotFound(handlerNotFound);
   Serial.println( F("Web handlers registered") );
   
   //setup interrupt-based 'soft' alarm handler for dome state update and async commands
   ets_timer_setfn( &fineTimer,    onFineTimer,    NULL ); 
-  ets_timer_setfn( &coarseTimer,  onCoarseTimer,  NULL ); 
-  ets_timer_setfn( &timeoutTimer, onTimeoutTimer, NULL ); 
-  //ets_timer_setfn( &minuteTimer, onMinuteTimer, NULL ); 
+  ets_timer_setfn( &coarseTimer,  onCoarseTimer,  NULL ); //Used for onIdle processing
+  ets_timer_setfn( &timeoutTimer, onTimeoutTimer, NULL ); //Used for callback timer. 
+  ets_timer_setfn( &watchdogTimer,  onWatchdogTimer, NULL ); //Used for slew failure watchdog
   
   domeCmdList    = new LinkedList <cmdItem_t*>();
   shutterCmdList = new LinkedList <cmdItem_t*>();
@@ -366,10 +372,10 @@ The JSON list of configured ASCOM devices would be available through a GET to ht
   Serial.printf_P( PSTR("Updated position from encoder\n") );
      
   //Start timers last
-  ets_timer_arm_new( &coarseTimer, 2500,     1/*repeat*/, 1);//millis
-  ets_timer_arm_new( &fineTimer,   1000,      1/*repeat*/, 1);//millis
-  //ets_timer_arm_new( &minuteTimer,   60000,      1/*repeat*/, 1);//millis
-  //ets_timer_arm_new( &timeoutTimer, 2500, 0/*one-shot*/, 1);
+  ets_timer_arm_new( &coarseTimer, 2500,        1/*repeat*/, 1);//millis    2.5 seconds 
+  ets_timer_arm_new( &fineTimer,   1000,        1/*repeat*/, 1);//millis   1 second - bearing reading. 
+  ets_timer_arm_new( &watchdogTimer, 5000,      1/*repeat*/, 1);//millis 5 seconds - watchdog check of dome stuck. 
+  //ets_timer_arm_new( &timeoutTimer, 2500,     0/*one-shot*/, 1);
 
   //Show welcome message
 
@@ -402,6 +408,11 @@ void onTimeoutTimer( void* pArg )
    timeoutFlag = true;
 }
 
+void onWatchdogTimer( void* pArg )
+{
+  watchdogTimerFlag = true; 
+}
+
 //Used to test/force callback health actions. 
 void onMinuteTimer( void* pArg )
 {
@@ -409,17 +420,10 @@ void onMinuteTimer( void* pArg )
    callbackFlag = true;
 }
 
-#define _MEMLEAK_CHECK 
-#define _ENABLE_BEARING
-#define _ENABLE_SHUTTER
-#define _ENABLE_DOME
-#define _MEMLEAK_CHECK_DEBUG
-
 inline uint32_t checkRam( const char* location )
 {
     //Check heap for memory bugs 
     uint32_t ram = 0;
-#if defined _MEMLEAK_CHECK_DEBUG    
     ram = ESP.getFreeHeap();
     if( lastRam != ( ram - originalRam ) )
     {
@@ -430,9 +434,7 @@ inline uint32_t checkRam( const char* location )
       debugV( "%s RAM: %u change: %d\n", location, ram, lastRam );
 #endif
     }
-#endif
-    return ram;
-    
+    return ram;   
 }
 
 void loop()
@@ -473,8 +475,8 @@ void loop()
                          break;   
       case DOME_ABORT:   onDomeAbort();     
                          break;
-      default:
-        debugE( "Unexpected Dome status detected: %s", domeStateNames[(int) domeStatus ]);
+      default:      
+        debugE( "Unexpected Dome status detected: %s\n", domeStateNames[(int) domeStatus ]);
         domeStatus = DOME_ABORT; //error condition
         break;
     }
@@ -486,7 +488,9 @@ void loop()
     //For shutter
     //Update our knowledge of shutter current status
     if ( getShutterStatus( shutterHostname, shutterStatus  ) == HTTP_CODE_OK )
+    {
       debugD( "Dome: %s Shutter: %s\n", domeStateNames[(int)domeStatus], shutterStateNames[(int)shutterStatus] );
+    }
 
     switch( shutterStatus )
     {
@@ -527,13 +531,8 @@ void loop()
     coarseTimerFlag = false;
   }
  
-
-  if ( !client.connected() )
+  if ( client.connected() )
   {  
-    reconnectNB();
-  }
-  else
-  {
     //Service MQTT keep-alives
     client.loop();
     if (callbackFlag ) 
@@ -543,6 +542,11 @@ void loop()
       publishFnStatus();
       callbackFlag = false;
     }
+  }
+  else
+  {
+      reconnectNB();
+      client.subscribe( inTopic, 1 );
   }
 
   //If there are any web client connections - handle them.
@@ -560,12 +564,12 @@ void loop()
 #endif
 }
    
-void coarseTimerHandler(void)
+void coarseTimerHandler(void) //controls loop time for checking commands. 
 {
   coarseTimerFlag = true;
 }
 
-void fineTimerHandler(void)
+void fineTimerHandler(void) //controls loop time for reading bearing device
 {
   fineTimerFlag = true;
 }
@@ -667,11 +671,11 @@ void publishFnStatus( void )
 void setupWifi( void )
 {
   int zz = 0;
-  WiFi.hostname( myHostname );  
+
   WiFi.mode(WIFI_STA);
   WiFi.hostname( myHostname );  
 
-  WiFi.begin( String(ssid2).c_str(), String(password2).c_str() );
+  WiFi.begin( String(ssid1).c_str(), String(password1).c_str() );
   Serial.print("Searching for WiFi..");
   
   while (WiFi.status() != WL_CONNECTED) 

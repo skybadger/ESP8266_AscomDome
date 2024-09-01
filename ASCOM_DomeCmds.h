@@ -112,7 +112,7 @@ File to be included into relevant device REST setup
       pCmd->transId = transId; 
       shutterCmdList->add( pCmd );
 
-      debugI( "Cmd pushed: %i", (int) newCmd ); 
+      debugI( "Cmd added: %i", (int) newCmd ); 
       return pCmd;
   }
 
@@ -139,7 +139,7 @@ File to be included into relevant device REST setup
     
     if ( domeCmdList->size() > 0 ) 
     {
-      pCmd = domeCmdList->pop();
+      pCmd = domeCmdList->shift();
       debugI( "Popped new command: %i, value: %i", (int) pCmd->cmd, (int) pCmd->value );
       newCmd = (enum domeCmd ) pCmd->cmd;
       String cmd = "";
@@ -235,17 +235,17 @@ File to be included into relevant device REST setup
    */
   void onDomeSlew( void )
   {
+    //Detecting dome locked during slew. 
+    static boolean domeLockDetected = false;
+    static float startAzimuth = 0.0F;
+    static float lastAzimuth = 0.0F;
+    static const float minMovementLimit = 0.1F;
+    
     float distance = 0.0F;
     enum motorSpeed speed = MOTOR_SPEED_OFF;
     enum motorDirection direction = MOTOR_DIRN_CW; 
     float localAzimuth = 0.0F; 
-      
-    if( domeStatus != DOME_SLEWING )
-    {
-      slewing = false; //book-keeping
-      return;
-    }
-      
+          
     //getAzimuth keeps the value in range and applies any sync offset to the raw bearing. 
     localAzimuth = getAzimuth( bearing );
     //359-1 = 358
@@ -260,7 +260,7 @@ File to be included into relevant device REST setup
     //Updated 29/09/21 to address slow speed when starting near 0 and inaccurate home/park determination
     float delta = 0.0F;
 
-    //Work out direction and speed to turn dome
+    //Have we finished ?
     delta = abs(distance);
     if( delta < acceptableAzimuthError || (360.0F - delta) < acceptableAzimuthError )
     {
@@ -270,11 +270,16 @@ File to be included into relevant device REST setup
 
       //Update the desired state to say we have finished.
       domeStatus = DOME_IDLE;
+      slewing = false;
 
       debugI( "Dome stopped at target: %03.1f", localAzimuth);
       if ( lcdPresent )
         myLCD.writeLCD( 2, 0, "Slew complete." );
-      
+
+      lastAzimuth = localAzimuth;
+      startAzimuth = lastAzimuth; //the last place we successfully arrived at due to a slew. 
+      domeLockDetected = false;
+      slewing = false;
       return; 
     }
     
@@ -283,7 +288,8 @@ File to be included into relevant device REST setup
     //from 4 to 356 = 352 or -8 after reversal or 
     //from 356 to 4 = -352 or +8 after reversal
 
-    //we're not there yet so work out the direction. 
+    //we're not there yet so work out the direction. We may not yet be moving post IDLE state
+    //Work out direction and speed to turn dome
     debugD( "OnDomeSlew: raw distance : %f, direction : %i", distance, (int) direction  );    
     if( ( distance >= 0.0F ) && ( distance <= 180.0F ) ) 
     {
@@ -302,8 +308,9 @@ File to be included into relevant device REST setup
     {
       direction = MOTOR_DIRN_CW;
       distance = 360 + distance;
-    }
+    }  
     
+    //Set the speed based on distance to move. 
     if ( abs(distance) < slowAzimuthRange )
     {
       speed = MOTOR_SPEED_SLOW_SLEW;
@@ -319,10 +326,64 @@ File to be included into relevant device REST setup
         myLCD.writeLCD( 2, 0, "Slew::Fast" );
     }
     debugD( "OnDomeSlew: raw distance : %f, direction : %i, speed: %i", distance, (int) direction, (int) speed  );      
-    
     myMotor.setSpeedDirection( speed, direction );
-    //myMotor.getSpeedDirection();
-    //debugV("Motor returned - speed %u, direction: %u", ( uint) myMotor.getSpeed(), (uint) myMotor.getDirection() );
+    slewing = true;
+    
+    //Finally - check whether we are currently stalled
+    //Criterion - no motion since last check when we are supposed to be slewing. 
+    //However this might be the first call to onSlew after Idle so shouldnt check too soon. 
+    if ( abs( lastAzimuth - startAzimuth ) >  minMovementLimit && abs(localAzimuth - lastAzimuth ) < minMovementLimit ) 
+    {     
+      int clientId = 100;
+      int transId = 1000;
+      int slewTarget = 0;
+      int orgTarget = int( targetAzimuth );
+      domeLockDetected = true;
+      
+      //Add a slew to outside of the |slowSlewRange+1) distance in the direction we came from. 
+      if ( direction == MOTOR_DIRN_CCW ) 
+      {
+        slewTarget = int( localAzimuth ) + (slowAzimuthRange +1 ); 
+        normaliseInt( slewTarget , 360 );
+      }
+      else
+      {
+        slewTarget = int( localAzimuth) - ( slowAzimuthRange +1);
+        slewTarget = normaliseInt( slewTarget,360 );
+      }
+      //slewTarget = normaliseInt( int( localAzimuth) - slowAzimuthRange -1, 360 );  
+      addDomeCmd( clientId, transId, "", CMD_DOME_SLEW, slewTarget );         
+
+      debugD( "OnDomeSlew: Added slew to reverse from lock: direction : %i", (int) direction );      
+      
+      //Add another slew to current +/ |2*(slowAzimuthRange ) + 1| - ie fast past the obstruction
+      if ( direction == MOTOR_DIRN_CCW ) 
+      {
+        slewTarget = int( localAzimuth ) - ( 2 * (slowAzimuthRange +1) );
+        slewTarget = normaliseInt( slewTarget, 360 );
+      }
+      else 
+      {
+        slewTarget = int( localAzimuth) + ( 2 * slowAzimuthRange  + 1);
+        slewTarget = normaliseInt( slewTarget, 360 );
+      }
+      addDomeCmd( clientId, transId, "", CMD_DOME_SLEW, slewTarget );
+      debugD( "OnDomeSlew: Added slew to slew at speed past lock: direction : %i", (int) direction);      
+      
+      //Finally - add slew to get to original desired target position.
+      addDomeCmd( clientId, transId, "", CMD_DOME_SLEW, orgTarget ); 
+      debugD( "OnDomeSlew: Added slew to original target after lock: direction : %i", (int) direction  );      
+      
+      //Finally - abort this slew so we can process the ones just added 
+      onDomeAbort();
+    }
+    
+    //Update our persistent record of last place
+    lastAzimuth = localAzimuth;
+        
+    myMotor.getSpeedDirection();
+    debugV("Motor returned - speed %u, direction: %u", ( uint) myMotor.getSpeed(), (uint) myMotor.getDirection() );
+    
     return;
    }
   
@@ -624,20 +685,26 @@ int shutterAltitude( int newAngle )
     //if ( hClient.begin( wClient, uri ) ) uri must already have request args in it
     if ( hClient.begin( wClient, host) ) 
     {
-      if( method == HTTP_GET )
-      {
-        httpCode = hClient.GET();
-      }
-      else if ( method == HTTP_PUT ) //variables are added as headers
-      {
-        //hClient.addHeader("Content-Type", "application/json"); 
-        hClient.addHeader(F("Content-Type"), F("application/x-www-form-urlencoded") );
-        httpCode = hClient.PUT( args.c_str() );        
-      }
-
       endTime = millis();
+      switch( method ) 
+      {
+        case HTTP_GET: 
+        httpCode = hClient.GET();
+        break;
+      
+      case HTTP_PUT: 
+        hClient.addHeader(F("Content-Type"), F("application/x-www-form-urlencoded") );
+        httpCode = hClient.PUT( args.c_str() );             
+        break;
+      
+      default: 
+        debugE("Unable to open connection of unsupported type: %i", method );
+        response = "";
+        break;
+      }//end switch
+
 #if defined DEBUG_ESP_HTTP_CLIENT            
-        debugV( "Time for restQuery call(mS): %li\n", (long int) endTime-startTime );
+      debugV( "Time for restQuery call(mS): %li\n", (long int) endTime-startTime );
 #endif        
 
       // file found at server ?
@@ -653,13 +720,10 @@ int shutterAltitude( int newAngle )
 #if defined DEBUG_ESP_HTTP_CLIENT      
         debugV("restQuery ... failed, error: %s\n", hClient.errorToString(httpCode).c_str() );
 #endif        
-        ;;
+        response = "";
       } 
-    }
-    else
-    {
-       debugE("restQuery Unable to open connection");
-    }  
+    }//end hclient.
+
     hClient.end();
     return httpCode;
   }
@@ -687,24 +751,21 @@ int shutterAltitude( int newAngle )
     path = String( F("http://") );
     path += host;
     path += F("/bearing");
+
 #if defined DEBUG_ESP_HTTP_CLIENT      
     debugV("GetBearing using remote device - host path: %s \n", path.c_str() );
     debugV("GetBearing setup - host uri: %s \n", host.c_str() );
 #endif    
     response = restQuery( path, "", outbuf, HTTP_GET );
-#if defined DEBUG_ESP_HTTP_CLIENT      
-    debugD("GetBearing response - code: %i, output: %s", response, outbuf.c_str() );
-#endif
     
-    //Sometimes we get a good HTTP code but still no body... 
     JsonObject& root = jsonBuff.parse( outbuf );
+    //Sometimes we get a good HTTP code but still no body... 
     if ( response == HTTP_CODE_OK ) 
     {            
       if( root.success() && root.containsKey( "bearing" ) )
       {
         localBearing = (float) root["bearing"];
         lastBearing = localBearing;
-
         debugD(" GetBearing: localBearing %f", localBearing );     
 
 #if defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION        
@@ -736,11 +797,18 @@ int shutterAltitude( int newAngle )
       }
       else //can't retrieve the bearing
       {
-      debugV( "Response code: %i, parse success: %i, json data: %s", response, (int) root.success(), outbuf.c_str() );
-      debugW( "No reading, using last  ");
-      localBearing = lastBearing;
+        debugV( "Response code: %i, parse success: %i, json data: %s", response, (int) root.success(), outbuf.c_str() );
+        debugW( "No reading, using last: %f ", lastBearing );
+        localBearing = lastBearing;
       }
     }//HTTP_CODE_OK
+    else //Hvent got a good response code
+    {
+      debugV( "Response code: %i, parse success: %i, json data: %s", response, (int) root.success(), outbuf.c_str() );
+      debugW( "No reading, using last: %f ", lastBearing );
+      localBearing = lastBearing;
+    }
+   
     duration = millis()-duration;
     debugI( "request duration %li", (long int) duration);
     return localBearing;

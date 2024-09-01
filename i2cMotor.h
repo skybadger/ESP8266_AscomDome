@@ -2,7 +2,8 @@
 #define _i2cMotor_h_
 
 //*Include ASCOMDome enum for motor speed and direction settings.
-enum motorSpeed: uint8_t     { MOTOR_SPEED_OFF=0, MOTOR_SPEED_SLOW_SLEW=100, MOTOR_SPEED_FAST_SLEW=240 };
+//Dropped dome top speed from 240 to 180 to see if it overcomes intial stall issues. 
+enum motorSpeed: uint8_t     { MOTOR_SPEED_OFF=0, MOTOR_SPEED_SLOW_SLEW=180, MOTOR_SPEED_FAST_SLEW=200 };
 enum motorDirection: uint8_t { MOTOR_DIRN_CW=0, MOTOR_DIRN_CCW=1 };
 
 
