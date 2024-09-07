@@ -340,8 +340,8 @@ File to be included into relevant device REST setup
       int orgTarget = int( targetAzimuth );
       domeLockDetected = true;
       
-      //Add a slew to outside of the |slowSlewRange+1) distance in the direction we came from. 
-      if ( direction == MOTOR_DIRN_CCW ) 
+      //Add a slew to outside of the |slowSlewRange+1| distance in the direction we came from. 
+      if ( direction == MOTOR_DIRN_CW ) 
       {
         slewTarget = int( localAzimuth ) + (slowAzimuthRange +1 ); 
         normaliseInt( slewTarget , 360 );
@@ -357,7 +357,7 @@ File to be included into relevant device REST setup
       debugD( "OnDomeSlew: Added slew to reverse from lock: direction : %i", (int) direction );      
       
       //Add another slew to current +/ |2*(slowAzimuthRange ) + 1| - ie fast past the obstruction
-      if ( direction == MOTOR_DIRN_CCW ) 
+      if ( direction == MOTOR_DIRN_CW ) 
       {
         slewTarget = int( localAzimuth ) - ( 2 * (slowAzimuthRange +1) );
         slewTarget = normaliseInt( slewTarget, 360 );

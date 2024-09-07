@@ -205,8 +205,8 @@ volatile boolean timeoutTimerFlag = false;
 volatile boolean watchdogTimerFlag = false;
 static int blockedTarget;
 
-//Cmd lists used to queue commands 
-#include <LinkedList.h>      //https://github.com/ivanseidel/LinkedList
+//Cmd lists used to queue commands https://github.com/ivanseidel/LinkedList
+#include <LinkedList.h>      
 LinkedList <cmdItem_t*> *domeCmdList;
 LinkedList <cmdItem_t*> *shutterCmdList;
 LinkedList <cmdItem_t*> *cmdStatusList; // use to track async completion state. 
@@ -266,10 +266,10 @@ bool setupCompass(String url);
 
 void saveToEeprom();
 void readFromEeprom();
-void fineTimerHandler(void); //sensor loop
-void coarseTimerHandler(void); //command loop
-void timeoutTimerHandler(void); //MQTT loop
-void watchdogTimerHandler(void); //
+void fineTimerHandler(void);     //sensor loop
+void coarseTimerHandler(void);   //command loop
+void timeoutTimerHandler(void);  //MQTT reconnect try loop
+void watchdogTimerHandler(void); //rotation lockup timeout handler - currently not used. 
 
 //ASCOM-dependent variables 
 unsigned int transactionId;

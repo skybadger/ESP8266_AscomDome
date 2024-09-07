@@ -143,7 +143,6 @@ void setup()
 #if !defined DEBUG_DISABLED
   //Debugging over telnet setup
   // Initialize the server (telnet or web socket) of RemoteDebug
-  //Debug.begin(HOST_NAME, startingDebugLevel );
   Debug.begin( WiFi.hostname().c_str(), Debug.ERROR ); 
   Debug.setSerialEnabled(true);//until set false 
   // Options
@@ -199,7 +198,7 @@ void setup()
   lastWillTopic.concat( myHostname ); 
   client.connect( thisID, pubsubUserID, pubsubUserPwd, lastWillTopic.c_str(), 1, true, "Offline", false ); 
     
-  //Create a timer-based callback that causes this device to read the local i2C bus devices for data to publish.
+  //Create a callback that causes this device to publish its health asnd sesnor data over MQTT to the centre
   client.setCallback( callback );
   client.subscribe( inTopic );
   Serial.printf_P(PSTR("Configured MQTT subscription connection: %s\n"), inTopic );
@@ -247,6 +246,7 @@ void setup()
  
   //Register Web server handler functions 
   //ASCOM dome-specific functions
+  Serial.printf_P( PSTR("Registering web handlers.\n" ));  
   server.on(F("/api/v1/dome/0/altitude"),                   HTTP_GET, handleAltitudeGet ); //tested - 0
   server.on(F("/api/v1/dome/0/athome"),                     HTTP_GET, handleAtHomeGet );   //tested - returns false ?
   server.on(F("/api/v1/dome/0/atpark"),                     HTTP_GET, handleAtParkGet );   //tested - returns false ?
@@ -319,9 +319,9 @@ The JSON list of configured ASCOM devices would be available through a GET to ht
   Serial.println( F("Web handlers registered") );
   
   //setup interrupt-based 'soft' alarm handler for dome state update and async commands
-  ets_timer_setfn( &fineTimer,    onFineTimer,    NULL ); 
-  ets_timer_setfn( &coarseTimer,  onCoarseTimer,  NULL ); //Used for onIdle processing
-  ets_timer_setfn( &timeoutTimer, onTimeoutTimer, NULL ); //Used for callback timer. 
+  ets_timer_setfn( &fineTimer,      onFineTimer,     NULL ); 
+  ets_timer_setfn( &coarseTimer,    onCoarseTimer,   NULL ); //Used for onIdle processing
+  ets_timer_setfn( &timeoutTimer,   onTimeoutTimer,  NULL ); //Used for callback timer. 
   ets_timer_setfn( &watchdogTimer,  onWatchdogTimer, NULL ); //Used for slew failure watchdog
   
   domeCmdList    = new LinkedList <cmdItem_t*>();
@@ -337,35 +337,44 @@ The JSON list of configured ASCOM devices would be available through a GET to ht
   //Get startup values
   domeStatus = DOME_IDLE;
   int requestStatus = 0;
+  int attemptCount = 0;
   Serial.printf_P( PSTR("Waiting for shutter\n") );
   do 
   {
     //there's a chance of a watchdog timer timeout here. 
     requestStatus = getShutterStatus ( shutterHostname, shutterStatus );
     Serial.printf( ".");
+    delay( 500 );
     yield();
   }
-  while ( requestStatus != HTTP_CODE_OK );
-  Serial.printf_P( PSTR("Shutter found\n") );
+  while ( requestStatus != HTTP_CODE_OK && ++attemptCount < 10 );
+  if ( attemptCount < 10  )
+    Serial.printf_P( PSTR("Shutter NOT found\n") );
+  else
+    Serial.printf_P( PSTR("Shutter found OK\n") );
   
 #if defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION || defined USE_REMOTE_ENCODER_FOR_DOME_ROTATION
   Serial.printf_P( PSTR("Searching for remote compass/encoder\n") );
   path = String( "http://" );
   path += sensorHostname;
   path += "/bearing";
+  attemptCount =0;
 
   do
   {
     response = restQuery( path, "", outbuf, HTTP_GET );
     debugI("Waiting for remote encoder/compass\n");
+    delay(500);
     yield();
-  }while ( response != HTTP_CODE_OK );
-  Serial.printf_P( PSTR("Found remote compass/encoder\n") );
+  }while ( response != HTTP_CODE_OK && ++attemptCount < 10 );
+  if ( attemptCount >= 10 )
+    Serial.printf_P( PSTR("Remote compass/encoder NOT FOUND \n") );
+  else 
+    Serial.printf_P( PSTR("Found remote compass/encoder\n") );
 
 #endif
 
-  //TODO consider using AtPark flag to set azimuth and remote encoder if atPark is stored in eeprom on successful park. 
-  //ie if ( atPark ) set bearing, set azimuth else read bearing
+  //TODO consider some mech of reading actual position and storing last position betwwen power cycles. 
   bearing = getBearing( sensorHostname );
   currentAzimuth = getAzimuth( bearing);
   targetAzimuth = currentAzimuth;
@@ -375,7 +384,7 @@ The JSON list of configured ASCOM devices would be available through a GET to ht
   ets_timer_arm_new( &coarseTimer, 2500,        1/*repeat*/, 1);//millis    2.5 seconds 
   ets_timer_arm_new( &fineTimer,   1000,        1/*repeat*/, 1);//millis   1 second - bearing reading. 
   ets_timer_arm_new( &watchdogTimer, 5000,      1/*repeat*/, 1);//millis 5 seconds - watchdog check of dome stuck. 
-  //ets_timer_arm_new( &timeoutTimer, 2500,     0/*one-shot*/, 1);
+  ets_timer_arm_new( &timeoutTimer, 2500,       0/*one-shot*/, 1); //MQTT background reconnection timer. 
 
   //Show welcome message
 
@@ -404,20 +413,12 @@ void onCoarseTimer( void* pArg )
 //Used to complete timeout actions. 
 void onTimeoutTimer( void* pArg )
 {
-   ;;//fn moved to Shutter controller  - delete later if not used. 
    timeoutFlag = true;
 }
 
 void onWatchdogTimer( void* pArg )
 {
-  watchdogTimerFlag = true; 
-}
-
-//Used to test/force callback health actions. 
-void onMinuteTimer( void* pArg )
-{
-   ;;//fn moved to Shutter controller  - delete later if not used. 
-   callbackFlag = true;
+   watchdogTimerFlag = true; 
 }
 
 inline uint32_t checkRam( const char* location )
@@ -564,16 +565,6 @@ void loop()
 #endif
 }
    
-void coarseTimerHandler(void) //controls loop time for checking commands. 
-{
-  coarseTimerFlag = true;
-}
-
-void fineTimerHandler(void) //controls loop time for reading bearing device
-{
-  fineTimerFlag = true;
-}
-  
 /* MQTT callback for subscription and topic.
  * Only respond to valid states ""
  * Publish under ~/skybadger/sensors/<sensor type>/<host>
@@ -697,9 +688,6 @@ void setupWifi( void )
   delay(500);
 
   //Setup sleep parameters
-  //wifi_set_sleep_type(LIGHT_SLEEP_T);
-
-  //WiFi.mode(WIFI_NONE_SLEEP);
   wifi_set_sleep_type(NONE_SLEEP_T);
 
   Serial.println( F("WiFi connected" ) );
