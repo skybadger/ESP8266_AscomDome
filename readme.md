@@ -13,10 +13,14 @@ In my arrangement, Node-red flows are used to listen for and graph the updated r
   <li>Arduino 1.8+ </li>
   <li>ESP8266 V2.4+ </li>
 <li>Arduino MQTT client (https://pubsubclient.knolleary.net/api.html) - used for report state to the Node-red device health monitor</li>
-<li>Arduino JSON library (pre v6)  - used to parse and respond to REST queries. </li>
+<li>Arduino JSON library (pre v6 - e.g. 5.13)  - used to parse and respond to REST queries. </li>
 <li>ASCOM_COMMON library - see other repo <a href="http://www.github.com/skybadger/ASCOM_COMMON">here</a>. Used to create standard response templates and handle the ALPACA UDP management queries in a consistent way. </li>
+<li>Dome shutter device https://github.com/skybadger/ESP8266_Shutter</li>
+<li>Optional - Remote encoder device https://github.com/skybadger/ESP8266_SingleEncoder </li>
+<li>Optional - remote compass device as found in https://github.com/skybadger/ESP8266_DomeSensors </li>
 <li>Remote Debug library  - Used to access via telnet for remote debugging https://github.com/JoaoLopesF/RemoteDebug</li>
-<li>EasyEEPROM ardiono library modified to add a string read and write function because the templated types was not handling this well. Need to add this to the repo. </li> 
+<li>EasyEEPROM arduino library modified to add a string read and write function because the templated types was not handling this well. Need to add this to the repo. </li> 
+<li> linked list library : https://github.com/ivanseidel/LinkedList/archive/master.zip </li>
 </ul>
 
 <h3>Testing</h3>
