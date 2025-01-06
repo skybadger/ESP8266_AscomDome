@@ -15,7 +15,8 @@ In my arrangement, Node-red flows are used to listen for and graph the updated r
 <li>Arduino MQTT client (https://pubsubclient.knolleary.net/api.html) - used for report state to the Node-red device health monitor</li>
 <li>Arduino JSON library (pre v6)  - used to parse and respond to REST queries. </li>
 <li>ASCOM_COMMON library - see other repo <a href="http://www.github.com/skybadger/ASCOM_COMMON">here</a>. Used to create standard response templates and handle the ALPACA UDP management queries in a consistent way. </li>
-<li>Remote Debug library  - Used to access via telnet for remote debugging</li>
+<li>Remote Debug library  - Used to access via telnet for remote debugging https://github.com/JoaoLopesF/RemoteDebug</li>
+<li>EasyEEPROM ardiono library modified to add a string read and write function because the templated types was not handling this well. Need to add this to the repo. </li> 
 </ul>
 
 <h3>Testing</h3>
