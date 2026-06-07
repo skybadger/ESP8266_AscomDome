@@ -441,21 +441,21 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
   htmlForm += F("<form action=\"http://");
   htmlForm.concat(myHostname);
   htmlForm += F("/Home\" method=\"PUT\" id=\"home\" >\n");
-  htmlForm += F("<input type=\"number\" name=\"homePosition\" max=\"360.0\" min=\"0.0\" value=\"");
+  htmlForm += F("<input type=\"number\" name=\"homePosition\" max=\"360\" min=\"0\" step=\"1\" value=\"");
   htmlForm += homePosition;
   htmlForm += F("\">\n");  
   htmlForm += F("<input type=\"submit\" value=\"submit\">\n</form></div>\n");
   
   //Dome park position
-  htmlForm += F("<div id=\"parkset\" >");
+  htmlForm += F("<div id=\"park_updateset\" >");
   htmlForm += F("<h2> Enter new Park position for dome </h2>\n");
   htmlForm += F("<form action=\"http://");
   htmlForm.concat(myHostname);
   htmlForm += F("/ParkSet\" method=\"PUT\" id=\"park\" >\n");
-  htmlForm += F("<input type=\"number\" name=\"parkPosition\" max=\"360.0\" min=\"0.0\" value=\"");
+  htmlForm += F("<input type=\"number\" name=\"parkPosition\" max=\"360\" min=\"0\" step=\"1\" value=\"");
   htmlForm += parkPosition;
   htmlForm += F("\">\n");  
-  htmlForm += F("<input type=\"submit\" value=\"submit\">\n</form></div>\n");
+  htmlForm += F("<input type=\"submit\" value=\"Update\">\n</form></div>\n");
   
   //Consider also - for later, for systems that don't calc this for us, we 
   //may have to do it ourselves - except then we need to know where the scope is too. . 
@@ -468,14 +468,21 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
   //Distance from RA axis.
   
   //Park dome
-  htmlForm += F("<div id=\"park\" >");
+  htmlForm += F("<div id=\"park_set\" >");
   htmlForm += F("<h2> Park dome </h2>\n");
   htmlForm += F("<form action=\"http://");
   htmlForm.concat(myHostname);
-  htmlForm += F("/ParkAction\" method=\"PUT\" id=\"actions\" >\n");
-  htmlForm += F("<input type=\"button\" id=\"Park\" name=\"Park\" value=\"Park\" >\n");  
-  htmlForm += F("<input type=\"submit\" value=\"submit\">\n</form></div>\n");
+  htmlForm += F("/ParkAction\" method=\"PUT\" id=\"parkactions\" >\n");
+  htmlForm += F("<input type=\"submit\" value=\"Park\">\n</form></div>\n");
   
+  //Abort actions
+  htmlForm += F("<div id=\"abortset\" >");
+  htmlForm += F("<h2> ABORT</h2>\n");
+  htmlForm += F("<form action=\"http://");
+  htmlForm.concat(myHostname);
+  htmlForm += F("/AbortAction\" method=\"PUT\" id=\"abortactions\" >\n");
+  htmlForm += F("<input type=\"submit\" value=\"Abort\">\n</form></div>\n");
+
   //Shutter Controls
   /*NYI
   htmlForm += F("<div id=\"Shutter\" >");

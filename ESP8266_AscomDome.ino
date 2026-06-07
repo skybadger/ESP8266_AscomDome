@@ -161,7 +161,7 @@ void setup()
 #if !defined DEBUG_DISABLED
   //Debugging over telnet setup
   // Initialize the server (telnet or web socket) of RemoteDebug
-  Debug.begin( WiFi.hostname().c_str(), Debug.ERROR );
+  Debug.begin( WiFi.hostname().c_str(), Debug.VERBOSE );
   Debug.setSerialEnabled(true);//until set false
   // Options
   // Debug.setResetCmdEnabled(true); // Enable the reset command
@@ -385,15 +385,16 @@ void setup()
 
 #if defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION || defined USE_REMOTE_ENCODER_FOR_DOME_ROTATION
   Serial.printf_P( PSTR("Searching for remote compass/encoder\n") );
-  path = String( "http://" );
-  Serial.printf( ".");
-  path += sensorHostname;
-  path += "/bearing";
   attemptCount = 0;
 
   do
   {
-    response = restQuery( path, "", outbuf, HTTP_GET );
+#if defined USE_REMOTE_ENCODER_FOR_DOME_ROTATION
+    response = restQuery( sensorHostname, "/encoder/bearing", outbuf, HTTP_GET );
+#elif defined defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION
+    response = restQuery( sensorHostname, "/bearing", outbuf, HTTP_GET );
+
+#endif 
     debugI("Waiting for remote encoder/compass\n");
     delay(500);
     yield();
@@ -464,7 +465,7 @@ inline uint32_t checkRam( const char* location )
   if ( lastRam != ( ram - originalRam ) )
   {
     lastRam = ram - originalRam;
-#if defined DEBUG_DISABLED
+#if defined REMOTE_DEBUG_DISABLED
     Serial.printf_P( PSTR( "%s RAM: %d \n"), location, ram );
 #else
     debugV( "%s RAM: %u change: %d\n", location, ram, lastRam );
@@ -525,7 +526,7 @@ void loop()
 #if defined _TEST_RAM_
     checkRam( "DomeExit");
 #endif
-#endif
+#endif //dome
 
 #if defined _ENABLE_SHUTTER
 #if defined _TEST_RAM_
@@ -558,7 +559,7 @@ void loop()
 #if defined _TEST_RAM_
     checkRam( "ShutterExit" );
 #endif
-#endif
+#endif //shutter 
 
     //Clock tick onLCD
     if ( lcdPresent )
@@ -575,32 +576,32 @@ void loop()
         myLCD.writeLCD( 1, 1, LCDOutput );
       }
     }
+  
+    if ( client.connected() )
+    {
+      //Service MQTT keep-alives
+      client.loop();
+      if (callbackFlag ) //found as a consequence of being connected
+      {
+        //publish results
+        publishHealth();
+        publishFnStatus();
+        callbackFlag = false;
+      }
+    }
+    else
+    {
+      reconnectNB();
+      client.subscribe( inTopic );
+    }
 
     coarseTimerFlag = false;
-  }
-
-  if ( client.connected() )
-  {
-    //Service MQTT keep-alives
-    client.loop();
-    if (callbackFlag ) //found as a consequence of being connected
-    {
-      //publish results
-      publishHealth();
-      publishFnStatus();
-      callbackFlag = false;
-    }
-  }
-  else
-  {
-    reconnectNB();
-    client.subscribe( inTopic );
   }
 
   //If there are any web client connections - handle them.
   server.handleClient();
 
-#if !defined DEBUG_DISABLED
+#if !defined REMOTE_DEBUG_DISABLED
   //Handle remote telnet debug session
   Debug.handle();
 #endif

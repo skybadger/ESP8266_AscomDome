@@ -698,9 +698,12 @@ int shutterAltitude( int newAngle )
     
     debugD("restQuery request - uri:%s, args:%s, method: %i", host.c_str(), args.c_str(), (int) method );
     startTime = millis();
-    //host and args are separate, need to join them for a GET parameterised request.    
-    //if ( hClient.begin( wClient, uri ) ) uri must already have request args in it
-    if ( hClient.begin( wClient, host) ) 
+    //host and args are separate, need to join them and add a protocol and args for a GET parameterised request.    
+    String path( "http://");
+    path.concat( host ); 
+    path.concat(args); //bad TODO - modify correctly. 
+      
+    if ( hClient.begin( wClient, path ) ) 
     {
       endTime = millis();
       switch( method ) 
@@ -762,14 +765,9 @@ int shutterAltitude( int newAngle )
     String path = "";
     DynamicJsonBuffer jsonBuff(250);    
     
-    //Update the bearing
-    path = String( F("http://") );
-    path += host;
-    path += F("/bearing");
-
     debugV("GetBearing using remote device - host path: %s \n", path.c_str() );
     debugV("GetBearing setup - host uri: %s \n", host.c_str() );
-    response = restQuery( path, "", outbuf, HTTP_GET );
+    response = restQuery( host, "/bearing", outbuf, HTTP_GET );
     
     JsonObject& root = jsonBuff.parse( outbuf );
     //Sometimes we get a good HTTP code but still no body... 
@@ -863,10 +861,7 @@ int shutterAltitude( int newAngle )
     enum shutterState value = SHUTTER_ERROR;
     DynamicJsonBuffer jsonBuff(250);
 
-    String uri = String( F("http://") );
-    uri.concat( host );
-    uri.concat( F("/shutter") );
-    int response = restQuery( uri , "", outbuf, HTTP_GET  );
+    int response = restQuery( host , "/status", outbuf, HTTP_GET  );
     
     if( response == HTTP_CODE_OK ) 
     {

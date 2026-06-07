@@ -18,8 +18,8 @@
 #endif
 
 //Use for client detailed performance & functional testing 
-#define DEBUG_ESP_HTTP_CLIENT
-#define DEBUG_ESP_HTTP_SERVER
+//#define DEBUG_ESP_HTTP_CLIENT
+//#define DEBUG_ESP_HTTP_SERVER
 #define _DEBUG
 #define DEBUG_ESP               //Enables basic debugging statements for ESP
 #define HTTP_CLIENT_REUSE true  //Re-use the existing connection or not for subsequent comms within a session 
@@ -36,7 +36,7 @@
 
 //remote debugging 
 //Manage the remote debug interface, it takes 6K of memory with all the strings even when not in use but loaded
-//#define DEBUG_DISABLED
+//#define REMOTE_DEBUG_DISABLED
 //#define DEBUG_DISABLE_AUTO_FUNC true    //Turn on or off the auto function labelling feature .
 #define WEBSOCKET_DISABLED true           //No impact to memory requirement
 #define MAX_TIME_INACTIVE 0               //to turn off the de-activation of a telnet session
@@ -87,7 +87,7 @@
 int bootCount = 0;
 
 //Create a remote debug object
-#ifndef DEBUG_DISABLED
+#ifndef REMOTE_DEBUG_DISABLED
 RemoteDebug Debug;
 #endif
 
@@ -115,7 +115,7 @@ time_t now; //use as 'gmtime(&now);'
 
 //Program constants
 #define BUILDSTRING __FILE__+__DATE__
-#if !defined DEBUG_DISABLED
+#if !defined REMOTE_DEBUG_DISABLED
 const char* BuildVersionName PROGMEM = " LWIPv2 Higher Bandwidth, RDebug enabled \n" ;
 #else
 const char* BuildVersionName PROGMEM = " LWIPv2 Higher Bandwidth, RDebug disabled \n"  ;
@@ -179,7 +179,7 @@ static const char* defaultShutterHostname PROGMEM = "espdsh00.i-badger.co.uk";
 #if   defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION
 static const char* defaultSensorHostname PROGMEM = "espsen01.i-badger.co.uk";         //Remote Compass host
 #elif defined USE_REMOTE_ENCODER_FOR_DOME_ROTATION
-static const char* defaultSensorHostname PROGMEM = "espenc01.i-badger.co.uk/encoder"; //Remote Encoder host
+static const char* defaultSensorHostname PROGMEM = "espenc01.i-badger.co.uk"; //Remote Encoder host
 #elif defined USE_LOCAL_COMPASS_FOR_DOME_ROTATION
 //Nada
 #endif //Encoder source host selection 
