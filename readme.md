@@ -13,9 +13,14 @@ In my arrangement, Node-red flows are used to listen for and graph the updated r
   <li>Arduino 1.8+ </li>
   <li>ESP8266 V2.4+ </li>
 <li>Arduino MQTT client (https://pubsubclient.knolleary.net/api.html) - used for report state to the Node-red device health monitor</li>
-<li>Arduino JSON library (pre v6)  - used to parse and respond to REST queries. </li>
+<li>Arduino JSON library (pre v6 - e.g. 5.13)  - used to parse and respond to REST queries. </li>
 <li>ASCOM_COMMON library - see other repo <a href="http://www.github.com/skybadger/ASCOM_COMMON">here</a>. Used to create standard response templates and handle the ALPACA UDP management queries in a consistent way. </li>
-<li>Remote Debug library  - Used to access via telnet for remote debugging</li>
+<li>Dome shutter device https://github.com/skybadger/ESP8266_Shutter</li>
+<li>Optional - Remote encoder device https://github.com/skybadger/ESP8266_SingleEncoder </li>
+<li>Optional - remote compass device as found in https://github.com/skybadger/ESP8266_DomeSensors </li>
+<li>Remote Debug library  - Used to access via telnet for remote debugging https://github.com/JoaoLopesF/RemoteDebug</li>
+<li>EasyEEPROM arduino library modified to add a string read and write function because the templated types was not handling this well. Need to add this to the repo. </li> 
+<li> linked list library : https://github.com/ivanseidel/LinkedList/archive/master.zip </li>
 </ul>
 
 <h3>Testing</h3>
@@ -33,6 +38,8 @@ Use http://api/v1/dome/0/setup to enter setup page for this device specifically.
 
 <h3>ToDo </h3>
 <p>There is a bug whereby the device will occassionally drop the connected status, probably caused by a reboot, which means the clients will need to re-connect to re-establish use of the dome. This happens up to several times a night and so far is proving hard to track down. 
-Update: this has been tracked down to the wifi stack exceeding its buffer - this happens when it receives data faster than it processes it. Since the program design already returns asynchronously for everything, the only thing that can be improved is to make the TCP stack async and move the http request to full async processing - removing a potential delay of up to 200ms. I'll try.. 
+  
+Update: This has been tracked down to the wifi stack exceeding its buffer - this happens when it receives data faster than it processes it. Since the program design already returns asynchronously for everything, the only thing that can be improved is to make the TCP stack async and move the http request to full async processing - removing a potential delay of up to 200ms. I'll try.. 
 
+Another potential source is when the dome gets locked stuck as occasionally happens, eventually the motor controller draws too much power and causes a brown-out on the 5v power line which is sourced from the 12v line. If your power setup is different, you won't have this problem. 
 </p>
