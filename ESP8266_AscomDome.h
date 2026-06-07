@@ -2,16 +2,29 @@
 #define _ESP8266_ASCOMDOME_H_
 
 //State what the target hardware is - determines use of pins for I2C for instance. 
-#define _ESP8266_01_
-//define _ESP8266_12_   
+//#define _ESP8266_01_
+#define _ESP8266_12_   
+//#define _ESP32_XX_
+//Manage different Encoder pinout variants of the ESP8266
+#if defined _ESP8266_12_ //Used to manage pinout.
+#pragma GCC Warning "ESP8266-12 Device selected"
+#elif defined _ESP8266_01_
+#pragma GCC Warning "ESP8266-01 Device selected"
+#undef USE_LOCAL_ENCODER_FOR_DOME_ROTATION
+#elif defined _ESP32_XX_
+#pragma GCC Warning "ESP32 Device selected"
+#else
+#pragma GCC Error "No Device pinout selected"
+#endif
 
 //Use for client detailed performance & functional testing 
-//#define DEBUG_ESP_HTTP_CLIENT
+#define DEBUG_ESP_HTTP_CLIENT
+#define DEBUG_ESP_HTTP_SERVER
 #define _DEBUG
 #define DEBUG_ESP               //Enables basic debugging statements for ESP
 #define HTTP_CLIENT_REUSE true  //Re-use the existing connection or not for subsequent comms within a session 
 //Use for client testing
-//#define _DISABLE_MQTT_        //Disable the MQTT handling segments. 
+#define _DISABLE_MQTT_        //Disable the MQTT handling segments. 
 //#define DEBUG_MQTT            //enable low-level MQTT connection debugging statements.    
 #include "DebugSerial.h" 
 
@@ -19,7 +32,7 @@
 //added to support reboots of dome controller due to un-diagnosed power brownouts which Voyager doesn't get to see and therefore loses control of the dome. 
 //Doing this means the dome will come up and still accept calls from anyone... as long as it reads the encoder and the encoder stays running, we maintain our position knowledge
 //If using a local direct attached device, have to assume positional knowledge will be lost too. 
-#define ACCEPT_CONNECTED_CLIENT_ONLY
+//#define ACCEPT_CONNECTED_CLIENT_ONLY
 
 //remote debugging 
 //Manage the remote debug interface, it takes 6K of memory with all the strings even when not in use but loaded
@@ -27,7 +40,7 @@
 //#define DEBUG_DISABLE_AUTO_FUNC true    //Turn on or off the auto function labelling feature .
 #define WEBSOCKET_DISABLED true           //No impact to memory requirement
 #define MAX_TIME_INACTIVE 0               //to turn off the de-activation of a telnet session
-#include "RemoteDebug.h"  //https://github.com/JoaoLopesF/RemoteDebug
+#include <RemoteDebug.h>  //https://github.com/JoaoLopesF/RemoteDebug
 
 //Used to test for memory leaks.
 //#define _TEST_RAM_ //turn on RAM check settings
@@ -45,24 +58,22 @@
 
 #include "SkybadgerStrings.h"
 
-//Manage different Encoder pinout variants of the ESP8266
-#ifdef _ESP8266_12_ 
-#pragma GCC Warning "ESP8266-12 Device selected"
-#else // _ESP8266_01_
-#define _ESP8266_01_
-#pragma GCC Warning "ESP8266-01 Device selected"
-#undef USE_LOCAL_ENCODER_FOR_DOME_ROTATION
-#endif
-
 #include <Esp.h>                 //used for restart and cycle timer
+
+#if defined _ESP32_XX_ 
+#include <Wifi.h>
+#include <WiFiClient.h>
+#include <WebServer.h>
+
+#else //ESP8266 
 #include <ESP8266WiFi.h>         //https://links2004.github.io/Arduino/d3/d58/class_e_s_p8266_web_server.html
-#include <WiFiUdp.h>             //Used for Alpaca Management
 #include <ESP8266WebServer.h>    //REST web server
 #include "ESP8266HTTPUpdateServer.h"  //REST web server handlers for OTA firmware update
-
-//These two are for REST calls out. 
-#include <WiFiClient.h>
+#include <WiFiUdp.h>             //Used for Alpaca Management
 #include <ESP8266HTTPClient.h>
+#include <WiFiClient.h>
+
+#endif
 
 #include <ArduinoJson.h>     //JSON response formatting
 #include <Wire.h>            //I2C dependencies
@@ -83,8 +94,7 @@ RemoteDebug Debug;
 //Ntp dependencies - available from v2.4
 #include <time.h>
 #include <sys/time.h>
-#include <coredecls.h>
-
+//#include <coredecls.h>
 #ifdef ESP8266
 extern "C" {
 #include "ets_sys.h"         //Base timer and interrupt handling 
@@ -104,11 +114,11 @@ extern "C" {
 time_t now; //use as 'gmtime(&now);'
 
 //Program constants
-#define VERSION R1.4
+#define BUILDSTRING __FILE__+__DATE__
 #if !defined DEBUG_DISABLED
-const char* BuildVersionName PROGMEM = " LWIPv2 lo memory, RDebug enabled \n";
+const char* BuildVersionName PROGMEM = " LWIPv2 Higher Bandwidth, RDebug enabled \n" ;
 #else
-const char* BuildVersionName PROGMEM = " LWIPv2 lo memory, RDebug disabled \n";
+const char* BuildVersionName PROGMEM = " LWIPv2 Higher Bandwidth, RDebug disabled \n"  ;
 #endif 
 
 #define MAX_NAME_LENGTH 40
@@ -164,12 +174,12 @@ typedef struct {
   
 //defaults for setup before replacing with values read from eeprom
 //Should be const but compiler barfs when copying into an array for later use
-static const char* defaultHostname PROGMEM =   "espDOM00";
-static const char* defaultShutterHostname PROGMEM = "espDSH00.i-badger.co.uk";
+static const char* defaultHostname PROGMEM =   "espdom01";
+static const char* defaultShutterHostname PROGMEM = "espdsh00.i-badger.co.uk";
 #if   defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION
 static const char* defaultSensorHostname PROGMEM = "espsen01.i-badger.co.uk";         //Remote Compass host
 #elif defined USE_REMOTE_ENCODER_FOR_DOME_ROTATION
-static const char* defaultSensorHostname PROGMEM = "espENC01.i-badger.co.uk/encoder"; //Remote Encoder host
+static const char* defaultSensorHostname PROGMEM = "espenc01.i-badger.co.uk/encoder"; //Remote Encoder host
 #elif defined USE_LOCAL_COMPASS_FOR_DOME_ROTATION
 //Nada
 #endif //Encoder source host selection 
@@ -241,7 +251,6 @@ uint32_t originalRam;
 uint32_t lastRam;
 long int nowTime, startTime, indexTime;
 unsigned long int debugId = 0; //Seed a debug log ID 
-#define  _TEST_RAM_
 
 ETSTimer fineTimer; 
 ETSTimer coarseTimer;
@@ -278,11 +287,11 @@ int connectionCtr = 0; //variable to count number of times something has connect
 extern const unsigned int NOT_CONNECTED;
 unsigned int connected = NOT_CONNECTED;
 static const char* DriverName PROGMEM    = "Skybadger.ESPDome";
-static const char* DriverVersion PROGMEM = "1";
+static const char* DriverVersion PROGMEM = "1.1";
 static const char* DriverInfo PROGMEM    = "Skybadger.ESPDome RESTful native device. ";
 static const char* Description PROGMEM   = "Skybadger ESP2866-based wireless ASCOM Dome controller";
-static const char* InterfaceVersion PROGMEM = "3";
-static const char* DriverType PROGMEM    = "Dome"; //Must be a valid ASCOM type to be recognised by UDP discovery. 
+static const int32 InterfaceVersion PROGMEM = 1;
+static const char* DriverType PROGMEM    = "dome"; //Must be a valid ASCOM type to be recognised by UDP discovery - lower case required 
 
 //ALPACA support additions
 //UDP Port can be edited in setup page
@@ -303,7 +312,9 @@ static const char* defaultAscomName PROGMEM = "Skybadger Dome 01";
 char* ascomName = nullptr;
 
 //Mgmt Api Constants
-const int instanceVersion = 3; //the iteration version identifier for this driver. Update every major change - relate to your repo versioning
+//The iteration version identifier for this driver. Update every major change - relate to your repo versioning
+//Alpaca Mgmt Api defines this as a String !. Currently using String( itoa( int) ) in responses. 
+const int instanceVersion = 3; 
 char* Location = nullptr;
 
 //ASCOM variables

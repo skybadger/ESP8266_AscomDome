@@ -588,7 +588,7 @@ void handleParkPut(void)
 
    root.printTo(message);
    debugI( "ParkPut: %s", message.c_str() );
-   server.send(200, "text/json", message);
+   server.send(200, "application/json", message);
    return ;      
 }
 

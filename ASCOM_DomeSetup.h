@@ -389,7 +389,7 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
   htmlForm += F("<form action=\"http://");
   htmlForm.concat( myHostname );
   htmlForm += F("/ShutterName\" method=\"PUT\" id=\"shutterhostname\" >\n");
-  htmlForm += F("<h2> Enter new URL path \<hostname\>/\<path\> for Shutter controller </h2>\n");
+  htmlForm += F("<h2> Enter new URL path \\<hostname\\>/\\<path\\> for Shutter controller </h2>\n");
   htmlForm += F("<input type=\"text\" name=\"shutterhostname\" value=\"");
   htmlForm.concat( shutterHostname );
   htmlForm += F("\" maxlength=\"");
@@ -403,7 +403,7 @@ String& setupFormBuilder( String& htmlForm, String& errMsg )
   htmlForm += F("<form action=\"http://");
   htmlForm.concat( myHostname );
   htmlForm += F("/SensorName\" method=\"PUT\" id=\"bearingsensorname\" >\n");
-  htmlForm += F("<h2> Enter new URL \<hostname\>/\<path\> for Dome orientation sensor </h2>\n");
+  htmlForm += F("<h2> Enter new URL \\<hostname\\>/\\<path\\> for Dome orientation sensor </h2>\n");
   htmlForm += F("<p> Rest response returned must return a 'bearing' entry in json form</p>\n");
   htmlForm += F("<input type=\"text\" name=\"bearingsensorname\" value=\"");
   htmlForm.concat( sensorHostname );

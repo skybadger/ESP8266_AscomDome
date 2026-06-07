@@ -3,7 +3,7 @@
 
 //*Include ASCOMDome enum for motor speed and direction settings.
 //Dropped dome top speed from 240 to 180 to see if it overcomes intial stall issues. 
-enum motorSpeed: uint8_t     { MOTOR_SPEED_OFF=0, MOTOR_SPEED_SLOW_SLEW=180, MOTOR_SPEED_FAST_SLEW=200 };
+enum motorSpeed: uint8_t     { MOTOR_SPEED_OFF=0, MOTOR_SPEED_SLOW_SLEW=180, MOTOR_SPEED_FAST_SLEW=220 };
 enum motorDirection: uint8_t { MOTOR_DIRN_CW=0, MOTOR_DIRN_CCW=1 };
 
 

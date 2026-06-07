@@ -38,6 +38,11 @@ File to be included into relevant device REST setup
  int shutterSlew( enum shutterCmd setting );
  //int shutterAbort( void ); //deprecated
 
+  //This detects for domeLocked state handled in OnDomeSlew
+  static int domeLockDetectedCount = 0;
+  //This is to ensure domeLocked handling isn't invoked due to a missing or repeat reading due to being unable to access remote devices. 
+  static int domeLockDetectedEntryCount = 5;
+  
   float normaliseFloat( float& input, float radix) 
   {
     float temp = input;
@@ -87,7 +92,7 @@ File to be included into relevant device REST setup
       pCmd->transId = transId; 
       
       domeCmdList->add( pCmd );
-      debugI( "Cmd pushed: %i", (int) newCmd ); 
+      debugI( "Cmd added: %i", (int) newCmd ); 
       return pCmd;
   }
 
@@ -140,7 +145,7 @@ File to be included into relevant device REST setup
     if ( domeCmdList->size() > 0 ) 
     {
       pCmd = domeCmdList->shift();
-      debugI( "Popped new command: %i, value: %i", (int) pCmd->cmd, (int) pCmd->value );
+      debugI( "Popped next command: %i, value: %i", (int) pCmd->cmd, (int) pCmd->value );
       newCmd = (enum domeCmd ) pCmd->cmd;
       String cmd = "";
       switch ( newCmd )
@@ -148,20 +153,23 @@ File to be included into relevant device REST setup
         // HOME and PARK are handled by slew commands but these entries satify the compiler warnings. 
         case CMD_DOME_HOME:
           targetAzimuth = (float) homePosition;
-          domeStatus = DOME_SLEWING;
+          domeLockDetectedCount = false;
           onDomeSlew();
+          domeStatus = DOME_SLEWING;
           break;
 
         case CMD_DOME_PARK:
-          targetAzimuth = (float) homePosition;
-          domeStatus = DOME_SLEWING;
+          targetAzimuth = (float) parkPosition;
+          domeLockDetectedCount = false;
           onDomeSlew();
+          domeStatus = DOME_SLEWING;
           break;
           
         case CMD_DOME_SLEW:
           targetAzimuth = (float) pCmd->value;
-          domeStatus = DOME_SLEWING;
+          domeLockDetectedCount = false;
           onDomeSlew();
+          domeStatus = DOME_SLEWING;         
           break;
 
         case CMD_DOME_ABORT:
@@ -235,8 +243,6 @@ File to be included into relevant device REST setup
    */
   void onDomeSlew( void )
   {
-    //Detecting dome locked during slew. 
-    static boolean domeLockDetected = false;
     static float startAzimuth = 0.0F;
     static float lastAzimuth = 0.0F;
     static const float minMovementLimit = 0.1F;
@@ -278,7 +284,7 @@ File to be included into relevant device REST setup
 
       lastAzimuth = localAzimuth;
       startAzimuth = lastAzimuth; //the last place we successfully arrived at due to a slew. 
-      domeLockDetected = false;
+      domeLockDetectedCount = false;
       slewing = false;
       return; 
     }
@@ -332,14 +338,22 @@ File to be included into relevant device REST setup
     //Finally - check whether we are currently stalled
     //Criterion - no motion since last check when we are supposed to be slewing. 
     //However this might be the first call to onSlew after Idle so shouldnt check too soon. 
-    if ( abs( lastAzimuth - startAzimuth ) >  minMovementLimit && abs(localAzimuth - lastAzimuth ) < minMovementLimit ) 
+    //This will get called for every OnDomeSlew so we need to use the domeLockDetectedCount flag to see if its already handled. 
+    //A regular abort will clear the flag
+    //The flag is also clear on entry 
+    if ( abs(localAzimuth - lastAzimuth ) < minMovementLimit  && domeStatus == DOME_SLEWING ) 
+    {
+        domeLockDetectedCount++;      
+    }
+    if ( domeLockDetectedCount > domeLockDetectedEntryCount ) 
     {     
       int clientId = 100;
       int transId = 1000;
       int slewTarget = 0;
       int orgTarget = int( targetAzimuth );
-      domeLockDetected = true;
       
+      
+      debugW( "OnDomeSlew: DOMELOCK detected slewing to %i", (int) targetAzimuth ); 
       //Add a slew to outside of the |slowSlewRange+1| distance in the direction we came from. 
       if ( direction == MOTOR_DIRN_CW ) 
       {
@@ -353,8 +367,7 @@ File to be included into relevant device REST setup
       }
       //slewTarget = normaliseInt( int( localAzimuth) - slowAzimuthRange -1, 360 );  
       addDomeCmd( clientId, transId, "", CMD_DOME_SLEW, slewTarget );         
-
-      debugD( "OnDomeSlew: Added slew to reverse from lock: direction : %i", (int) direction );      
+      debugW( "OnDomeSlew: DOMELOCK - Added slew to reverse from lock @ %i: direction : %i", (int) localAzimuth, (int) direction );      
       
       //Add another slew to current +/ |2*(slowAzimuthRange ) + 1| - ie fast past the obstruction
       if ( direction == MOTOR_DIRN_CW ) 
@@ -368,14 +381,20 @@ File to be included into relevant device REST setup
         slewTarget = normaliseInt( slewTarget, 360 );
       }
       addDomeCmd( clientId, transId, "", CMD_DOME_SLEW, slewTarget );
-      debugD( "OnDomeSlew: Added slew to slew at speed past lock: direction : %i", (int) direction);      
+      debugW( "OnDomeSlew: DOMELOCK - Added slew to slew at speed past lock: direction : %i", (int) direction);      
       
       //Finally - add slew to get to original desired target position.
       addDomeCmd( clientId, transId, "", CMD_DOME_SLEW, orgTarget ); 
-      debugD( "OnDomeSlew: Added slew to original target after lock: direction : %i", (int) direction  );      
+      debugW( "OnDomeSlew: DOMELOCK - Added slew to original target after lock: direction : %i", (int) direction  );      
       
-      //Finally - abort this slew so we can process the ones just added 
-      onDomeAbort();
+      //Finally - abort this slew so we can process the ones just added - dont call onDomeAbort() as that resets the domeLock flag. 
+      //turn off motor
+      if( motorPresent )
+        myMotor.setSpeedDirection( MOTOR_SPEED_OFF, MOTOR_DIRN_CW );
+        debugW("Aborting- motor set to stop");
+          
+      //Update status to idle to process normally.
+      domeStatus = DOME_IDLE;
     }
     
     //Update our persistent record of last place
@@ -419,6 +438,9 @@ File to be included into relevant device REST setup
     
     //Update status to idle to process normally.
     domeStatus = DOME_IDLE;
+    
+    //Remove domeLock flag so we can detect it again in the OnSlew handler. 
+    domeLockDetectedCount = 0;
     return;
   }
 
@@ -440,9 +462,9 @@ void onShutterIdle()
         //Get next command if there is one. 
         if ( shutterCmdList->size() > 0 ) 
         {
-          pCmd = shutterCmdList->pop();
+          pCmd = shutterCmdList->shift();
           newCmd = (enum shutterCmd) pCmd->cmd;
-          debugI("OnShutterIdle - new command popped: %s", shutterCmdNames[(int)newCmd] );  
+          debugI("OnShutterIdle - new command read: %s", shutterCmdNames[(int)newCmd] );  
 
           switch( newCmd )
           {
@@ -645,9 +667,7 @@ int shutterAltitude( int newAngle )
     compassURL.concat( sensorHostname );
     compassURL.concat( "/bearing" );
     response = restQuery( compassURL, "", output, HTTP_GET );
-#if defined DEBUG_ESP_HTTP_CLIENT      
     debugD( "[HTTPClient response ] response code: %i, response: %s", (int) response, output.c_str() );
-#endif    
     JsonObject& root = jsonBuff.parse( output );
     
     if ( response == HTTP_CODE_OK && root.success() && root.containsKey(F("bearing")) )
@@ -658,10 +678,7 @@ int shutterAltitude( int newAngle )
     else
     {
       debugE( "Shutter compass bearing call not successful, response: %i", (int) response );
-#if defined DEBUG_ESP_HTTP_CLIENT      
       debugV( "bearing json content: %s", output.c_str() );
-#endif      
-      debugW( "JSON parsing status: %i", (int) root.success() );
     }
     return status;
   }
@@ -717,9 +734,7 @@ int shutterAltitude( int newAngle )
       }
       else 
       {
-#if defined DEBUG_ESP_HTTP_CLIENT      
-        debugV("restQuery ... failed, error: %s\n", hClient.errorToString(httpCode).c_str() );
-#endif        
+        debugW("restQuery ... failed, error: %s\n", hClient.errorToString(httpCode).c_str() );
         response = "";
       } 
     }//end hclient.
@@ -752,10 +767,8 @@ int shutterAltitude( int newAngle )
     path += host;
     path += F("/bearing");
 
-#if defined DEBUG_ESP_HTTP_CLIENT      
     debugV("GetBearing using remote device - host path: %s \n", path.c_str() );
     debugV("GetBearing setup - host uri: %s \n", host.c_str() );
-#endif    
     response = restQuery( path, "", outbuf, HTTP_GET );
     
     JsonObject& root = jsonBuff.parse( outbuf );
@@ -866,11 +879,7 @@ int shutterAltitude( int newAngle )
       {
         value = shutterStatus; //Report the last response in the meantime. 
         debugW("Shutter controller call not successful, buffer: %s", outbuf.c_str() );
-        debugV("Shutter response: %i, parse result %i, json data %s", (int) response, (int) root.success(), outbuf.c_str() );
-  
-  #if defined DEBUG_ESP_HTTP_CLIENT      
-        Serial.printf( "Shutter response: %i, parse result %i, json data %s\n", response, (int) root.success(), outbuf.c_str() );
-  #endif      
+        debugV("Shutter response: %i, parse result %i, json data %s", (int) response, (int) root.success(), outbuf.c_str() );   
       }
     }
 
