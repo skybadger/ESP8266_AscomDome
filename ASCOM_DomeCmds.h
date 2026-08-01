@@ -14,7 +14,7 @@ File to be included into relevant device REST setup
  int normaliseInt( int& input, int radix ); 
  
  //interfaces to other inputs. 
- int restQuery( String uri, String args, String& response, int method );
+ int restQuery( String uri, String path, String args, String& response, enum HTTPMethod method );
  float getAzimuth( float );
  void setupEncoder();
  bool setupCompass( String host );
@@ -534,13 +534,9 @@ void onShutterIdle()
 int shutterSlew( enum shutterCmd setting )
 {
     String outbuf = "";
-    String uri = "http://";
     String arg = "shutter=";
     int errorCode = 200;
     
-    uri.concat( shutterHostname );
-    uri.concat("/shutter");
-
     debugD( "shutterSlew: setting: %s", shutterCmdNames[(int) setting] );
     switch( setting )
     {
@@ -555,7 +551,7 @@ int shutterSlew( enum shutterCmd setting )
       break;
     }   
 
-    errorCode = restQuery( uri, arg, outbuf, HTTP_PUT );  
+    errorCode = restQuery( shutterHostname, "/shutter", arg, outbuf, HTTPMethod::HTTP_PUT );  
     if( errorCode == HTTP_CODE_OK )
     {
       debugV("Successfully issued new state '%s' to shutter", arg.c_str() );
@@ -584,15 +580,13 @@ int shutterSlew( enum shutterCmd setting )
 int shutterAltitude( int newAngle )
 {
     String outbuf = "";
-    String uri = "http:";
-    String arg = "altitude=";
-    
-    uri.concat( shutterHostname );
-    uri.concat("/shutter");
-    arg.concat( newAngle );
+    String path = "/shutter"; 
+    String args  =  "shutter=";
+    char charbuff[10];
+    args.concat ( String( itoa( newAngle, charbuff, 10 ) ));
         
     debugD(" Setting up to send new altitude to shutter");
-    int response = restQuery( uri, arg, outbuf, HTTP_PUT);
+    int response = restQuery( shutterHostname, path , args, outbuf, HTTPMethod::HTTP_PUT);
     if( response == HTTP_CODE_OK )
     {
       debugD("Issued new altitude %i to shutter, currently at %i", newAngle, altitude );
@@ -629,7 +623,7 @@ int shutterAltitude( int newAngle )
     uri.concat("/shutter");
 
     debugV("Abort issued to shutter.");
-    response = restQuery( uri, "{\"status\":\"abort\"}", outbuf ,HTTP_PUT);
+    response = restQuery( uri, "{\"status\":\"abort\"}", outbuf , HTTPMethod::HTTP_PUT);
     if( response == HTTP_CODE_OK)
     {
       debugV("Abort successful.");
@@ -658,15 +652,12 @@ int shutterAltitude( int newAngle )
   bool setupCompass( String targetHost )
   {
     bool status = false;
-    String compassURL = "http://";
     String output = "";
     int response = 0;
     float value;
     DynamicJsonBuffer jsonBuff(256);
     
-    compassURL.concat( sensorHostname );
-    compassURL.concat( "/bearing" );
-    response = restQuery( compassURL, "", output, HTTP_GET );
+    response = restQuery( targetHost , "/bearing" , "", output, HTTPMethod::HTTP_GET );
     debugD( "[HTTPClient response ] response code: %i, response: %s", (int) response, output.c_str() );
     JsonObject& root = jsonBuff.parse( output );
     
@@ -682,47 +673,97 @@ int shutterAltitude( int newAngle )
     }
     return status;
   }
-
+ 
+  
   /*
    * Query a url for a parsed json output
    * check return code with object.success();
    */ 
-  int restQuery( String host, String args, String& response, int method )
+  int restQuery( String host, String uri, String args, String& response, enum HTTPMethod method)
   {
     int httpCode = 0;
     long int startTime;
     long int endTime;
-    //HTTPClient hClient; //uses a global 
-    hClient.setTimeout ( (uint16_t) 250 );    
-    hClient.setReuse( HTTP_CLIENT_REUSE );    
+    WiFiClient wclient;
+    HTTPClient httpClient; 
+    hClient.setTimeout ( (uint16_t) 5000 );    
+    //hClient.setReuse( HTTP_CLIENT_REUSE );    
     
-    debugD("restQuery request - uri:%s, args:%s, method: %i", host.c_str(), args.c_str(), (int) method );
-    startTime = millis();
-    //host and args are separate, need to join them and add a protocol and args for a GET parameterised request.    
-    String path( "http://");
-    path.concat( host ); 
-    path.concat(args); //bad TODO - modify correctly. 
-      
-    if ( hClient.begin( wClient, path ) ) 
+    debugD("restQuery request - uri:%s, path:%s, args:%s, method:%i", host.c_str(), uri.c_str(), args.c_str(), (enum HTTPMethod) method );
+   
+    IPAddress resolvedIP;
+
+    if (WiFi.hostByName(host.c_str(), resolvedIP))
     {
-      endTime = millis();
+        debugI("DNS: %s -> %s",              host.c_str(),              resolvedIP.toString().c_str());
+    } 
+    else 
+    {
+        debugE("DNS lookup failed for %s", host.c_str());
+    }
+    
+    //host and args are separate, need to join them and add a protocol and args for a GET parameterised request.    
+    host.trim();
+    uri.trim();
+    args.trim();
+    if ( host == nullptr || host.length() == 0 || host == "" )
+      return HTTP_CODE_BAD_REQUEST; 
+    if ( uri.length() == 0 || uri == "" ) 
+      uri = "/"; 
+
+    String path = String( host );
+    if ( !path.startsWith( F("http://") ) && !path.startsWith( F("https://") ) )
+      path = String( F("http://") ) + path;
+
+    int authorityStart = path.indexOf( F("://") );
+    authorityStart = ( authorityStart >= 0 ) ? authorityStart + 3 : 0;
+    int pathStart = path.indexOf( '/', authorityStart );
+    if ( pathStart >= 0 )
+    {
+      String baseUri = path.substring( pathStart );
+      while ( baseUri.length() > 1 && baseUri.endsWith( F("/") ) )
+        baseUri.remove( baseUri.length() - 1 );
+      while ( path.length() > authorityStart && path.endsWith( F("/") ) )
+        path.remove( path.length() - 1 );
+      if ( uri == baseUri )
+        uri = "/";
+      else if ( uri.startsWith( baseUri + F("/") ) )
+        uri.remove( 0, baseUri.length() );
+    }
+
+    if ( uri != F("/") )
+    {
+      while ( path.length() > authorityStart && path.endsWith( F("/") ) )
+        path.remove( path.length() - 1 );
+    }
+    path.concat( uri );
+    if ( args.length() != 0 && method == HTTPMethod::HTTP_GET ) 
+    {
+      path = path.concat("?");
+      path = path.concat( args );
+    }
+
+    debugI("restQuery request - path:%s", path.c_str() );
+    startTime = millis();
+    if ( httpClient.begin( wclient, path ) ) 
+    {
       switch( method ) 
       {
-        case HTTP_GET: 
-        httpCode = hClient.GET();
+        case HTTPMethod::HTTP_GET: 
+        httpCode = httpClient.GET();  
         break;
       
-      case HTTP_PUT: 
+      case HTTPMethod::HTTP_PUT:
         hClient.addHeader(F("Content-Type"), F("application/x-www-form-urlencoded") );
-        httpCode = hClient.PUT( args.c_str() );             
+        httpCode = httpClient.PUT( args );             
         break;
       
       default: 
-        debugE("Unable to open connection of unsupported type: %i", method );
+        debugE("Unable to open connection to '%s' of unsupported type: %i", path.c_str(), method );
         response = "";
         break;
       }//end switch
-
+      endTime = millis();    
 #if defined DEBUG_ESP_HTTP_CLIENT            
       debugV( "Time for restQuery call(mS): %li\n", (long int) endTime-startTime );
 #endif        
@@ -730,19 +771,25 @@ int shutterAltitude( int newAngle )
       // file found at server ?
       if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) 
       {
-        response = hClient.getString();
+        response = httpClient.getString();
 #if defined DEBUG_ESP_HTTP_CLIENT      
         debugV("HTTP rest query response : %s\n", response.c_str() );
 #endif        
       }
       else 
       {
-        debugW("restQuery ... failed, error: %s\n", hClient.errorToString(httpCode).c_str() );
+        debugW("restQuery ... failed, error: %s\n", httpClient.errorToString(httpCode).c_str() );
         response = "";
       } 
     }//end hclient.
+    else //hclient.begin() failed 
+    {
+      debugE("restQuery ... httpCient.begin failed, \n" );
+      response = "";
+      httpCode = -1;      
+    }
 
-    hClient.end();
+    httpClient.end();
     return httpCode;
   }
   
@@ -765,9 +812,8 @@ int shutterAltitude( int newAngle )
     String path = "";
     DynamicJsonBuffer jsonBuff(250);    
     
-    debugV("GetBearing using remote device - host path: %s \n", path.c_str() );
     debugV("GetBearing setup - host uri: %s \n", host.c_str() );
-    response = restQuery( host, "/bearing", outbuf, HTTP_GET );
+    response = restQuery( host, "/encoder/bearing", "", outbuf, HTTP_GET );
     
     JsonObject& root = jsonBuff.parse( outbuf );
     //Sometimes we get a good HTTP code but still no body... 
@@ -789,11 +835,7 @@ int shutterAltitude( int newAngle )
           //reset the compass by resetting the target device
           if ( bearingRepeatCount > bearingRepeatLimit ) 
           {  
-            uri = "http://";
-            uri.concat( host );
-            uri.concat( "/reset" );
-            
-            response = restQuery( uri, "", outbuf, HTTP_PUT );
+            response = restQuery( host, "/reset", outbuf, HTTP_PUT );
             debugW(" GetBearing: Compass reset attempted !");
             if (myLCD.present ) 
               myLCD.writeLCD( 2, 0, "Compass reset !");
@@ -861,7 +903,7 @@ int shutterAltitude( int newAngle )
     enum shutterState value = SHUTTER_ERROR;
     DynamicJsonBuffer jsonBuff(250);
 
-    int response = restQuery( host , "/status", outbuf, HTTP_GET  );
+    int response = restQuery( host , "/status", "", outbuf, HTTP_GET  );
     
     if( response == HTTP_CODE_OK ) 
     {
@@ -879,7 +921,7 @@ int shutterAltitude( int newAngle )
     }
 
     duration = millis() - duration;
-    debugI( " duration: %li", (long int) duration );
+    debugI( "Shutter query duration: %li", (long int) duration );
     outputState = value;
     return response;
   }

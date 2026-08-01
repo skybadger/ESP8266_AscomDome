@@ -122,11 +122,12 @@
 #include "ASCOM_DomeSetup.h"
 #include "ASCOM_DomeEeprom.h"
 
-#define DEBUG_DISABLED //put all debug to serial 
+
 
 void setup( void );
 void setupWifi( void );
 void publishFnStatus( void );
+void publishHealth( void );
 uint32_t reportRam(char* );
 
 void setup()
@@ -152,7 +153,6 @@ void setup()
   EEPROM.begin(eepromSize);
   setupDefaults();
   readFromEeprom();
-
 
   //Setup WiFi
   Serial.printf_P( PSTR("Entering Wifi setup for host %s\n") , myHostname );
@@ -390,7 +390,7 @@ void setup()
   do
   {
 #if defined USE_REMOTE_ENCODER_FOR_DOME_ROTATION
-    response = restQuery( sensorHostname, "/encoder/bearing", outbuf, HTTP_GET );
+    response = restQuery( sensorHostname, "/encoder/bearing", "",  outbuf, HTTP_GET );
 #elif defined defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION
     response = restQuery( sensorHostname, "/bearing", outbuf, HTTP_GET );
 

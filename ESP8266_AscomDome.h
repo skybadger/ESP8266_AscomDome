@@ -36,10 +36,11 @@
 
 //remote debugging 
 //Manage the remote debug interface, it takes 6K of memory with all the strings even when not in use but loaded
-//#define REMOTE_DEBUG_DISABLED
-//#define DEBUG_DISABLE_AUTO_FUNC true    //Turn on or off the auto function labelling feature .
+//#define REMOTE_DEBUG_DISABLED //disables all debugX calls. 
+//#define DEBUG_DISABLED //put all debug to serial 
+#define DEBUG_DISABLE_AUTO_FUNC true      //Turn on or off the auto function labelling feature .
 #define WEBSOCKET_DISABLED true           //No impact to memory requirement
-#define MAX_TIME_INACTIVE 0               //to turn off the de-activation of a telnet session
+//#define MAX_TIME_INACTIVE 0               //to turn off the de-activation of a telnet session
 #include <RemoteDebug.h>  //https://github.com/JoaoLopesF/RemoteDebug
 
 //Used to test for memory leaks.
