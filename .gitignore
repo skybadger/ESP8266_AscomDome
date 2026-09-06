@@ -1,0 +1,7 @@
+putty.log
+ESP8266_AscomDome.ino
+.pio/
+lib/
+/build/
+/debug/
+ESP8266_AscomDome.ino.generic.bin

@@ -21,11 +21,11 @@
 //#define DEBUG_ESP_HTTP_CLIENT
 //#define DEBUG_ESP_HTTP_SERVER
 #define _DEBUG
-#define DEBUG_ESP               //Enables basic debugging statements for ESP
-#define HTTP_CLIENT_REUSE true  //Re-use the existing connection or not for subsequent comms within a session 
+#define _DEBUG_ESP               //Enables basic debugging statements for ESP
+#define HTTP_CLIENT_REUSE false  //Re-use the existing connection or not for subsequent comms within a session 
 //Use for client testing
-#define _DISABLE_MQTT_        //Disable the MQTT handling segments. 
-//#define DEBUG_MQTT            //enable low-level MQTT connection debugging statements.    
+//#define _DISABLE_MQTT_        //Disable the MQTT handling segments. 
+#define _DEBUG_MQTT            //enable low-level MQTT connection debugging statements.    
 #include "DebugSerial.h" 
 
 //Flag to specify whether code checks for connected client ID on motion command requests or not 
@@ -77,6 +77,7 @@
 #endif
 
 #include <ArduinoJson.h>     //JSON response formatting
+#include "ASCOMAPIDome_rest.h" //Shared Dome states and REST handler declarations
 #include <Wire.h>            //I2C dependencies
 #include <EEPROM.h>
 #include <EEPROMAnything.h>
@@ -88,7 +89,7 @@
 int bootCount = 0;
 
 //Create a remote debug object
-#ifndef REMOTE_DEBUG_DISABLED
+#ifndef _REMOTE_DEBUG_DISABLED
 RemoteDebug Debug;
 #endif
 
@@ -116,7 +117,7 @@ time_t now; //use as 'gmtime(&now);'
 
 //Program constants
 #define BUILDSTRING __FILE__+__DATE__
-#if !defined REMOTE_DEBUG_DISABLED
+#if !defined _REMOTE_DEBUG_DISABLED
 const char* BuildVersionName PROGMEM = " LWIPv2 Higher Bandwidth, RDebug enabled \n" ;
 #else
 const char* BuildVersionName PROGMEM = " LWIPv2 Higher Bandwidth, RDebug disabled \n"  ;
@@ -126,11 +127,10 @@ const char* BuildVersionName PROGMEM = " LWIPv2 Higher Bandwidth, RDebug disable
 const int nameLengthLimit = MAX_NAME_LENGTH; //Default max length of names in char[]
 const int acceptableAzimuthError = 1; //Indicates how close to target we want to get before we say its done. 
 const int slowAzimuthRange = 10; //Indicates how close to target we want to get before we slow down to a crawl.
-enum domeState               { DOME_IDLE, DOME_SLEWING, DOME_ABORT };
-const char* domeStateNames[] = { "DOME_IDLE","DOME_SLEWING","DOME_ABORT" };
+const char* domeStateNames[] = { "DOME_IDLE", "DOME_SLEWING", "DOME_ABORT", "DOME_ABORTED", "DOME_HALTED" };
 enum domeCmd                 { CMD_DOME_ABORT=0, CMD_DOME_SLEW=1, CMD_DOME_PARK=2, CMD_DOME_HOME=3, CMD_DOMEVAR_SET };
-enum shutterState            { SHUTTER_OPEN, SHUTTER_CLOSED, SHUTTER_OPENING, SHUTTER_CLOSING, SHUTTER_ERROR }; //ASCOM defined constants.
-const char* shutterStateNames[] = {"SHUTTER_OPEN","SHUTTER_CLOSED","SHUTTER_OPENING", "SHUTTER_CLOSING", "SHUTTER_ERROR" };
+const char* shutterStateNames[] = { "SHUTTER_OPEN", "SHUTTER_CLOSED", "SHUTTER_OPENING", "SHUTTER_CLOSING", "SHUTTER_ERROR", "SHUTTER_ABORTING", "SHUTTER_ABORTED", "SHUTTER_HALTED" };
+const char* connectionStateNames[] = { "CONNECTION_DISCONNECTED", "CONNECTION_CONNECTING", "CONNECTION_CONNECTED", "CONNECTION_DISCONNECTING" };
 enum shutterCmd              { CMD_SHUTTER_ABORT=0, CMD_SHUTTER_OPEN=4, CMD_SHUTTER_CLOSE=5, CMD_SHUTTERVAR_SET };
 const char* shutterCmdNames[] = { "SHUTTER_ABORT", "SHUTTER_OPEN", "SHUTTER_CLOSE", "SHUTTERVAR_SET" };
 //enum motorSpeed: uint8_t     { MOTOR_SPEED_OFF=0, MOTOR_SPEED_SLOW_SLEW=120, MOTOR_SPEED_FAST_SLEW=180 };
@@ -207,6 +207,9 @@ enum domeState domeStatus         = DOME_IDLE;
 enum domeState domeTargetStatus   = domeStatus;
 enum shutterState shutterStatus   = SHUTTER_CLOSED;
 enum shutterState targetShutterStatus = SHUTTER_CLOSED;
+enum connectionState connectionStatus = CONNECTION_DISCONNECTED;
+uint32_t pendingConnectionClientID = 0;
+uint32_t connectionStateChangedAt = 0;
 extern void publishFnStatus(void);
 
 //Timer flags
@@ -231,12 +234,10 @@ ESP8266WebServer server(80);
 ESP8266HTTPUpdateServer updater;
 
 //REST API client
-HTTPClient hClient;  
-WiFiClient wClient;  //Client for web requests
 WiFiClient mClient;  //Client for MQTT
 
 //MQTT client - use separate WiFi client as an attempt to separate issues. 
-PubSubClient client(mClient);
+PubSubClient client( mClient );
 volatile bool callbackFlag = false;
 bool timeoutFlag = false;
 volatile bool timerSet = false;
@@ -259,10 +260,18 @@ ETSTimer timeoutTimer;
 ETSTimer minuteTimer; 
 ETSTimer watchdogTimer; //watchdog for dome stuck. 
 
+//Use different status polling periods based on whether the dome is meant to be active or not. 
+const uint32_t ACTIVE_STATUS_PERIOD_MS = 1000;
+const uint32_t IDLE_STATUS_PERIOD_MS = 5000;
+uint32_t statusPollingPeriodMs = ACTIVE_STATUS_PERIOD_MS;
+
 void onCoarseTimer( void* ptr );
 void onFineTimer( void* ptr );
 void onTimeoutTimer( void* ptr );
 void onWatchdogTimer( void* ptr );
+void manageConnectionState(void);
+void updateStatusPollingPeriod(void);
+void appendDomeStatusFields(JsonObject root);
 
 //Private web handler methods
 ;
@@ -288,10 +297,10 @@ int connectionCtr = 0; //variable to count number of times something has connect
 extern const unsigned int NOT_CONNECTED;
 unsigned int connected = NOT_CONNECTED;
 static const char* DriverName PROGMEM    = "Skybadger.ESPDome";
-static const char* DriverVersion PROGMEM = "1.1";
+static const char* DriverVersion PROGMEM = "1.2";
 static const char* DriverInfo PROGMEM    = "Skybadger.ESPDome RESTful native device. ";
 static const char* Description PROGMEM   = "Skybadger ESP2866-based wireless ASCOM Dome controller";
-static const int32 InterfaceVersion PROGMEM = 1;
+static const int32 InterfaceVersion PROGMEM = 3;
 static const char* DriverType PROGMEM    = "dome"; //Must be a valid ASCOM type to be recognised by UDP discovery - lower case required 
 
 //ALPACA support additions
@@ -346,6 +355,7 @@ const uint8_t PCFControllerAddr   = 0x20;//32
 const uint8_t motorControllerAddr = 88;//7-bit == 0xB0;//176
 const uint8_t LCDControllerAddr   = 99;//0x61 (C2)0x63 (C6) 7-bit == 0xC6;//198
 const uint8_t ADCControllerAddr   = 0x48;//72
+const uint8_t FRAMControllerAddr  = 0x00;
 
 #include "I2CLCD.h"
 I2CLCD myLCD( LCDControllerAddr, 4, 16 );

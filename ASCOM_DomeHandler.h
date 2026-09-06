@@ -11,51 +11,57 @@ File to be included into relevant device REST setup
 
 #include <LinkedList.h>
 
-/* 
-extern int azimuth;
-extern int altitude;
-extern int parkPosition;
-extern int homePosition;
-extern bool canSyncAzimuth; 
-extern bool canSetAltitude, canSetAzimuth;
-extern bool atHome, atPark, canFindHome, canPark, canSetPark;
-extern bool canSetShutter;
-extern bool canSlave;
-extern LinkedList <cmdItem_t*> domeCmdList;
-extern LinkedList <cmdItem_t*> shutterCmdList;
-
-extern cmdItem_t* addDomeCmd( int, int, enum domeCmd, int ); 
-extern cmdItem_t* addShutterCmd( int, int, enum shutterCmd, int ); 
-*/
 bool hasArgIC( String& check, ESP8266WebServer& ref, bool caseSensitive );
+
+// Validate an unsigned integer using ArduinoJson's type conversion.
+bool checkUint32( String inval, uint32_t& out  ) 
+{
+  bool valid = false;
+  JsonDocument doc;
+  JsonVariant variant = doc.to<JsonVariant>();
+  variant.set( inval );
+  if ( variant.is<unsigned int>() && variant.as<unsigned int>() >= 0 ) 
+  {
+    out = variant.as<int>();
+    valid = true;
+  }   
+  return valid; 
+}
+
+bool validateClientTransactionIds(uint32_t& clientID, uint32_t& transID, const __FlashStringHelper* operation)
+{
+  const bool clientIDValid = checkUint32(server.arg("ClientID"), clientID);
+  const bool transIDValid = checkUint32(server.arg("ClientTransactionID"), transID);
+
+  if (clientIDValid && transIDValid)
+    return true;
+
+  String message;
+  JsonDocument doc;
+  JsonObject root = doc.to<JsonObject>();
+  jsonResponseBuilder(root, clientID, transID, ++serverTransID, operation, invalidValue, F("Invalid ClientID or ClientTransactionID"));
+  serializeJson(root, message);
+  server.send(400, F("application/json"), message);
+  return false;
+}
 
 void handleAltitudeGet(void)
 {
     String message;
-    uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
-    uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-    DynamicJsonBuffer jsonBuffer(128);
-    JsonObject& root = jsonBuffer.createObject();
+    //TEST
+    uint32_t clientID = 0;
+    uint32_t transID = 0;
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
+
+    if (!validateClientTransactionIds(clientID, transID, F("AltitudeGet")))
+      return;
+      
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("AltitudeGet"), Success, "" );    
 
-    //TODO
-    /*Check there is no pending altitude cmd that this needs to wait for. 
-    cmdItemPtr *pCmd;
-    for( int i=0; i< domeCmdList.size(); pCmd = domeCmdList[0] )
-     if (pCmd->cmd == CMD_DOMEVAR_SET && pCmd->value != -1 && !pCmd->cmdName.equalsIgnoreCase( "Altitude")")
-     {
-          root["Value"] = altitude;
-     }
-    else
-    {
-      
-    }
-    This is the sort of way we would like to behave
-    */
-    
     root["Value"] = altitude;
     //JsonArray& offsets = root.createNestedArray("Value");
-    root.printTo(message);
+    serializeJson(root, message);
     debugI( "AltitudeGet: %s", message.c_str() );    
     server.send(200, F("application/json"), message);
     return ;
@@ -64,11 +70,13 @@ void handleAltitudeGet(void)
 void handleAtHomeGet( void)
 {
     String message;
-    uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
-    uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
+    uint32_t clientID = 0;
+    uint32_t transID = 0;
+    if (!validateClientTransactionIds(clientID, transID, F("AtHome")))
+      return;
     boolean tempHome = false;
-    DynamicJsonBuffer jsonBuffer(128);
-    JsonObject& root = jsonBuffer.createObject();
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("AtHome"), 0, "" );  
     float delta = currentAzimuth - homePosition;
       
@@ -82,7 +90,7 @@ void handleAtHomeGet( void)
     }
     root["Value"] = tempHome;
     // replaced .. root["Value"] = ( abs( currentAzimuth - homePosition ) <= acceptableAzimuthError )? atHome = true : atHome = false;
-    root.printTo(message);
+    serializeJson(root, message);
     debugI( "AtHomeGet : %s", message.c_str() );
     server.send(200, F("application/json"), message);
     return ;
@@ -91,11 +99,13 @@ void handleAtHomeGet( void)
 void handleAtParkGet(void)
 {
     String message;
-    uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
-    uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
+    uint32_t clientID = 0;
+    uint32_t transID = 0;
+    if (!validateClientTransactionIds(clientID, transID, F("AtPark")))
+      return;
     boolean tempPark = false;
-    DynamicJsonBuffer jsonBuffer(128);
-    JsonObject& root = jsonBuffer.createObject();
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("AtPark"), 0, "" );    
     float delta = currentAzimuth - parkPosition;
     
@@ -108,23 +118,25 @@ void handleAtParkGet(void)
       tempPark = false;
     }
     root["Value"] = tempPark;
-    root.printTo(message);
+    serializeJson(root, message);
     debugI("AtParkGet: %s", message.c_str() );
-    server.send(200, F("application/json"), message);
+    
     return ;
 }
 
 void handleAzimuthGet(void)
 {
     String message;
-    uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
-    uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-    DynamicJsonBuffer jsonBuffer(128);
-    JsonObject& root = jsonBuffer.createObject();
+    uint32_t clientID = 0;
+    uint32_t transID = 0;
+    if (!validateClientTransactionIds(clientID, transID, F("Azimuth")))
+      return;
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("Azimuth"), 0, "" );    
     root["Value"] = normaliseFloat( currentAzimuth, 360.0);
     //JsonArray& offsets = root.createNestedArray("Value");
-    root.printTo(message);
+    serializeJson(root, message);
     debugI("AzimuthGet: %s", message.c_str() );
     server.send(200, F("application/json"), message);
     return ;
@@ -133,14 +145,16 @@ void handleAzimuthGet(void)
 void handleCanFindHomeGet(void)
 {
     String message;
-    uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
-    uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-    DynamicJsonBuffer jsonBuffer(256);
-    JsonObject& root = jsonBuffer.createObject();
+    uint32_t clientID = 0;
+    uint32_t transID = 0;
+    if (!validateClientTransactionIds(clientID, transID, F("CanFindHome")))
+      return;
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("CanFindHome"), 0, "" );    
     root["Value"] = canFindHome;
     //JsonArray& offsets = root.createNestedArray("Value");
-    root.printTo(message);
+    serializeJson(root, message);
     debugI("CanFindHomeGet: %s", message.c_str() );
     server.send(200, F("application/json"), message);
     return ;
@@ -149,16 +163,18 @@ void handleCanFindHomeGet(void)
 void handleCanParkGet(void)
 {
     String message;
-    uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
-    uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
+    uint32_t clientID = 0;
+    uint32_t transID = 0;
+    if (!validateClientTransactionIds(clientID, transID, F("CanPark")))
+      return;
 
-    DynamicJsonBuffer jsonBuff(256);
-    JsonObject& root = jsonBuff.createObject();
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
 
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("CanPark"), 0, "" );    
     root["Value"] = canPark;
     //JsonArray& offsets = root.createNestedArray("Value");
-    root.printTo(message);
+    serializeJson(root, message);
     debugI("CanParkGet: %s", message.c_str() );    
     server.send(200, F("application/json"), message);
     return ;
@@ -167,14 +183,16 @@ void handleCanParkGet(void)
 void handleCanSetAltitudeGet(void)
 {
     String message;
-    uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
-    uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-    DynamicJsonBuffer jsonBuffer(256);
-    JsonObject& root = jsonBuffer.createObject();
+    uint32_t clientID = 0;
+    uint32_t transID = 0;
+    if (!validateClientTransactionIds(clientID, transID, F("CanSetAltitude")))
+      return;
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("CanSetAltitude"), 0, "" );    
     root["Value"] = canSetAltitude;
     //JsonArray& offsets = root.createNestedArray("Value");
-    root.printTo(message);
+    serializeJson(root, message);
     debugI("CanSetAltitudeGet: %s", message.c_str() );    
     server.send(200, F("application/json"), message);
     return ;  
@@ -183,13 +201,15 @@ void handleCanSetAltitudeGet(void)
 void handleCanSetAzimuthGet(void)
 {
     String message;
-    uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
-    uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-    DynamicJsonBuffer jsonBuffer(256);
-    JsonObject& root = jsonBuffer.createObject();
+    uint32_t clientID = 0;
+    uint32_t transID = 0;
+    if (!validateClientTransactionIds(clientID, transID, F("CanSetAzimuth")))
+      return;
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("CanSetAzimuth"), Success, "" );    
     root["Value"] = canSetAzimuth;
-    root.printTo(message);
+    serializeJson(root, message);
     debugI( "CanSetAzimuthGet: %s", message.c_str() );
     server.send(200, F("application/json"), message);
     return ;  
@@ -198,13 +218,15 @@ void handleCanSetAzimuthGet(void)
 void handleCanSetParkGet(void)
 {
     String message;
-    uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
-    uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-    DynamicJsonBuffer jsonBuffer(256);
-    JsonObject& root = jsonBuffer.createObject();
+    uint32_t clientID = 0;
+    uint32_t transID = 0;
+    if (!validateClientTransactionIds(clientID, transID, F("CanSetPark")))
+      return;
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("CanSetPark"), 0, "" );    
     root["Value"] = canSetPark;
-    root.printTo(message);
+    serializeJson(root, message);
     debugI( "CanSetParkGet: %s", message.c_str() );
     server.send(200, F("application/json"), message);
     return ;  
@@ -213,14 +235,16 @@ void handleCanSetParkGet(void)
 void handleCanSetShutterGet(void)
 {
     String message;
-    uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
-    uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-    DynamicJsonBuffer jsonBuffer(256);
-    JsonObject& root = jsonBuffer.createObject();
+    uint32_t clientID = 0;
+    uint32_t transID = 0;
+    if (!validateClientTransactionIds(clientID, transID, F("CanSetShutter")))
+      return;
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("CanSetShutter"), Success, "" );    
     root["Value"] = canSetShutter;
     //JsonArray& offsets = root.createNestedArray("Value");
-    root.printTo(message);
+    serializeJson(root, message);
     debugI( "CanSetShutterGet: %s", message.c_str() );
     server.send(200, F("application/json"), message);
     return ;  
@@ -229,13 +253,15 @@ void handleCanSetShutterGet(void)
 void handleCanSlaveGet(void)
 {
     String message;
-    uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
-    uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-    DynamicJsonBuffer jsonBuffer(256);
-    JsonObject& root = jsonBuffer.createObject();
+    uint32_t clientID = 0;
+    uint32_t transID = 0;
+    if (!validateClientTransactionIds(clientID, transID, F("CanSlave")))
+      return;
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("CanSlave"), Success, "" );
     root["Value"] = canSlave;
-    root.printTo(message);
+    serializeJson(root, message);
     debugI( "CanSlaveGet: %s", message.c_str() );
     server.send(200, F("application/json"), message);
     return ;  
@@ -244,14 +270,16 @@ void handleCanSlaveGet(void)
 void handleCanSyncAzimuthGet(void)
 {
     String message;
-    uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
-    uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-    DynamicJsonBuffer jsonBuffer(256);
-    JsonObject& root = jsonBuffer.createObject();
+    uint32_t clientID = 0;
+    uint32_t transID = 0;
+    if (!validateClientTransactionIds(clientID, transID, F("CanSyncAzimuth")))
+      return;
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
     
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("CanSyncAzimuth"), Success, "" );    
     root["Value"] = canSyncAzimuth;
-    root.printTo(message);
+    serializeJson(root, message);
     debugI( "CanSyncAzimuthGet: %s", message.c_str() );
     server.send(200, F("application/json"), message);
     return ;  
@@ -261,12 +289,14 @@ void handleCanSyncAzimuthGet(void)
 void handleSlavedGet(void)
 {
     String message;
-    uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
-    uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-    DynamicJsonBuffer jsonBuffer(256);
-    JsonObject& root = jsonBuffer.createObject();
+    uint32_t clientID = 0;
+    uint32_t transID = 0;
+    if (!validateClientTransactionIds(clientID, transID, F("Slaved")))
+      return;
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
     root["Value"] = slaved;
-    root.printTo(message);
+    serializeJson(root, message);
     debugI( "SlavedGet: %s", message.c_str() );
     server.send(200, F("application/json"), message);
     return ;  
@@ -275,15 +305,17 @@ void handleSlavedGet(void)
 void handleSlavedPut(void)
 {
     String message;
-    uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
-    uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
+    uint32_t clientID = 0;
+    uint32_t transID = 0;
+    if (!validateClientTransactionIds(clientID, transID, F("Slaved")))
+      return;
 
-    DynamicJsonBuffer jsonBuffer(256);
-    JsonObject& root = jsonBuffer.createObject();
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
     
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("Slaved"), notImplemented, F("Not Implemented") );    
     root["Value"] = false;
-    root.printTo(message);
+    serializeJson(root, message);
     debugI( "SlavedPut: %s", message.c_str() );
     server.send(200, F("application/json"), message);
     return ;  
@@ -292,22 +324,17 @@ void handleSlavedPut(void)
 void handleSlewingGet(void)
 {
   String message;
-  DynamicJsonBuffer jsonBuffer(256);
-  JsonObject& root = jsonBuffer.createObject();
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
 
-  String argsToSearchFor[] = {"clientID","clientTransactionID"};
   uint32_t clientID = 0;
   uint32_t transID = 0;
-   
-  if( hasArgIC( argsToSearchFor[0], server, false ) )
-     clientID = (uint32_t)server.arg( argsToSearchFor[0] ).toInt();
-  
-  if( hasArgIC( argsToSearchFor[1], server, false ) )
-     transID = (uint32_t)server.arg( argsToSearchFor[1] ).toInt();
+  if (!validateClientTransactionIds(clientID, transID, F("Slewing")))
+    return;
 
   jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("Slewing"), Success, "" );    
-  root["Value"] = ( domeStatus == DOME_SLEWING ) ? true:false;
-  root.printTo(message);
+  root["Value"] = (domeStatus == DOME_SLEWING || shutterStatus == SHUTTER_OPENING || shutterStatus == SHUTTER_CLOSING || shutterStatus == SHUTTER_ABORTING);
+  serializeJson(root, message);
   debugD( "SlewingGet: %s", message.c_str() );
   server.send(200, F("application/json"), message);
   return ; 
@@ -316,18 +343,13 @@ void handleSlewingGet(void)
 void handleAbortSlewPut(void)
 {
   String message;
-  DynamicJsonBuffer jsonBuffer(256);
-  JsonObject& root = jsonBuffer.createObject();
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
 
-  String argsToSearchFor[] = {"clientID","clientTransactionID"};
   uint32_t clientID =0;
   uint32_t transID =0;
-   
-  if( hasArgIC( argsToSearchFor[0], server, false ) )
-     clientID = (uint32_t)server.arg( argsToSearchFor[0] ).toInt();
-  
-  if( hasArgIC( argsToSearchFor[1], server, false ) )
-     transID = (uint32_t)server.arg( argsToSearchFor[1] ).toInt();
+  if (!validateClientTransactionIds(clientID, transID, F("AbortSlew")))
+    return;
 
 #if defined ACCEPT_CONNECTED_CLIENT_ONLY
   if( connected != clientID )
@@ -354,7 +376,7 @@ void handleAbortSlewPut(void)
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("AbortSlew"), Success, "" );
   }
   root["value"] = connected; //return the current connected Client ID.
-  root.printTo(message);
+  serializeJson(root, message);
   debugI( "AbortSlewPut: %s", message.c_str() );    
   server.send(200, F("application/json"), message);
   return ;   
@@ -363,27 +385,22 @@ void handleAbortSlewPut(void)
 void handleShutterStatusGet(void)
 {
   String message;
-  DynamicJsonBuffer jsonBuffer(256);
-  JsonObject& root = jsonBuffer.createObject();
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
 
-  String argsToSearchFor[] = {"clientID","clientTransactionID"};
   uint32_t clientID =0;
   uint32_t transID =0;
-   
-  if( hasArgIC( argsToSearchFor[0], server, false ) )
-     clientID = (uint32_t)server.arg( argsToSearchFor[0] ).toInt();
-  
-  if( hasArgIC( argsToSearchFor[1], server, false ) )
-     transID = (uint32_t)server.arg( argsToSearchFor[1] ).toInt();
+  if (!validateClientTransactionIds(clientID, transID, F("ShutterStatus")))
+    return;
 
   //anyone can get the shutter status.
   jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("ShutterStatus"), Success, "" );
   
-  root.set<int>("Value", (int) shutterStatus );
+  root["Value"] = (shutterStatus <= SHUTTER_ERROR) ? static_cast<int>(shutterStatus) : static_cast<int>(SHUTTER_ERROR);
   //root.set<int>("Value", )
   //0 = Open, 1 = Closed, 2 = Opening, 3 = Closing, 4 = Shutter status error
   //JsonArray& offsets = root.createNestedArray("Value");
-  root.printTo(message);
+  serializeJson(root, message);
   debugI( "ShutterStatusGet: %s", message.c_str() );      
   server.send(200, F("application/json"), message);
   return ;   
@@ -392,18 +409,13 @@ void handleShutterStatusGet(void)
 void handleCloseShutterPut(void)
 {
   String message;
-  DynamicJsonBuffer jsonBuffer(256);
-  JsonObject& root = jsonBuffer.createObject();
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
 
-  String argsToSearchFor[] = {"clientID","clientTransactionID"};
   uint32_t clientID =0;
   uint32_t transID =0;
-   
-  if( hasArgIC( argsToSearchFor[0], server, false ) )
-     clientID = (uint32_t)server.arg( argsToSearchFor[0] ).toInt();
-  
-  if( hasArgIC( argsToSearchFor[1], server, false ) )
-     transID = (uint32_t)server.arg( argsToSearchFor[1] ).toInt();
+  if (!validateClientTransactionIds(clientID, transID, F("CloseShutter")))
+    return;
 
 #if defined ACCEPT_CONNECTED_CLIENT_ONLY
    if( connected != clientID ) 
@@ -428,7 +440,7 @@ void handleCloseShutterPut(void)
    } 
   
   //JsonArray& offsets = root.createNestedArray("Value");
-  root.printTo(message);
+  serializeJson(root, message);
   debugI( "CloseShutterPut: %s", message.c_str() );        
   server.send(200, F("application/json"), message);
   return ;   
@@ -438,18 +450,13 @@ void handleCloseShutterPut(void)
 void handleFindHomePut(void)
 {
    String message;
-   DynamicJsonBuffer jsonBuffer(256);
-   JsonObject& root = jsonBuffer.createObject();
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
 
-   String argsToSearchFor[] = {"clientID","clientTransactionID"};
    uint32_t clientID = 0;
    uint32_t transID = 0;
-   
-  if( hasArgIC( argsToSearchFor[0], server, false ) )
-     clientID = (uint32_t)server.arg( argsToSearchFor[0] ).toInt();
-  
-  if( hasArgIC( argsToSearchFor[1], server, false ) )
-     transID = (uint32_t)server.arg( argsToSearchFor[1] ).toInt();
+   if (!validateClientTransactionIds(clientID, transID, F("FindHome")))
+     return;
 
 #if defined ACCEPT_CONNECTED_CLIENT_ONLY
    if ( connected != clientID ) 
@@ -463,7 +470,7 @@ void handleFindHomePut(void)
       addDomeCmd( clientID, transID, "", CMD_DOME_SLEW, homePosition ); 
       jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("FindHome"), Success, "" );
    }
-   root.printTo(message);
+   serializeJson(root, message);
    debugI( "FindHomePut: %s", message.c_str() );        
    server.send(200, F("application/json"), message);
    return ;   
@@ -472,18 +479,13 @@ void handleFindHomePut(void)
 void handleOpenShutterPut(void)
 {
    String message;
-   DynamicJsonBuffer jsonBuffer(256);
-   JsonObject& root = jsonBuffer.createObject();
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
 
-   String argsToSearchFor[] = {"clientID","clientTransactionID"};
    uint32_t clientID = 0;
    uint32_t transID = 0;
-   
-  if( hasArgIC( argsToSearchFor[0], server, false ) )
-     clientID = (uint32_t)server.arg( argsToSearchFor[0] ).toInt();
-  
-  if( hasArgIC( argsToSearchFor[1], server, false ) )
-     transID = (uint32_t)server.arg( argsToSearchFor[1] ).toInt();
+   if (!validateClientTransactionIds(clientID, transID, F("OpenShutter")))
+     return;
    
  #if defined ACCEPT_CONNECTED_CLIENT_ONLY
    //in this driver model,each device has a separate ip address ,so can only be one device. hence ignore device-number
@@ -514,7 +516,7 @@ void handleOpenShutterPut(void)
    {
       jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("OpenShutter"), invalidOperation, F("Dome shutter not idle or errored") );       
    }
-   root.printTo(message);
+   serializeJson(root, message);
    debugI( "OpenShutterPut: %s", message.c_str() );           
    server.send( 200, F("application/json"), message);
    return ;   
@@ -527,18 +529,13 @@ void handleOpenShutterPut(void)
 void handleSetParkPut(void)
 {
    String message;
-   DynamicJsonBuffer jsonBuffer(256);
-   JsonObject& root = jsonBuffer.createObject();
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
 
-   String argsToSearchFor[] = {"clientID","clientTransactionID",};
    uint32_t clientID = 0;
    uint32_t transID = 0;
-   
-  if( hasArgIC( argsToSearchFor[0], server, false ) )
-     clientID = (uint32_t)server.arg( argsToSearchFor[0] ).toInt();
-  
-  if( hasArgIC( argsToSearchFor[1], server, false ) )
-     transID = (uint32_t)server.arg( argsToSearchFor[1] ).toInt();
+   if (!validateClientTransactionIds(clientID, transID, F("SetPark")))
+     return;
     
  #if defined ACCEPT_CONNECTED_CLIENT_ONLY
   if( connected != clientID )
@@ -552,7 +549,7 @@ void handleSetParkPut(void)
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SetPark"), Success, "" );    
   }
 
-   root.printTo(message);
+   serializeJson(root, message);
    debugI( "SetParkPut: %s", message.c_str() );            
    server.send(200, F("application/json"), message);
    return ;      
@@ -562,18 +559,13 @@ void handleSetParkPut(void)
 void handleParkPut(void)
 {
    String message;
-   DynamicJsonBuffer jsonBuffer(256);
-   JsonObject& root = jsonBuffer.createObject();
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
 
-   String argsToSearchFor[] = {"clientID","clientTransactionID",};
    uint32_t clientID = 0;
    uint32_t transID = 0;
-   
-  if( hasArgIC( argsToSearchFor[0], server, false ) )
-     clientID = (uint32_t)server.arg( argsToSearchFor[0] ).toInt();
-  
-  if( hasArgIC( argsToSearchFor[1], server, false ) )
-     transID = (uint32_t)server.arg( argsToSearchFor[1] ).toInt();
+   if (!validateClientTransactionIds(clientID, transID, F("Park")))
+     return;
     
 #if defined ACCEPT_CONNECTED_CLIENT_ONLY
   if( connected != clientID ) 
@@ -586,7 +578,7 @@ void handleParkPut(void)
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("Park"), Success, "" );    
    }
 
-   root.printTo(message);
+   serializeJson(root, message);
    debugI( "ParkPut: %s", message.c_str() );
    server.send(200, "application/json", message);
    return ;      
@@ -596,18 +588,14 @@ void handleSlewToAltitudePut(void)
 {
    String message;
    float location = 0.0F;
-   DynamicJsonBuffer jsonBuffer(256);
-   JsonObject& root = jsonBuffer.createObject();
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
 
    String argsToSearchFor[] = {"clientID","clientTransactionID","altitude"};
    uint32_t clientID = 0;
    uint32_t transID = 0;
-   
-  if( hasArgIC( argsToSearchFor[0], server, false ) )
-     clientID = (uint32_t)server.arg( argsToSearchFor[0] ).toInt();
-  
-  if( hasArgIC( argsToSearchFor[1], server, false ) )
-     transID = (uint32_t)server.arg( argsToSearchFor[1] ).toInt();
+   if (!validateClientTransactionIds(clientID, transID, F("SlewToAltitude")))
+     return;
   
   if( hasArgIC( argsToSearchFor[2], server, false ) )
      location = (boolean) server.arg( argsToSearchFor[2]).toFloat();
@@ -641,7 +629,7 @@ void handleSlewToAltitudePut(void)
   else
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAltitude"), valueNotSet, F("Altitude not provided") );       
   
-  root.printTo(message);
+  serializeJson(root, message);
   debugI( "SlewToAltitudePut: %s", message.c_str() );    
   server.send(200, F("application/json"), message);
   return ;      
@@ -660,14 +648,11 @@ void handleSlewToAzimuthPut(void)
    
    float location = 0.0F;
    
-   DynamicJsonBuffer jsonBuffer(256);
-   JsonObject& root = jsonBuffer.createObject();
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
    
-  if( hasArgIC( argsToSearchFor[0], server, false ) )
-    clientID = (uint32_t)server.arg( argsToSearchFor[0] ).toInt();
-  
-  if( hasArgIC( argsToSearchFor[1], server, false ) )
-     transID = (uint32_t)server.arg( argsToSearchFor[1] ).toInt();
+  if (!validateClientTransactionIds(clientID, transID, F("SlewToAzimuth")))
+    return;
   
   if( hasArgIC( argsToSearchFor[2], server, false ) )
     location = server.arg( argsToSearchFor[2]).toFloat();
@@ -704,7 +689,7 @@ void handleSlewToAzimuthPut(void)
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SlewToAzimuth"), valueNotSet, F("Azimuth argument not found") );
   }
 
-  root.printTo(message);
+  serializeJson(root, message);
   debugI( "SlewToAzimuthPut: %s", message.c_str() );    
   server.send(200, F("application/json"), message);
   return ;
@@ -718,18 +703,15 @@ void handleSyncToAzimuthPut(void)
    String message;
    float location=0;
 
-   DynamicJsonBuffer jsonBuffer(256);
-   JsonObject& root = jsonBuffer.createObject();
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
 
    String argsToSearchFor[] = {"clientID","clientTransactionID","Azimuth"};
    uint32_t clientID = 0;
    uint32_t transID = 0;
     
-  if( hasArgIC( argsToSearchFor[0], server, false ) )
-    clientID = (uint32_t)server.arg( argsToSearchFor[0] ).toInt();
-  
-  if( hasArgIC( argsToSearchFor[1], server, false ) )
-     transID = (uint32_t)server.arg( argsToSearchFor[1] ).toInt();
+  if (!validateClientTransactionIds(clientID, transID, F("SyncToAzimuth")))
+    return;
   
   if( hasArgIC( argsToSearchFor[2], server, false ) )
      location = server.arg( argsToSearchFor[2]).toFloat();
@@ -768,10 +750,99 @@ void handleSyncToAzimuthPut(void)
   else
     jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("SyncToAzimuth"), valueNotSet, F("Argument not found") );       
 
-  root.printTo(message);
+  serializeJson(root, message);
   debugI( "SyncToAzimuthPut: %s", message.c_str() );    
   server.send(200, F("application/json"), message);
   return ;
+}
+
+void handleConnectPut(void)
+{
+  String message;
+  uint32_t clientID = 0;
+  uint32_t transID = 0;
+  if (!validateClientTransactionIds(clientID, transID, F("Connect")))
+    return;
+
+  JsonDocument doc;
+  JsonObject root = doc.to<JsonObject>();
+  if (connectionStatus == CONNECTION_CONNECTED && connected != clientID)
+    jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("Connect"), invalidOperation, F("Another client is already connected"));
+  else
+  {
+    pendingConnectionClientID = clientID;
+    connectionStatus = (connected == clientID) ? CONNECTION_CONNECTED : CONNECTION_CONNECTING;
+    connectionStateChangedAt = millis();
+    jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("Connect"), Success, "");
+  }
+  serializeJson(root, message);
+  server.send(200, F("application/json"), message);
+}
+
+void handleDisconnectPut(void)
+{
+  String message;
+  uint32_t clientID = 0;
+  uint32_t transID = 0;
+  if (!validateClientTransactionIds(clientID, transID, F("Disconnect")))
+    return;
+
+  JsonDocument doc;
+  JsonObject root = doc.to<JsonObject>();
+  if (connected != NOT_CONNECTED && connected != clientID)
+    jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("Disconnect"), notConnected, F("This client does not own the connection"));
+  else
+  {
+    pendingConnectionClientID = clientID;
+    connectionStatus = (connected == NOT_CONNECTED) ? CONNECTION_DISCONNECTED : CONNECTION_DISCONNECTING;
+    connectionStateChangedAt = millis();
+    jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("Disconnect"), Success, "");
+  }
+  serializeJson(root, message);
+  server.send(200, F("application/json"), message);
+}
+
+void handleConnectingGet(void)
+{
+  String message;
+  uint32_t clientID = 0;
+  uint32_t transID = 0;
+  if (!validateClientTransactionIds(clientID, transID, F("Connecting")))
+    return;
+
+  JsonDocument doc;
+  JsonObject root = doc.to<JsonObject>();
+  jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("Connecting"), Success, "");
+  root["Value"] = (connectionStatus == CONNECTION_CONNECTING || connectionStatus == CONNECTION_DISCONNECTING);
+  serializeJson(root, message);
+  server.send(200, F("application/json"), message);
+}
+
+void handleDeviceStateGet(void)
+{
+  String message;
+  uint32_t clientID = 0;
+  uint32_t transID = 0;
+  if (!validateClientTransactionIds(clientID, transID, F("DeviceState")))
+    return;
+
+  JsonDocument snapshotDoc;
+  JsonObject snapshot = snapshotDoc.to<JsonObject>();
+  appendDomeStatusFields(snapshot);
+
+  JsonDocument doc;
+  JsonObject root = doc.to<JsonObject>();
+  jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("DeviceState"), Success, "");
+  JsonArray values = root["Value"].to<JsonArray>();
+  for (JsonPair pair : snapshot)
+  {
+    JsonObject stateValue = values.add<JsonObject>();
+    stateValue["Name"] = pair.key();
+    stateValue["Value"].set(pair.value());
+  }
+
+  serializeJson(root, message);
+  server.send(200, F("application/json"), message);
 }
 
 #endif

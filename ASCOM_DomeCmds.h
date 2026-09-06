@@ -150,7 +150,7 @@ File to be included into relevant device REST setup
       String cmd = "";
       switch ( newCmd )
       {
-        // HOME and PARK are handled by slew commands but these entries satify the compiler warnings. 
+        // HOME and PARK are handled by slew commands but these entries satisfy the compiler warnings. 
         case CMD_DOME_HOME:
           targetAzimuth = (float) homePosition;
           domeLockDetectedCount = false;
@@ -418,7 +418,7 @@ File to be included into relevant device REST setup
    * Handler for domeAbort command
    * if an abort is called, this function clears down the async command stack
    * and puts the dome in a safe mode of not slewing and closed shutter. 
-   * closed shutter seems fairly extreme though. 
+   * closing the shutter seems fairly extreme though. 
    * @param void  
    * @return void 
    */ 
@@ -655,15 +655,16 @@ int shutterAltitude( int newAngle )
     String output = "";
     int response = 0;
     float value;
-    DynamicJsonBuffer jsonBuff(256);
+    JsonDocument doc;
     
     response = restQuery( targetHost , "/bearing" , "", output, HTTPMethod::HTTP_GET );
     debugD( "[HTTPClient response ] response code: %i, response: %s", (int) response, output.c_str() );
-    JsonObject& root = jsonBuff.parse( output );
+    DeserializationError error = deserializeJson(doc, output);
+    JsonObject root = doc.as<JsonObject>();
     
-    if ( response == HTTP_CODE_OK && root.success() && root.containsKey(F("bearing")) )
+    if ( response == HTTP_CODE_OK && !error && root["bearing"].is<float>() )
     {
-      value = (float) root.get<float>("bearing"); //initialise current setting
+      value = root["bearing"].as<float>(); //initialise current setting
       status = true;
     }
     else
@@ -677,7 +678,7 @@ int shutterAltitude( int newAngle )
   
   /*
    * Query a url for a parsed json output
-   * check return code with object.success();
+   * Check the DeserializationError returned by deserializeJson().
    */ 
   int restQuery( String host, String uri, String args, String& response, enum HTTPMethod method)
   {
@@ -686,8 +687,8 @@ int shutterAltitude( int newAngle )
     long int endTime;
     WiFiClient wclient;
     HTTPClient httpClient; 
-    hClient.setTimeout ( (uint16_t) 5000 );    
-    //hClient.setReuse( HTTP_CLIENT_REUSE );    
+    httpClient.setTimeout ( (uint16_t) 750 );    
+    httpClient.setReuse( false );    
     
     debugD("restQuery request - uri:%s, path:%s, args:%s, method:%i", host.c_str(), uri.c_str(), args.c_str(), (enum HTTPMethod) method );
    
@@ -754,7 +755,7 @@ int shutterAltitude( int newAngle )
         break;
       
       case HTTPMethod::HTTP_PUT:
-        hClient.addHeader(F("Content-Type"), F("application/x-www-form-urlencoded") );
+        httpClient.addHeader(F("Content-Type"), F("application/x-www-form-urlencoded") );
         httpCode = httpClient.PUT( args );             
         break;
       
@@ -810,16 +811,17 @@ int shutterAltitude( int newAngle )
     int response = 0;
     String outbuf = "";
     String path = "";
-    DynamicJsonBuffer jsonBuff(250);    
+    JsonDocument doc;
     
     debugV("GetBearing setup - host uri: %s \n", host.c_str() );
     response = restQuery( host, "/encoder/bearing", "", outbuf, HTTP_GET );
     
-    JsonObject& root = jsonBuff.parse( outbuf );
+    DeserializationError error = deserializeJson(doc, outbuf);
+    JsonObject root = doc.as<JsonObject>();
     //Sometimes we get a good HTTP code but still no body... 
     if ( response == HTTP_CODE_OK ) 
     {            
-      if( root.success() && root.containsKey( "bearing" ) )
+      if( !error && root["bearing"].is<float>() )
       {
         localBearing = (float) root["bearing"];
         lastBearing = localBearing;
@@ -850,14 +852,14 @@ int shutterAltitude( int newAngle )
       }
       else //can't retrieve the bearing
       {
-        debugV( "Response code: %i, parse success: %i, json data: %s", response, (int) root.success(), outbuf.c_str() );
+        debugV( "Response code: %i, parse error: %s, json data: %s", response, error.c_str(), outbuf.c_str() );
         debugW( "No reading, using last: %f ", lastBearing );
         localBearing = lastBearing;
       }
     }//HTTP_CODE_OK
     else //Hvent got a good response code
     {
-      debugV( "Response code: %i, parse success: %i, json data: %s", response, (int) root.success(), outbuf.c_str() );
+      debugV( "Response code: %i, parse error: %s, json data: %s", response, error.c_str(), outbuf.c_str() );
       debugW( "No reading, using last: %f ", lastBearing );
       localBearing = lastBearing;
     }
@@ -901,22 +903,23 @@ int shutterAltitude( int newAngle )
     String outbuf;
     long int duration = millis();
     enum shutterState value = SHUTTER_ERROR;
-    DynamicJsonBuffer jsonBuff(250);
+    JsonDocument doc;
 
     int response = restQuery( host , "/status", "", outbuf, HTTP_GET  );
     
     if( response == HTTP_CODE_OK ) 
     {
-      JsonObject& root = jsonBuff.parse( outbuf ); 
-      if ( root.success() && root.containsKey("status") )
+      DeserializationError error = deserializeJson(doc, outbuf);
+      JsonObject root = doc.as<JsonObject>();
+      if ( !error && root["status"].is<int>() )
       {
-        value = ( enum shutterState) root.get<int>("status");
+        value = static_cast<enum shutterState>(root["status"].as<int>());
       }
       else
       {
         value = shutterStatus; //Report the last response in the meantime. 
         debugW("Shutter controller call not successful, buffer: %s", outbuf.c_str() );
-        debugV("Shutter response: %i, parse result %i, json data %s", (int) response, (int) root.success(), outbuf.c_str() );   
+        debugV("Shutter response: %i, parse error %s, json data %s", (int) response, error.c_str(), outbuf.c_str() );
       }
     }
 

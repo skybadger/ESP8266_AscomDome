@@ -1,0 +1,10 @@
+{
+  "additionalFiles": "..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..",
+  "builtInToolsFolders": "",
+  "compiler.optimization_flags": "",
+  "customBuildProperties": "build.warn_data_percentage=75",
+  "fqbn": "esp8266:esp8266:nodemcuv2",
+  "hardwareFolders": "C:\\Users\\mharrison.I-BADGER\\AppData\\Local\\Arduino15\\packages",
+  "otherLibrariesFolders": "C:\\Mikes\\software\\Skybadgers-Git-Repository\\libraries,C:\\Users\\mharrison.I-BADGER\\Documents\\Arduino\\libraries",
+  "sketchLocation": "C:\\Mikes\\software\\Skybadgers-Git-Repository\\ESP8266_AscomDome"
+}

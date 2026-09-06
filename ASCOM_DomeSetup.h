@@ -30,38 +30,47 @@ void handlerNotFound()
   int responseCode = 400;
   uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
   uint32_t transID = (uint32_t)server.arg("ClientTransactionID").toInt();
-  DynamicJsonBuffer jsonBuffer(250);
-  JsonObject& root = jsonBuffer.createObject();
+  JsonDocument doc;
+  JsonObject root = doc.to<JsonObject>();
   jsonResponseBuilder( root, clientID, transID, ++serverTransID, F("HandlerNotFound"), invalidOperation , F("No REST handler found for argument - check ASCOM Dome v2 specification") );    
   root["Value"] = 0;
-  root.printTo(message);
+  serializeJson(root, message);
   server.send(responseCode, F("application/json"), message);
+}
+
+void appendDomeStatusFields(JsonObject root)
+{
+  String timestamp;
+  getTimeAsString(timestamp);
+
+  root["TimeStamp"] = timestamp;
+  root["Altitude"] = currentAltitude;
+  root["AtHome"] = (abs(currentAzimuth - homePosition) <= acceptableAzimuthError);
+  root["AtPark"] = (abs(currentAzimuth - parkPosition) <= acceptableAzimuthError);
+  root["Azimuth"] = currentAzimuth;
+  root["ShutterStatus"] = (shutterStatus <= SHUTTER_ERROR) ? static_cast<int>(shutterStatus) : static_cast<int>(SHUTTER_ERROR);
+  root["Slewing"] = (domeStatus == DOME_SLEWING || shutterStatus == SHUTTER_OPENING || shutterStatus == SHUTTER_CLOSING || shutterStatus == SHUTTER_ABORTING);
+  root["DomeControllerState"] = domeStateNames[static_cast<int>(domeStatus)];
+  root["ShutterControllerState"] = shutterStateNames[static_cast<int>(shutterStatus)];
+  root["ConnectionState"] = connectionStateNames[static_cast<int>(connectionStatus)];
+  root["TargetAzimuth"] = targetAzimuth;
+  root["MotorSpeed"] = motorSpeed;
+  root["MotorDirection"] = motorDirection;
 }
 
 void handlerStatus()
 {
   String message;
-  String timestamp;
   int responseCode = 400;
-  DynamicJsonBuffer jsonBuffer(250);
-  JsonObject& root = jsonBuffer.createObject();
+  JsonDocument doc;
+  JsonObject root = doc.to<JsonObject>();
 
-  getTimeAsString2( timestamp );
+  appendDomeStatusFields(root);
+  root["BuildVersion"] = String(__DATE__) + FPSTR(BuildVersionName);
   
-  //Status info
-  root["time"]                  = timestamp;
-  root["build version"]         = String(__DATE__) + FPSTR(BuildVersionName);
-  root["dome status"]           = (int) domeStatus;
-  root["dome status string"]    = domeStateNames[domeStatus];
-  root["shutter status"]        = (int) shutterStatus;
-  root["shutter status string"] = shutterStateNames[shutterStatus];
-  root["motor speed"]           = motorSpeed;
-  root["motor direction"]       = motorDirection;
-  root["target azimuth"]        = targetAzimuth;
-  root["current azimuth"]       = currentAzimuth;
-  root["current altitude"]      = currentAltitude;
+  serializeJson(root, message);
+  debugI( "Status requested: %s", message );
   
-  root.printTo(message);
   server.send(responseCode=200, F("application/json"), message);
 }
 
