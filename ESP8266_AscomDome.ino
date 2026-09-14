@@ -38,7 +38,7 @@
    12, Provide option to not use connected client id for use in brownouts - done
    13, Adjust slow rate to almost max rate.
    14, add call to set slow rates and max rates via API.
-   15, Add action to backup crawling over lockups and attempt at full speed - done 
+   15, Add action to backup crawling over lockups and attempt at full speed - done
 
   To test:
   Download curl for your operating system. Linux variants and Windows powershell should already have it.
@@ -51,7 +51,7 @@
   pubsub library for MQTT
   ALPACA for ASCOM 6.5+
   Expressif ESP8266 board library for arduino - configured for v2.7
-  EEPROMAnything library - added string handler since it doesn't do char* strings well - moving to FRAM library when ready . 
+  EEPROMAnything library - added string handler since it doesn't do char* strings well - moving to FRAM library when ready .
   GDB - not really used
   RemoteDebug - used more and more.
   +
@@ -87,11 +87,11 @@
   21/09/2025 Fixed Alpaca management code - versions are now correct data format, URLs now have correct handlers, UDP service now runs and responds.
   Used Confirm Universal to validate. Still returns some non-compliant IDs when conform provides them , however meets normal conditions fine.
   Will NOT try to fix since that means fixing web server handling service.
-  30/05/2026 updated ASCOMAPICommonRest functions to prevent bad parameteres and badly-cased arguments through, to get rid of a lot of CONFORM noise. 
-  Added use of isValidRequest to check parameter casing and values in ranges for types. 
-  01/08/2026 Migrated handlers to use JsonVariant and JsonDoc as per ArduinoJson v7 to enforce checks for non-compliant ids to get rid aof a lot of the compliance check warnings. 
-  Added handlers for more async as per interface v3 but not fully integrated. 
-  Added status handler as per interface v3. 
+  30/05/2026 updated ASCOMAPICommonRest functions to prevent bad parameteres and badly-cased arguments through, to get rid of a lot of CONFORM noise.
+  Added use of isValidRequest to check parameter casing and values in ranges for types.
+  01/08/2026 Migrated handlers to use JsonVariant and JsonDoc as per ArduinoJson v7 to enforce checks for non-compliant ids to get rid aof a lot of the compliance check warnings.
+  Added handlers for more async as per interface v3 but not fully integrated.
+  Added status handler as per interface v3.
 
   Bugs
   Theres a bug in here somewhere which causes a reboot and a client clost connection occasionally enough to be a problem, causing Voyager to lose 'connected' state
@@ -108,13 +108,13 @@
   - increase the heap size. So an ESP8266-12 should be fine with a 4MB memory. Just needs to be configured to be able to use it.
   In spite of all of this, over time, sometimes when a response is not rapid enough the device will run out of local heap mememory since there will be calls waiting that have data bufffers waiting to be serviced.
   Need to work out how to increase local heap allocation.
-  Actually, after some conversations with chatGPt, it might be that there is a clash in use of the WiFi port and that causes the reboot. Try without MQTT in nbreconnect mode and see. 
+  Actually, after some conversations with chatGPt, it might be that there is a clash in use of the WiFi port and that causes the reboot. Try without MQTT in nbreconnect mode and see.
 */
 
 /////////////////////////////////////////////////////////////////////////////////
 
 //Internal variables
-#include "ESP8266_AscomDome.h"   //App variables - pulls in the other include files - its all in there.
+#include "ESP8266_AscomDome.h" //App variables - pulls in the other include files - its all in there.
 #include <Skybadger_common_funcs.h>
 #include "ASCOMAPICommon_rest.h"
 #include "ASCOMAPIDome_rest.h"
@@ -125,19 +125,19 @@
 #include "ASCOM_DomeSetup.h"
 #include "ASCOM_DomeEeprom.h"
 
-void setup( void );
-void setupWifi( void );
-void publishFnStatus( void );
-void publishHealth( void );
-uint32_t reportRam(char* );
+void setup(void);
+void setupWifi(void);
+void publishFnStatus(void);
+void publishHealth(void);
+uint32_t reportRam(char *);
 
-void debugMem() 
+void debugMem()
 {
-  debugI( "Heap free:%u maxBlock:%u fragmentation:%u%% stack:%u",
-    ESP.getFreeHeap(),
-    ESP.getMaxFreeBlockSize(),
-    ESP.getHeapFragmentation(),
-    ESP.getFreeContStack() );
+  debugI("Heap free:%u maxBlock:%u fragmentation:%u%% stack:%u",
+         ESP.getFreeHeap(),
+         ESP.getMaxFreeBlockSize(),
+         ESP.getHeapFragmentation(),
+         ESP.getFreeContStack());
 }
 
 void setup()
@@ -148,16 +148,16 @@ void setup()
   int response = 403;
 
   //Minimise serial to one pin only.
-  Serial.begin( 115200, SERIAL_8N1, SERIAL_TX_ONLY);
+  Serial.begin(115200, SERIAL_8N1, SERIAL_TX_ONLY);
   Serial.println(F("ESP starting."));
   //gdbstub_init();
-  
-  //Give time to open a serial monitor for debugging 
+
+  //Give time to open a serial monitor for debugging
   delay(5000);
 
   //Start time
-  configTime(TZ_SEC, DST_MN, timeServer1, timeServer2, timeServer3 );
-  Serial.println( F("Time Services setup") );
+  configTime(TZ_SEC, DST_MN, timeServer1, timeServer2, timeServer3);
+  Serial.println(F("Time Services setup"));
 
   //Read internal state, apply defaults if we can't find user-set values in Eeprom.
   EEPROM.begin(eepromSize);
@@ -165,24 +165,24 @@ void setup()
   readFromEeprom();
 
   //Setup WiFi
-  Serial.printf_P( PSTR("Entering Wifi setup for host %s\n") , myHostname );
+  Serial.printf_P(PSTR("Entering Wifi setup for host %s\n"), myHostname);
   setupWifi();
 
-#if !defined DEBUG_DISABLED
+#if !defined _DISABLE_REMOTE_DEBUG
   //Debugging over telnet setup
   // Initialize the server (telnet or web socket) of RemoteDebug
-  Debug.begin( WiFi.hostname().c_str(), Debug.VERBOSE );
-  Debug.setSerialEnabled(true);//until set false
+  Debug.begin(WiFi.hostname().c_str(), Debug.VERBOSE);
+  Debug.setSerialEnabled(true); //until set false
   // Options
   Debug.setResetCmdEnabled(true); // Enable the reset command
   // Debug.showProfiler(true); // To show profiler - time between messages of Debug
   //In practice still need to use serial commands until debugger is up and running..
-  DEBUGSL1( F("Remote debugger enabled and operating") );
+  DEBUGSL1(F("Remote debugger enabled and operating"));
 #endif
 
   //for use in debugging reset - may need to move
-  Serial.printf_P( PSTR( "Device reset reason: %s\n" ), device.getResetReason().c_str() );
-  Serial.printf_P( PSTR( "device reset info: %s\n" ),   device.getResetInfo().c_str() );
+  Serial.printf_P(PSTR("Device reset reason: %s\n"), device.getResetReason().c_str());
+  Serial.printf_P(PSTR("device reset info: %s\n"), device.getResetInfo().c_str());
 
   //Setup I2C
 #if defined _ESP8266_01_
@@ -190,90 +190,106 @@ void setup()
   pinMode(0, INPUT_PULLUP);
   pinMode(2, INPUT_PULLUP);
   //pinMode(3, INPUT_PULLUP);
-  
+
   //I2C setup SDA pin 0, SCL pin 2
   //Normally Wire.begin(0, 2);
-  Wire.begin( 2, 0 /*0, 2*/);
-  Serial.println( F( "Configured pins for ESP8266-01\n") );
+  Wire.begin(2, 0 /*0, 2*/);
+  Serial.println(F("Configured pins for ESP8266-01\n"));
 #elif defined _ESP8266_12_
   //Pins mode and direction setup for i2c on ESP8266-12
   pinMode(14, INPUT_PULLUP);
   pinMode(2, INPUT_PULLUP);
-  //I2C setup SDA GPIO 5, SCL GPIO 4 - emerges at pins D1 and D2 on nodeMCU ESP8266-12 
-  //I2C setup SDA GPIO 14, SCL GPIO 2 - emerges at pins D5 and D4 on nodeMCU ESP8266-12 
+  //I2C setup SDA GPIO 5, SCL GPIO 4 - emerges at pins D1 and D2 on nodeMCU ESP8266-12
+  //I2C setup SDA GPIO 14, SCL GPIO 2 - emerges at pins D5 and D4 on nodeMCU ESP8266-12
   Wire.begin(14, 2);
-  
+
   //setup pins 13, 15 for encoder (only need two + home if available.)
-  //emerges at pins D7 and D8 on nodeMCU ESP8266-12 
+  //emerges at pins D7 and D8 on nodeMCU ESP8266-12
   pinMode(13, INPUT_PULLUP);
   pinMode(15, INPUT_PULLUP);
-  Serial.println( F("Configured pins for ESP8266-12\n") );
+  Serial.println(F("Configured pins for ESP8266-12\n"));
 #elif defined _ESP32_XX_
   //TODO
-  Serial.println( F("Configured pins for ESP32-XX\n") );
+  Serial.println(F("Configured pins for ESP32-XX\n"));
 #endif
-  Wire.setClock(100000 );//100KHz target rate is a bit hopeful for this device
+  Wire.setClock(100000); //100KHz target rate is a bit hopeful for this device
 
   ////////////////////////////////////////////////////////////////////////////////////////
   outbuf = scanI2CBus();
-  debugD( "I2CScan: %s", outbuf.c_str() );
-  Serial.printf( "I2CScan: %s\n", outbuf.c_str() );
+  debugD("I2CScan: %s", outbuf.c_str());
+  Serial.printf("I2CScan: %s\n", outbuf.c_str());
   ////////////////////////////////////////////////////////////////////////////////////////
 
   //Open a connection to MQTT
-#if !defined _DISABLE_MQTT_  
+#if !defined _DISABLE_MQTT
   //MQTTServerName is in EEProm, as too ThisID.
-  Serial.printf_P( PSTR( ("Configuring MQTT connection to :%s\n") ), MQTTServerName );
-  client.setServer( MQTTServerName, 1883 );
-  Serial.printf_P( PSTR(" MQTT settings id: %s user: %s pwd: %s\n"), thisID, pubsubUserID, pubsubUserPwd );
+  Serial.printf_P(PSTR(("Configuring MQTT connection to :%s\n")), MQTTServerName);
+  client.setServer(MQTTServerName, 1883);
+  Serial.printf_P(PSTR(" MQTT settings id: %s user: %s pwd: %s\n"), thisID, pubsubUserID, pubsubUserPwd);
 
   //want to connect to a 'dirty' session not a clean one, that way we receive any outstanding messages waiting
   //Also setup our last will message
   String lastWillTopic = String(outHealthTopic);
-  lastWillTopic.concat( myHostname );
-  client.connect( thisID, pubsubUserID, pubsubUserPwd, lastWillTopic.c_str(), 1, true, "Offline", false );
+  lastWillTopic.concat(myHostname);
+  client.connect(thisID, pubsubUserID, pubsubUserPwd, lastWillTopic.c_str(), 1, true, "Offline", false);
 
   //Create a callback that causes this device to publish its health and sensor data over MQTT to the centre
-  client.setCallback( callback );
-  client.subscribe( inTopic );
-  Serial.printf_P(PSTR("Configured MQTT subscription connection: %s\n"), inTopic );
-  publishHealth();
-#endif 
+  client.setCallback(callback);
+  client.subscribe(inTopic);
+  Serial.printf_P(PSTR("Configured MQTT subscription connection: %s\n"), inTopic);
+#endif
 
   //Setup the sensors
   motorPresent = myMotor.check();
-  if ( motorPresent )
+  if (motorPresent)
   {
     myMotor.init();
-    myMotor.setSpeedDirection( MOTOR_SPEED_OFF, MOTOR_DIRN_CW );
+    myMotor.setSpeedDirection(MOTOR_SPEED_OFF, MOTOR_DIRN_CW);
     motorSpeed = MOTOR_SPEED_OFF;
     motorDirection = MOTOR_DIRN_CW;
     myMotor.getSpeedDirection();
-    Serial.printf_P( PSTR("motor initialised - speed: %u, direction: %u\n"), myMotor.getSpeed(), myMotor.getDirection() );
-    debugD( "motor initialised - speed: %u, direction: %u\n", myMotor.getSpeed(), myMotor.getDirection() );
+    Serial.printf_P(PSTR("motor initialised - speed: %u, direction: %u\n"), myMotor.getSpeed(), myMotor.getDirection());
+    debugD("motor initialised - speed: %u, direction: %u\n", myMotor.getSpeed(), myMotor.getDirection());
   }
   else
   {
-    Serial.println( F("No motor found on i2c bus\n") );
-    debugE( "No motor found on i2c bus\n" );
+    Serial.println(F("No motor found on i2c bus\n"));
+    debugE("No motor found on i2c bus\n");
+  }
+
+  //The FRAM library begin() does not probe the device. Check for an ACK first;
+  //this detects a device at the configured address without changing stored data.
+  Wire.beginTransmission(FRAMControllerAddr);
+  const uint8_t framStatus = Wire.endTransmission();
+  framPresent = (framStatus == 0);
+  if (framPresent)
+  {
+    myFRAM.begin();
+    Serial.printf_P(PSTR("FRAM found on i2c bus at 0x%02X\n"), FRAMControllerAddr);
+    debugD("FRAM found on i2c bus at 0x%02X\n", FRAMControllerAddr);
+  }
+  else
+  {
+    Serial.printf_P(PSTR("No FRAM found on i2c bus at 0x%02X - status: %u\n"), FRAMControllerAddr, framStatus);
+    debugE("No FRAM found on i2c bus at 0x%02X - status: %u\n", FRAMControllerAddr, framStatus);
   }
 
   //Setup i2c to control LCD display
   debugI("Starting to configure LCD connection");
-  lcdPresent = ( myLCD.checkLCD() == 0 ) ? true : false;
-  lcdPresent = false;//above check doesnt work - LCD currently not fitted.
-  if ( lcdPresent )
+  lcdPresent = (myLCD.checkLCD() == 0) ? true : false;
+  lcdPresent = false; //above check doesnt work - LCD currently not fitted.
+  if (lcdPresent)
   {
     myLCD.clearScreen();
-    myLCD.setCursor( 1, 1, I2CLCD::CURSOR_UNDERLINE );
-    myLCD.setBacklight( true );
-    myLCD.writeLCD( 4, 1 , "ASCOMDome ready" );
+    myLCD.setCursor(1, 1, I2CLCD::CURSOR_UNDERLINE);
+    myLCD.setBacklight(true);
+    myLCD.writeLCD(4, 1, "ASCOMDome ready");
     debugI("LCD found and configured");
   }
   else
   {
-    Serial.printf_P( PSTR("No LCD found on i2c bus.\n" ));
-    debugI( "No LCD display found on i2c bus\n" );
+    Serial.printf_P(PSTR("No LCD found on i2c bus.\n"));
+    debugI("No LCD display found on i2c bus\n");
   }
 
   //Use one of these to track the dome position
@@ -287,50 +303,54 @@ void setup()
 
   //Register Web server handler functions
   //ASCOM dome-specific functions
-  Serial.printf_P( PSTR("Registering web handlers.\n" ));
-  server.on(F("/api/v1/dome/1/altitude"),                   HTTP_GET, handleAltitudeGet ); //tested - 0
-  server.on(F("/api/v1/dome/1/athome"),                     HTTP_GET, handleAtHomeGet );   //tested - returns false ?
-  server.on(F("/api/v1/dome/1/atpark"),                     HTTP_GET, handleAtParkGet );   //tested - returns false ?
-  server.on(F("/api/v1/dome/1/azimuth"),                    HTTP_GET, handleAzimuthGet);
-  server.on(F("/api/v1/dome/1/canfindhome"),                HTTP_GET, handleCanFindHomeGet);
-  server.on(F("/api/v1/dome/1/canpark"),                    HTTP_GET, handleCanParkGet);
-  server.on(F("/api/v1/dome/1/cansetaltitude"),             HTTP_GET, handleCanSetAltitudeGet);
-  server.on(F("/api/v1/dome/1/cansetazimuth"),              HTTP_GET, handleCanSetAzimuthGet);
-  server.on(F("/api/v1/dome/1/cansetpark"),                 HTTP_GET, handleCanSetParkGet);
-  server.on(F("/api/v1/dome/1/cansetshutter"),             HTTP_GET, handleCanSetShutterGet);
-  server.on(F("/api/v1/dome/1/canslave"),                  HTTP_GET, handleCanSlaveGet);
-  server.on(F("/api/v1/dome/1/cansyncazimuth"),            HTTP_GET, handleCanSyncAzimuthGet);
-  server.on(F("/api/v1/dome/1/shutterstatus"),             HTTP_GET, handleShutterStatusGet);
-  server.on(F("/api/v1/dome/1/slaved"),                    HTTP_GET, handleSlavedGet);
-  server.on(F("/api/v1/dome/1/slaved"),                    HTTP_PUT, handleSlavedPut);
-  server.on(F("/api/v1/dome/1/slewing"),                   HTTP_GET, handleSlewingGet);
-  server.on(F("/api/v1/dome/1/abortslew"),                 HTTP_PUT, handleAbortSlewPut);
-  server.on(F("/api/v1/dome/1/closeshutter"),              HTTP_PUT, handleCloseShutterPut);
-  server.on(F("/api/v1/dome/1/findhome"),                  HTTP_PUT, handleFindHomePut);
-  server.on(F("/api/v1/dome/1/openshutter"),               HTTP_PUT, handleOpenShutterPut);
-  server.on(F("/api/v1/dome/1/park"),                      HTTP_PUT, handleParkPut);
-  server.on(F("/api/v1/dome/1/setpark"),                   HTTP_PUT, handleSetParkPut);
-  server.on(F("/api/v1/dome/1/slewtoaltitude"),            HTTP_PUT, handleSlewToAltitudePut);
-  server.on(F("/api/v1/dome/1/slewtoazimuth"),             HTTP_PUT, handleSlewToAzimuthPut);
-  server.on(F("/api/v1/dome/1/synctoazimuth"),             HTTP_PUT, handleSyncToAzimuthPut);
-  server.on(F("/api/v1/dome/1/connect"),                   HTTP_PUT, handleConnectPut);
-  server.on(F("/api/v1/dome/1/disconnect"),                HTTP_PUT, handleDisconnectPut);
-  server.on(F("/api/v1/dome/1/connecting"),                HTTP_GET, handleConnectingGet);
-  server.on(F("/api/v1/dome/1/devicestate"),               HTTP_GET, handleDeviceStateGet);
+  Serial.printf_P(PSTR("Registering web handlers.\n"));
+  server.on(F("/api/v1/dome/1/altitude"), HTTP_GET, handleAltitudeGet); //tested - 0
+  server.on(F("/api/v1/dome/1/athome"), HTTP_GET, handleAtHomeGet);     //tested - returns false ?
+  server.on(F("/api/v1/dome/1/atpark"), HTTP_GET, handleAtParkGet);     //tested - returns false ?
+  server.on(F("/api/v1/dome/1/azimuth"), HTTP_GET, handleAzimuthGet);
+  server.on(F("/api/v1/dome/1/canfindhome"), HTTP_GET, handleCanFindHomeGet);
+  server.on(F("/api/v1/dome/1/canpark"), HTTP_GET, handleCanParkGet);
+  server.on(F("/api/v1/dome/1/cansetaltitude"), HTTP_GET, handleCanSetAltitudeGet);
+  server.on(F("/api/v1/dome/1/cansetazimuth"), HTTP_GET, handleCanSetAzimuthGet);
+  server.on(F("/api/v1/dome/1/cansetpark"), HTTP_GET, handleCanSetParkGet);
+  server.on(F("/api/v1/dome/1/cansetshutter"), HTTP_GET, handleCanSetShutterGet);
+  server.on(F("/api/v1/dome/1/canslave"), HTTP_GET, handleCanSlaveGet);
+  server.on(F("/api/v1/dome/1/cansyncazimuth"), HTTP_GET, handleCanSyncAzimuthGet);
+  server.on(F("/api/v1/dome/1/shutterstatus"), HTTP_GET, handleShutterStatusGet);
+  server.on(F("/api/v1/dome/1/slaved"), HTTP_GET, handleSlavedGet);
+  server.on(F("/api/v1/dome/1/slaved"), HTTP_PUT, handleSlavedPut);
+  server.on(F("/api/v1/dome/1/slewing"), HTTP_GET, handleSlewingGet);
+  server.on(F("/api/v1/dome/1/abortslew"), HTTP_PUT, handleAbortSlewPut);
+  server.on(F("/api/v1/dome/1/closeshutter"), HTTP_PUT, handleCloseShutterPut);
+  server.on(F("/api/v1/dome/1/findhome"), HTTP_PUT, handleFindHomePut);
+  server.on(F("/api/v1/dome/1/openshutter"), HTTP_PUT, handleOpenShutterPut);
+  server.on(F("/api/v1/dome/1/park"), HTTP_PUT, handleParkPut);
+  server.on(F("/api/v1/dome/1/setpark"), HTTP_PUT, handleSetParkPut);
+  server.on(F("/api/v1/dome/1/slewtoaltitude"), HTTP_PUT, handleSlewToAltitudePut);
+  server.on(F("/api/v1/dome/1/slewtoazimuth"), HTTP_PUT, handleSlewToAzimuthPut);
+  server.on(F("/api/v1/dome/1/synctoazimuth"), HTTP_PUT, handleSyncToAzimuthPut);
+  server.on(F("/api/v1/dome/1/connect"), HTTP_PUT, handleConnectPut);
+  server.on(F("/api/v1/dome/1/disconnect"), HTTP_PUT, handleDisconnectPut);
+  server.on(F("/api/v1/dome/1/connecting"), HTTP_GET, handleConnectingGet);
+  server.on(F("/api/v1/dome/1/devicestate"), HTTP_GET, handleDeviceStateGet);
 
   //Common ASCOM function handlers
-  server.on(F("/api/v1/dome/1/action"),        HTTP_PUT, handleAction );              //Tested: Not implemented
-  server.on(F("/api/v1/dome/1/commandblind"),  HTTP_PUT, handleCommandBlind );        //These two have different responses
-  server.on(F("/api/v1/dome/1/commandbool"),   HTTP_PUT, handleCommandBool );         //These two have different responses
-  server.on(F("/api/v1/dome/1/commandstring"), HTTP_PUT, handleCommandString );       //Alpaca command methods use PUT
-  server.on(F("/api/v1/dome/1/connected"),     HTTP_PUT, handleConnected );           //tested
-  server.on(F("/api/v1/dome/1/connected"),     HTTP_GET, handleConnected );           //tested
-  server.on(F("/api/v1/dome/1/description"),   HTTP_GET, handleDescriptionGet );      //tested
-  server.on(F("/api/v1/dome/1/driverinfo"),    HTTP_GET, handleDriverInfoGet );       //freezes/times out
-  server.on(F("/api/v1/dome/1/driverversion"), HTTP_GET, handleDriverVersionGet );    //tested
-  server.on(F("/api/v1/dome/1/interfaceversion"), HTTP_GET, handleInterfaceVersionGet );    //tested
-  server.on(F("/api/v1/dome/1/name"),          HTTP_GET, handleNameGet );             //tested - doesnt return hostname
-  server.on(F("/api/v1/dome/1/supportedactions"),       HTTP_GET, handleSupportedActionsGet ); //tested
+  server.on(F("/api/v1/dome/1/action"), HTTP_PUT, handleAction);                        //Tested: Not implemented
+  server.on(F("/api/v1/dome/1/commandblind"), HTTP_PUT, handleCommandBlind);            //These two have different responses
+  server.on(F("/api/v1/dome/1/commandbool"), HTTP_PUT, handleCommandBool);              //These two have different responses
+  server.on(F("/api/v1/dome/1/commandstring"), HTTP_PUT, handleCommandString);          //Alpaca command methods use PUT
+  server.on(F("/api/v1/dome/1/connected"), HTTP_PUT, handleConnected);                  //tested
+  server.on(F("/api/v1/dome/1/connected"), HTTP_GET, handleConnected);                  //tested
+  server.on(F("/api/v1/dome/1/description"), HTTP_GET, handleDescriptionGet);           //tested
+  server.on(F("/api/v1/dome/1/driverinfo"), HTTP_GET, handleDriverInfoGet);             //freezes/times out
+  server.on(F("/api/v1/dome/1/driverversion"), HTTP_GET, handleDriverVersionGet);       //tested
+  server.on(F("/api/v1/dome/1/interfaceversion"), HTTP_GET, handleInterfaceVersionGet); //tested
+#if DOME_MODERN_SETUP
+  server.on(F("/api/v1/dome/1/name"), HTTP_GET, handleModernName);
+#else
+  server.on(F("/api/v1/dome/1/name"), HTTP_GET, handleNameGet);
+#endif
+  server.on(F("/api/v1/dome/1/supportedactions"), HTTP_GET, handleSupportedActionsGet); //tested
 
   /* ALPACA Management and setup interfaces
      The main browser setup URL would be http://192.168.1.89:7843/setup
@@ -339,137 +359,144 @@ void setup()
     Updated 21/09/2025 - satisfies conform.
   */
   //Management API
-  server.on(F("/management/apiversions"),              HTTP_GET, handleMgmtVersions );
-  server.on(F("/management/v1/description"),           HTTP_GET, handleMgmtDescription );
-  server.on(F("/management/v1/configureddevices"),     HTTP_GET, handleMgmtConfiguredDevices );
+  server.on(F("/management/apiversions"), HTTP_GET, handleMgmtVersions);
+  server.on(F("/management/v1/description"), HTTP_GET, handleMgmtDescription);
+#if DOME_MODERN_SETUP
+  server.on(F("/management/v1/configureddevices"), HTTP_GET, handleModernConfiguredDevices);
+  registerModernSetupRoutes();
+#else
+  server.on(F("/management/v1/configureddevices"), HTTP_GET, handleMgmtConfiguredDevices);
 
   //Custom and setup handlers used by the custom setup form - currently there is no collection of devices.
-  server.on(F("/setup"),                     HTTP_GET, handleSetup ); //Primary browser web page for the overall collection of devices
-  server.on(F("/setup/v1/dome/1/setup"), HTTP_GET, handleSetup ); //Browser web page for this driver instance
+  server.on(F("/setup"), HTTP_GET, handleSetup);                 //Primary browser web page for the overall collection of devices
+  server.on(F("/setup/v1/dome/1/setup"), HTTP_GET, handleSetup); //Browser web page for this driver instance
 
   //HTML forms don't support PUT -  they typically transform them to use GET instead.
   //form commands
-  server.on(F("/Hostname"),    handleHostnamePut );
-  server.on(F("/ShutterName"), handleShutterNamePut );
-  server.on(F("/SensorName"),  handleSensorNamePut );
-  server.on(F("/ParkSet"),     handleParkPositionPut );
-  server.on(F("/ParkAction"),  handleParkActionPut );
+  server.on(F("/Hostname"), handleHostnamePut);
+  server.on(F("/ShutterName"), handleShutterNamePut);
+  server.on(F("/SensorName"), handleSensorNamePut);
+  server.on(F("/ParkSet"), handleParkPositionPut);
+  server.on(F("/ParkAction"), handleParkActionPut);
   //  server.on(F("/ShutterAction"),handleShutterActionPut );
-  server.on(F("/Home"),        handleHomePositionPut );
-  server.on(F("/Goto"),        handleDomeGoto );
-  server.on(F("/Sync"),        handleSyncOffsetPut );
-  server.on(F("/restart"),     handlerRestart );
-  server.on(F("/status"),      handlerStatus );
-  server.on(F("/"),            handlerStatus);
+  server.on(F("/Home"), handleHomePositionPut);
+  server.on(F("/Goto"), handleDomeGoto);
+  server.on(F("/Sync"), handleSyncOffsetPut);
+  server.on(F("/restart"), handlerRestart);
+  server.on(F("/"), handlerStatus);
+#endif // DOME_MODERN_SETUP
+  server.on(F("/status"), HTTP_GET, handlerStatus);
 
   server.onNotFound(handlerNotFound);
-  Serial.println( F("Web handlers registered") );
+  Serial.println(F("Web handlers registered"));
 
   //setup interrupt-based 'soft' alarm handler for dome state update and async commands
-  ets_timer_setfn( &fineTimer,      onFineTimer,     NULL );
-  ets_timer_setfn( &coarseTimer,    onCoarseTimer,   NULL ); //Used for onIdle processing
-  ets_timer_setfn( &timeoutTimer,   onTimeoutTimer,  NULL ); //Used for callback timer.
-  ets_timer_setfn( &watchdogTimer,  onWatchdogTimer, NULL ); //Used for slew failure watchdog
+  ets_timer_setfn(&fineTimer, onFineTimer, NULL);
+  ets_timer_setfn(&coarseTimer, onCoarseTimer, NULL);     //Used for onIdle processing
+  ets_timer_setfn(&timeoutTimer, onTimeoutTimer, NULL);   //Used for callback timer.
+  ets_timer_setfn(&watchdogTimer, onWatchdogTimer, NULL); //Used for slew failure watchdog
 
-  domeCmdList    = new LinkedList <cmdItem_t*>();
-  shutterCmdList = new LinkedList <cmdItem_t*>();
-  cmdStatusList  = new LinkedList <cmdItem_t*>(); // use to track async completion state.
-  Serial.println( F("LinkedList setup complete") );
+  domeCmdList = new LinkedList<cmdItem_t *>();
+  shutterCmdList = new LinkedList<cmdItem_t *>();
+  cmdStatusList = new LinkedList<cmdItem_t *>(); // use to track async completion state.
+  Serial.println(F("LinkedList setup complete"));
 
   //Start web server
-  updater.setup( &server );
+  updater.setup(&server);
   server.begin();
-  Serial.println( F("webserver setup complete") );
+  Serial.println(F("webserver setup complete"));
 
   //Get startup values
   domeStatus = DOME_IDLE;
   int requestStatus = 0;
   int attemptCount = 0;
-  Serial.printf_P( PSTR("Waiting for shutter\n") );
+  connectionStatus = CONNECTION_DISCONNECTED;
+
+  Serial.printf_P(PSTR("Waiting for shutter\n"));
   do
   {
     //there's a chance of a watchdog timer timeout here.
-    requestStatus = getShutterStatus ( shutterHostname, shutterStatus );
-    Serial.printf( ".");
-    delay( 500 );
+    requestStatus = getShutterStatus(shutterHostname, shutterStatus);
+    Serial.printf(".");
+    delay(500);
     yield();
-  } while ( requestStatus != HTTP_CODE_OK && ++attemptCount < 10 );
-  if ( attemptCount < 10 && requestStatus == HTTP_CODE_OK )
-    Serial.printf_P( PSTR("Shutter found OK\n") );
+  } while (requestStatus != HTTP_CODE_OK && ++attemptCount < 10);
+  if (attemptCount < 10 && requestStatus == HTTP_CODE_OK)
+    Serial.printf_P(PSTR("Shutter found OK\n"));
   else
-    Serial.printf_P( PSTR("Shutter NOT found\n") );
+    Serial.printf_P(PSTR("Shutter NOT found\n"));
 
 #if defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION || defined USE_REMOTE_ENCODER_FOR_DOME_ROTATION
-  Serial.printf_P( PSTR("Searching for remote compass/encoder\n") );
+  Serial.printf_P(PSTR("Searching for remote compass/encoder\n"));
   attemptCount = 0;
 
   do
   {
 #if defined USE_REMOTE_ENCODER_FOR_DOME_ROTATION
-    response = restQuery( sensorHostname, "/encoder/bearing", "",  outbuf, HTTP_GET );
+    response = restQuery(sensorHostname, "/encoder/bearing", "", outbuf, HTTP_GET);
 #elif defined defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION
-    response = restQuery( sensorHostname, "/bearing", outbuf, HTTP_GET );
+    response = restQuery(sensorHostname, "/bearing", outbuf, HTTP_GET);
 
-#endif 
+#endif
     debugI("Waiting for remote encoder/compass\n");
     delay(500);
     yield();
-  } while ( response != HTTP_CODE_OK && ++attemptCount < 10 );
-  if ( attemptCount < 10 && response == HTTP_CODE_OK)
-    Serial.printf_P( PSTR("Found remote compass/encoder\n") );
+  } while (response != HTTP_CODE_OK && ++attemptCount < 10);
+  if (attemptCount < 10 && response == HTTP_CODE_OK)
+    Serial.printf_P(PSTR("Found remote compass/encoder\n"));
   else
-    Serial.printf_P( PSTR("Remote compass/encoder NOT FOUND \n") );
+    Serial.printf_P(PSTR("Remote compass/encoder NOT FOUND \n"));
 
 #endif
 
   //TODO consider some mech of reading actual position and storing last position between power cycles.
-  bearing = getBearing( sensorHostname );
-  currentAzimuth = getAzimuth( bearing);
+  bearing = getBearing(sensorHostname);
+  currentAzimuth = getAzimuth(bearing);
   targetAzimuth = currentAzimuth;
-  Serial.printf_P( PSTR("Updated position from encoder\n") );
+  Serial.printf_P(PSTR("Updated position from encoder\n"));
 
   //Start timers last
-  ets_timer_arm_new( &coarseTimer, ACTIVE_STATUS_PERIOD_MS, 1/*repeat*/, 1);//Adaptive status and command processing
-  ets_timer_arm_new( &fineTimer,   1000,        1/*repeat*/, 1);//millis   1 second - bearing reading.
-  ets_timer_arm_new( &watchdogTimer, 5000,      1/*repeat*/, 1);//millis 5 seconds - watchdog check of dome stuck.
+  ets_timer_arm_new(&coarseTimer, ACTIVE_STATUS_PERIOD_MS, 1 /*repeat*/, 1); //Adaptive status and command processing
+  ets_timer_arm_new(&fineTimer, 1000, 1 /*repeat*/, 1);                      //millis   1 second - bearing reading.
+  ets_timer_arm_new(&watchdogTimer, 5000, 1 /*repeat*/, 1);                  //millis 5 seconds - watchdog check of dome stuck.
 #if !defined _DISABLE_MQTT_
-ets_timer_arm_new( &timeoutTimer, 2500,       0/*one-shot*/, 1); //MQTT background reconnection timer.
-#endif 
+  ets_timer_arm_new(&timeoutTimer, 2500, 0 /*one-shot*/, 1); //MQTT background reconnection timer.
+#endif
 
 #if defined _TEST_RAM_
   originalRam = device.getFreeHeap();
   lastRam = originalRam;
-  debugV("Starting RAM: %i ", originalRam );
+  debugV("Starting RAM: %i ", originalRam);
 #endif
 
-  Serial.println( FPSTR(BuildVersionName) );
+  Serial.println(FPSTR(BuildVersionName));
 
   //Starts the discovery responder server
-  Udp.begin( udpPort);
-  
+  Udp.begin(udpPort);
+
   //Show welcome message
-  debugI( "setup complete" );
+  debugI("setup complete");
 }
 
-void onFineTimer( void* pArg )
+void onFineTimer(void *pArg)
 {
   //Read command list and apply.
   fineTimerFlag = true;
 }
 
-void onCoarseTimer( void* pArg )
+void onCoarseTimer(void *pArg)
 {
   //Read command list and apply.
   coarseTimerFlag = true;
 }
 
-//Used to complete timeout actions in MQTT background connection checks. 
-void onTimeoutTimer( void* pArg )
+//Used to complete timeout actions in MQTT background connection checks.
+void onTimeoutTimer(void *pArg)
 {
   timeoutFlag = true;
 }
 
-void onWatchdogTimer( void* pArg )
+void onWatchdogTimer(void *pArg)
 {
   watchdogTimerFlag = true;
 }
@@ -478,39 +505,39 @@ void manageConnectionState(void)
 {
   switch (connectionStatus)
   {
-    case CONNECTION_CONNECTING:
-      if (millis() - connectionStateChangedAt < 100)
-        break;
-      connected = pendingConnectionClientID;
-      connectionStatus = CONNECTION_CONNECTED;
+  case CONNECTION_CONNECTING:
+    if (millis() - connectionStateChangedAt < 100)
       break;
+    connected = pendingConnectionClientID;
+    connectionStatus = CONNECTION_CONNECTED;
+    break;
 
-    case CONNECTION_DISCONNECTING:
-      if (millis() - connectionStateChangedAt < 100)
-        break;
-      if (parkDomeOnDisconnect && domeCmdList != nullptr)
-        addDomeCmd(pendingConnectionClientID, 0, "", CMD_DOME_PARK, parkPosition);
-      if (closeShutterOnDisconnect && shutterCmdList != nullptr)
-        addShutterCmd(pendingConnectionClientID, 0, "", CMD_SHUTTER_CLOSE, 0);
-      connected = NOT_CONNECTED;
-      pendingConnectionClientID = 0;
+  case CONNECTION_DISCONNECTING:
+    if (millis() - connectionStateChangedAt < 100)
+      break;
+    if (parkDomeOnDisconnect && domeCmdList != nullptr)
+      addDomeCmd(pendingConnectionClientID, 0, "", CMD_DOME_PARK, parkPosition);
+    if (closeShutterOnDisconnect && shutterCmdList != nullptr)
+      addShutterCmd(pendingConnectionClientID, 0, "", CMD_SHUTTER_CLOSE, 0);
+    connected = NOT_CONNECTED;
+    pendingConnectionClientID = 0;
+    connectionStatus = CONNECTION_DISCONNECTED;
+    break;
+
+  case CONNECTION_CONNECTED:
+    if (connected == NOT_CONNECTED)
       connectionStatus = CONNECTION_DISCONNECTED;
-      break;
+    break;
 
-    case CONNECTION_CONNECTED:
-      if (connected == NOT_CONNECTED)
-        connectionStatus = CONNECTION_DISCONNECTED;
-      break;
-
-    case CONNECTION_DISCONNECTED:
-      // Keep the V3 state synchronized when the legacy Connected PUT is used.
-      if (connected != NOT_CONNECTED)
-        connectionStatus = CONNECTION_CONNECTED;
-      break;
+  case CONNECTION_DISCONNECTED:
+    // Keep the V3 state synchronized when the legacy Connected PUT is used.
+    if (connected != NOT_CONNECTED)
+      connectionStatus = CONNECTION_CONNECTED;
+    break;
   }
 }
 
-void updateStatusPollingPeriod( void )
+void updateStatusPollingPeriod(void)
 {
   const bool domeActive = domeStatus == DOME_SLEWING || domeStatus == DOME_ABORT;
   const bool shutterActive = shutterStatus == SHUTTER_OPENING || shutterStatus == SHUTTER_CLOSING || shutterStatus == SHUTTER_ABORTING;
@@ -521,23 +548,23 @@ void updateStatusPollingPeriod( void )
   {
     statusPollingPeriodMs = requestedPeriod;
     ets_timer_disarm(&coarseTimer);
-    ets_timer_arm_new(&coarseTimer, statusPollingPeriodMs, 1/*repeat*/, 1);
+    ets_timer_arm_new(&coarseTimer, statusPollingPeriodMs, 1 /*repeat*/, 1);
     debugI("Status polling period changed to %u ms\n", statusPollingPeriodMs);
   }
 }
 
-inline uint32_t checkRam( const char* location )
+inline uint32_t checkRam(const char *location)
 {
   //Check heap for memory bugs
   uint32_t ram = 0;
   ram = ESP.getFreeHeap();
-  if ( lastRam != ( ram - originalRam ) )
+  if (lastRam != (ram - originalRam))
   {
     lastRam = ram - originalRam;
-#if defined REMOTE_DEBUG_DISABLED
-    Serial.printf_P( PSTR( "%s RAM: %d \n"), location, ram );
+#if defined _DISABLE_REMOTE_DEBUG
+    Serial.printf_P(PSTR("%s RAM: %d \n"), location, ram);
 #else
-    debugV( "%s RAM: %u change: %d\n", location, ram, lastRam );
+    debugV("%s RAM: %u change: %d\n", location, ram, lastRam);
 #endif
   }
   return ram;
@@ -550,58 +577,61 @@ void loop()
 
 #if defined _MEMLEAK_CHECK_DEBUG
   //Check ram state on entry
-  checkRam( "LoopEntry" );
+  checkRam("LoopEntry");
 #endif
 
   //Operate and Clear down flags
-  if ( fineTimerFlag )
+  if (fineTimerFlag)
   {
 #if defined _ENABLE_BEARING
 
 #if defined _TEST_RAM_
-    checkRam( "FineTimerEntry" );
+    checkRam("FineTimerEntry");
 #endif
-  
-    bearing = getBearing( sensorHostname );
-    currentAzimuth = getAzimuth( bearing);
-    debugD( "Bearing %03.2f, offset: %f, adjusted: %f\n", bearing, azimuthSyncOffset, currentAzimuth );
+
+    bearing = getBearing(sensorHostname);
+    currentAzimuth = getAzimuth(bearing);
+    debugD("Bearing %03.2f, offset: %f, adjusted: %f\n", bearing, azimuthSyncOffset, currentAzimuth);
 
 #if defined _TEST_RAM_
-    checkRam( "FineTimerExit" );
+    checkRam("FineTimerExit");
 #endif
 #endif
     fineTimerFlag = false;
   }
 
-  if ( coarseTimerFlag )
+  if (coarseTimerFlag)
   {
     //Handle state changes
 #if defined _ENABLE_DOME
 
 #if defined _TEST_RAM_
-    checkRam( "DomeEntry" );
+    checkRam("DomeEntry");
 #endif
 
     //For dome
-    switch ( domeStatus )
+    switch (domeStatus)
     {
-      case DOME_IDLE:    onDomeIdle();
-        break;
-      case DOME_SLEWING: onDomeSlew();
-        break;
-      case DOME_ABORT:   onDomeAbort();
-        break;
-      case DOME_ABORTED:
-      case DOME_HALTED:
-        break;
-      default:
-        debugE( "Unexpected Dome status detected: %s\n", domeStateNames[(int) domeStatus ]);
-        domeStatus = DOME_ABORT; //error condition
-        break;
+    case DOME_IDLE:
+      onDomeIdle();
+      break;
+    case DOME_SLEWING:
+      onDomeSlew();
+      break;
+    case DOME_ABORT:
+      onDomeAbort();
+      break;
+    case DOME_ABORTED:
+    case DOME_HALTED:
+      break;
+    default:
+      debugE("Unexpected Dome status detected: %s\n", domeStateNames[(int)domeStatus]);
+      domeStatus = DOME_ABORT; //error condition
+      break;
     }
 
 #if defined _TEST_RAM_
-    checkRam( "DomeExit");
+    checkRam("DomeExit");
 #endif
 
 #endif //dome
@@ -609,98 +639,96 @@ void loop()
 #if defined _ENABLE_SHUTTER
 
 #if defined _TEST_RAM_
-    checkRam( "ShutterEntry" );
+    checkRam("ShutterEntry");
 #endif
     //For shutter
     //Update our knowledge of shutter current status
-    if ( getShutterStatus( shutterHostname, shutterStatus  ) == HTTP_CODE_OK )
+    if (getShutterStatus(shutterHostname, shutterStatus) == HTTP_CODE_OK)
     {
-      debugD( "Dome: %s Shutter: %s\n", domeStateNames[(int)domeStatus], shutterStateNames[(int)shutterStatus] );
+      debugD("Dome: %s Shutter: %s\n", domeStateNames[(int)domeStatus], shutterStateNames[(int)shutterStatus]);
     }
 
-    switch ( shutterStatus )
+    switch (shutterStatus)
     {
-      //These are the idle states for the shutter
-      case SHUTTER_ERROR:
-      case SHUTTER_CLOSED:
-      case SHUTTER_OPEN:
-        onShutterIdle();
-        break;
-      //The shutter is currently doing things so wait until complete or error.
-      case SHUTTER_OPENING:
-      case SHUTTER_CLOSING:
-      case SHUTTER_ABORTING:
-      case SHUTTER_ABORTED:
-      case SHUTTER_HALTED:
-        break;
-      default://Anything else.
-        debugE("Shutter status unexpected: %s", shutterStateNames[(int)shutterStatus] );
-        shutterStatus = SHUTTER_ERROR;
-        break;
+    //These are the idle states for the shutter
+    case SHUTTER_ERROR:
+    case SHUTTER_CLOSED:
+    case SHUTTER_OPEN:
+      onShutterIdle();
+      break;
+    //The shutter is currently doing things so wait until complete or error.
+    case SHUTTER_OPENING:
+    case SHUTTER_CLOSING:
+    case SHUTTER_ABORTING:
+    case SHUTTER_ABORTED:
+    case SHUTTER_HALTED:
+      break;
+    default: //Anything else.
+      debugE("Shutter status unexpected: %s", shutterStateNames[(int)shutterStatus]);
+      shutterStatus = SHUTTER_ERROR;
+      break;
     }
 #if defined _TEST_RAM_
-    checkRam( "ShutterExit" );
+    checkRam("ShutterExit");
 #endif
-#endif //shutter 
+#endif //shutter
 
     //Clock tick onLCD
-    if ( lcdPresent )
+    if (lcdPresent)
     {
       int index = 0;
       int lastIndex = 0;
       String output = "";
-      getTimeAsString( outbuf );
-      index = outbuf.indexOf( " " );
-      lastIndex = outbuf.indexOf( "." );
-      if ( index >= 0 && lastIndex >= index )
+      getTimeAsString(outbuf);
+      index = outbuf.indexOf(" ");
+      lastIndex = outbuf.indexOf(".");
+      if (index >= 0 && lastIndex >= index)
       {
-        LCDOutput = outbuf.substring( index, lastIndex );
-        myLCD.writeLCD( 1, 1, LCDOutput );
+        LCDOutput = outbuf.substring(index, lastIndex);
+        myLCD.writeLCD(1, 1, LCDOutput);
       }
     }
-    
+
     //If there's nothing going on - slow down polling
     updateStatusPollingPeriod();
     coarseTimerFlag = false;
   }
 
-#if !defined _DISABLE_MQTT  
-    if ( client.connected() )
-    {
-      //Service MQTT keep-alives
-      client.loop();
-      if (callbackFlag ) //found as a consequence of being connected
-      {
-        //publish results
-        publishHealth();
-        publishFnStatus();
-        callbackFlag = false;
-      }
-    }
-    else
-    {
-      //reconnectNB();
-      reconnect();
-      client.subscribe( inTopic );
-    }
+#if !defined _DISABLE_MQTT
+  if (!client.connected())
+  {
+    reconnectNB();
+    //reconnect();
+  }
+  //Service MQTT keep-alives
+  client.loop();
+  if (callbackFlag) //found as a consequence of being connected
+  {
+    //publish results
+    publishHealth();
+    publishFnStatus();
+    callbackFlag = false;
+  }
 #endif
 
   //If there are any web client connections - handle them.
   server.handleClient();
   manageConnectionState();
 
-#if !defined _REMOTE_DEBUG_DISABLED
+  //Check for Alpaca Discovery packets
+  handleManagement();
+
+#if !defined _DISABLE_REMOTE_DEBUG
   //Handle remote telnet debug session
   Debug.handle();
 #endif
 
-  //Check for Alpaca Discovery packets
-  handleManagement();
-
   //Final memory check
 #if defined MEM_CHECK_DEBUG
-  checkRam( "LoopExit" );
+  checkRam("LoopExit");
 #endif
+
+  delay(20); //If nothing else happens, just slow the loop a touch.
 }
 
 /* MQTT callback for subscription and topic.
@@ -708,13 +736,13 @@ void loop()
    Publish under ~/skybadger/sensors/<sensor type>/<host>
    Note that messages have an maximum length limit of 18 bytes - set in the MQTT header file.
 */
-void callback(char* topic, byte* payload, unsigned int length)
+void callback(char *topic, byte *payload, unsigned int length)
 {
   //set callback flag
   callbackFlag = true;
 }
 
-void publishFnStatus( void )
+void publishFnStatus(void)
 {
   String outTopic;
   String output;
@@ -724,36 +752,36 @@ void publishFnStatus( void )
   JsonDocument doc;
   JsonObject root = doc.to<JsonObject>();
 
-  getTimeAsString2( timestamp );
+  getTimeAsString2(timestamp);
   root["time"] = timestamp;
   root["hostname"] = myHostname;
   root["azimuth"] = currentAzimuth;
   root["altitude"] = currentAltitude;
   root["syncOffset"] = azimuthSyncOffset;
-  root["shutterStatus"] = shutterStateNames[(int) shutterStatus];
-  root["domeStatus"] = domeStateNames[(int) domeStatus];
+  root["shutterStatus"] = shutterStateNames[(int)shutterStatus];
+  root["domeStatus"] = domeStateNames[(int)domeStatus];
   serializeJson(root, output);
 
-  outTopic = String( outFnTopic );        //PROGMEM
-  outTopic.concat( String( DriverType) ); //PROGMEM
+  outTopic = String(outFnTopic);       //PROGMEM
+  outTopic.concat(String(DriverType)); //PROGMEM
   outTopic.concat("/");
-  outTopic.concat( myHostname );
+  outTopic.concat(myHostname);
 
   //publish with retention
-  if ( client.publish( outTopic.c_str(), output.c_str(), true ) )
+  if (client.publish(outTopic.c_str(), output.c_str(), true))
   {
-    debugI( "MQTT FN topic published: %s \n", output.c_str() );
+    debugI("MQTT FN topic published: %s \n", output.c_str());
   }
   else
   {
-    debugW( "MQTT FN topic failed to publish: %s \n", output.c_str() );
+    debugW("MQTT FN topic failed to publish: %s \n", output.c_str());
   }
 }
 
 /*
   @brief Publish health status to MQTT based on callback process.
 */
-void publishHealth(  )
+void publishHealth()
 {
   String outTopic;
   String output;
@@ -763,48 +791,48 @@ void publishHealth(  )
   JsonDocument doc;
   JsonObject root = doc.to<JsonObject>();
 
-  getTimeAsString2( timestamp );
+  getTimeAsString2(timestamp);
   root["time"] = timestamp;
 
   // Once connected, publish an announcement...
   root["hostname"] = myHostname;
-  if ( connected != NOT_CONNECTED )
+  if (connected != NOT_CONNECTED)
     root["message"] = F("Dome connected & operating");
   else
     root["message"] = F("Dome waiting for connection");
   serializeJson(root, output);
 
   //do once after reboot only.
-  if ( bootCount == 0 )
+  if (bootCount == 0)
   {
-    String buildVersion = String( __DATE__ ) + " " + FPSTR( BuildVersionName );
-    root[ "version" ] = buildVersion.c_str();
-    root[ "resetreason" ] = device.getResetReason().c_str();
-    root[ "resetinfo" ] = device.getResetInfo().c_str();
+    String buildVersion = String(__DATE__) + " " + FPSTR(BuildVersionName);
+    root["version"] = buildVersion.c_str();
+    root["resetreason"] = device.getResetReason().c_str();
+    root["resetinfo"] = device.getResetInfo().c_str();
     bootCount++;
   }
 
-  outTopic = String( outHealthTopic ); //PROGMEM
-  outTopic.concat( myHostname );
+  outTopic = String(outHealthTopic); //PROGMEM
+  outTopic.concat(myHostname);
 
-  if ( client.publish( outTopic.c_str(), output.c_str(), true ) )
+  if (client.publish(outTopic.c_str(), output.c_str(), true))
   {
-    debugI("MQTT Health topic: %s: output: %s", outTopic.c_str(), output.c_str() );
+    debugI("MQTT Health topic: %s: output: %s", outTopic.c_str(), output.c_str());
   }
   else
   {
-    debugW("MQTT Health topic failed : %s: output: %s", outTopic.c_str(), output.c_str() );
+    debugW("MQTT Health topic failed : %s: output: %s", outTopic.c_str(), output.c_str());
   }
 }
 
-void setupWifi( void )
+void setupWifi(void)
 {
   int zz = 0;
 
   WiFi.mode(WIFI_STA);
-  WiFi.hostname( myHostname );
+  WiFi.hostname(myHostname);
 
-  WiFi.begin( String(ssid2).c_str(), String(password2).c_str() );
+  WiFi.begin(String(ssid2).c_str(), String(password2).c_str());
   Serial.print("Searching for WiFi..\n");
 
   while (WiFi.status() != WL_CONNECTED)
@@ -817,34 +845,34 @@ void setupWifi( void )
     }
   }
 
-  Serial.println( F("WiFi connected") );
-  Serial.printf_P( PSTR("SSID: %s, Signal strength %i dBm \n\r"), WiFi.SSID().c_str(), WiFi.RSSI() );
-  Serial.printf_P( PSTR("Hostname: %s\n\r"),       WiFi.hostname().c_str() );
-  Serial.printf_P( PSTR("IP address: %s\n\r"),     WiFi.localIP().toString().c_str() );
-  Serial.printf_P( PSTR("DNS address 0: %s\n\r"),  WiFi.dnsIP(0).toString().c_str() );
-  Serial.printf_P( PSTR("DNS address 1: %s\n\r"),  WiFi.dnsIP(1).toString().c_str() );
+  Serial.println(F("WiFi connected"));
+  Serial.printf_P(PSTR("SSID: %s, Signal strength %i dBm \n\r"), WiFi.SSID().c_str(), WiFi.RSSI());
+  Serial.printf_P(PSTR("Hostname: %s\n\r"), WiFi.hostname().c_str());
+  Serial.printf_P(PSTR("IP address: %s\n\r"), WiFi.localIP().toString().c_str());
+  Serial.printf_P(PSTR("DNS address 0: %s\n\r"), WiFi.dnsIP(0).toString().c_str());
+  Serial.printf_P(PSTR("DNS address 1: %s\n\r"), WiFi.dnsIP(1).toString().c_str());
   delay(500);
 
   //Setup sleep parameters
   wifi_set_sleep_type(NONE_SLEEP_T);
 
   String host[] = {sensorHostname, shutterHostname};
-  for ( int i = 0; i< (sizeof( host )/sizeof( host[0]) )  ; i++ )
+  for (int i = 0; i < (sizeof(host) / sizeof(host[0])); i++)
   {
-    Serial.printf("Wifi setup rest resolution test - %s\n", host[i].c_str() );
-  
+    Serial.printf("Wifi setup rest resolution test - %s\n", host[i].c_str());
+
     IPAddress resolvedIP;
 
     if (WiFi.hostByName(host[i].c_str(), resolvedIP))
     {
-        Serial.printf("DNS: %s -> %s\n", host[i].c_str(), resolvedIP.toString().c_str());
-    } 
-    else 
+      Serial.printf("DNS: %s -> %s\n", host[i].c_str(), resolvedIP.toString().c_str());
+    }
+    else
     {
-        Serial.printf("DNS lookup failed for %s\n", host[i].c_str());
+      Serial.printf("DNS lookup failed for %s\n", host[i].c_str());
     }
   }
-  
-  Serial.println( F("WiFi connected" ) );
+
+  Serial.println(F("WiFi connected"));
   delay(500);
 }

@@ -24,6 +24,36 @@ In my arrangement, Node-red flows are used to listen for and graph the updated r
 </ul>
 
 <h3>Testing</h3>
+<p>The new configuration UI is enabled by default: open <code>/setup</code> for
+device management and <code>/setup/v1/dome/1/setup</code> for dome settings.
+See <a href="WEB_SETUP_CHANGELOG.md">the web setup plan, settings inventory,
+HTTP examples and implementation notes</a>. Define <code>DOME_MODERN_SETUP=0</code>
+to compile the original pages.</p>
+<p>Run the discovery and settings test from PowerShell (Windows PowerShell 5.1+ and curl.exe):</p>
+
+```powershell
+.\test-discovery.ps1
+# Use a specific subnet broadcast, or a dome IP for unicast UDP discovery:
+.\test-discovery.ps1 -DiscoveryAddress 192.168.1.255
+.\test-discovery.ps1 -DiscoveryAddress 192.168.1.89
+# Optionally select the exact DeviceName returned by management:
+.\test-discovery.ps1 -DeviceName ESPdom01
+```
+
+<p>The script sends alpacadiscovery1 on UDP port 32227, queries API versions,
+server description and configured devices, then tests each matching Dome using
+the returned IP, HTTP port and DeviceNumber. It connects with a generated ClientID,
+reads standard capabilities and state, saves the management and dome settings HTML,
+and disconnects in a finally block, verifying the connected state afterwards.
+Responses are saved under logs/discovery-TIMESTAMP. Failed requests produce warnings
+and a nonzero exit status; property failures allow the remaining properties to be read.
+Use -DiscoveryPort for a custom UDP port or -HttpTimeoutSeconds for slow responses.</p>
+<p>The script sends no explicit movement commands. The firmware may park the dome
+or close the shutter on disconnect if configured to do so. A powered-off or
+unreachable controller cannot be guaranteed to receive the disconnect request.
+The older test.bat is a separate movement test with hard-coded device URLs.</p>
+<p>Local mock integration checks (no dome needed): <code>python tests/check-discovery-script.py</code>.</p>
+
 <p>Access by serial port  - Tx only is available from device at 115,600 baud at 3.3v. This provides debug output .<br/>
 Wifi is used for REST-ful web access <br/>
 ESP8266HttpServer is used to service web requests on port 80 <br/>
