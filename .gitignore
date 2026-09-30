@@ -4,4 +4,5 @@ ESP8266_AscomDome.ino
 lib/
 /build/
 /debug/
+/logs/
 ESP8266_AscomDome.ino.generic.bin

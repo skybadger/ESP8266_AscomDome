@@ -1,0 +1,122 @@
+Executable segment sizes:
+IROM   : 471120          - code in flash         (default or ICACHE_FLASH_ATTR) 
+IRAM   : 30064   / 32768 - code in IRAM          (ICACHE_RAM_ATTR, ISRs...) 
+DATA   : 1692  )         - initialized variables (global, static) in RAM/HEAP 
+RODATA : 21576 ) / 81920 - constants             (global, static) in RAM/HEAP 
+BSS    : 33296 )         - zeroed variables      (global, static) in RAM/HEAP 
+
+
+Executable segment sizes:
+IROM   : 471216          - code in flash         (default or ICACHE_FLASH_ATTR) 
+IRAM   : 30064   / 32768 - code in IRAM          (ICACHE_RAM_ATTR, ISRs...) 
+DATA   : 1692  )         - initialized variables (global, static) in RAM/HEAP 
+RODATA : 21544 ) / 81920 - constants             (global, static) in RAM/HEAP 
+BSS    : 33296 )         - zeroed variables      (global, static) in RAM/HEAP 
+
+Executable segment sizes:
+IROM   : 471840          - code in flash         (default or ICACHE_FLASH_ATTR) 
+IRAM   : 30064   / 32768 - code in IRAM          (ICACHE_RAM_ATTR, ISRs...) 
+DATA   : 1692  )         - initialized variables (global, static) in RAM/HEAP 
+RODATA : 20960 ) / 81920 - constants             (global, static) in RAM/HEAP 
+BSS    : 33304 )         - zeroed variables      (global, static) in RAM/HEAP 
+
+DEBUG turned off - NoAssert -NDEBUG
+Executable segment sizes:
+IROM   : 460372          - code in flash         (default or ICACHE_FLASH_ATTR) 
+IRAM   : 29272   / 32768 - code in IRAM          (ICACHE_RAM_ATTR, ISRs...) 
+DATA   : 1692  )         - initialized variables (global, static) in RAM/HEAP 
+RODATA : 20208 ) / 81920 - constants             (global, static) in RAM/HEAP 
+BSS    : 33288 )         - zeroed variables      (global, static) in RAM/HEAP 
+
+Removed GDB support 
+Executable segment sizes:
+IROM   : 460412          - code in flash         (default or ICACHE_FLASH_ATTR) 
+IRAM   : 29272   / 32768 - code in IRAM          (ICACHE_RAM_ATTR, ISRs...) 
+DATA   : 1692  )         - initialized variables (global, static) in RAM/HEAP 
+RODATA : 20104 ) / 81920 - constants             (global, static) in RAM/HEAP 
+BSS    : 33280 )         - zeroed variables      (global, static) in RAM/HEAP 
+
+DEBUG = NONE
+Executable segment sizes:
+IROM   : 452220          - code in flash         (default or ICACHE_FLASH_ATTR) 
+IRAM   : 29272   / 32768 - code in IRAM          (ICACHE_RAM_ATTR, ISRs...) 
+DATA   : 1692  )         - initialized variables (global, static) in RAM/HEAP 
+RODATA : 20104 ) / 81920 - constants             (global, static) in RAM/HEAP 
+BSS    : 33232 )         - zeroed variables      (global, static) in RAM/HEAP 
+
+Reduced EEPROM
+Executable segment sizes:
+IROM   : 452424          - code in flash         (default or ICACHE_FLASH_ATTR) 
+IRAM   : 29272   / 32768 - code in IRAM          (ICACHE_RAM_ATTR, ISRs...) 
+DATA   : 1660  )         - initialized variables (global, static) in RAM/HEAP 
+RODATA : 20016 ) / 81920 - constants             (global, static) in RAM/HEAP 
+BSS    : 33168 )         - zeroed variables      (global, static) in RAM/HEAP 
+
+Moved api device calls into PROGMEM 
+Executable segment sizes:
+IROM   : 453104          - code in flash         (default or ICACHE_FLASH_ATTR) 
+IRAM   : 29272   / 32768 - code in IRAM          (ICACHE_RAM_ATTR, ISRs...) 
+DATA   : 1612  )         - initialized variables (global, static) in RAM/HEAP 
+RODATA : 19432 ) / 81920 - constants             (global, static) in RAM/HEAP 
+BSS    : 33160 )         - zeroed variables      (global, static) in RAM/HEAP 
+
+streamlined the json helper functions
+Executable segment sizes:
+IROM   : 453328          - code in flash         (default or ICACHE_FLASH_ATTR) 
+IRAM   : 29272   / 32768 - code in IRAM          (ICACHE_RAM_ATTR, ISRs...) 
+DATA   : 1612  )         - initialized variables (global, static) in RAM/HEAP 
+RODATA : 19432 ) / 81920 - constants             (global, static) in RAM/HEAP 
+BSS    : 33160 )         - zeroed variables      (global, static) in RAM/HEAP 
+
+Executable segment sizes:
+IROM   : 453488          - code in flash         (default or ICACHE_FLASH_ATTR) 
+IRAM   : 29272   / 32768 - code in IRAM          (ICACHE_RAM_ATTR, ISRs...) 
+DATA   : 1612  )         - initialized variables (global, static) in RAM/HEAP 
+RODATA : 19432 ) / 81920 - constants             (global, static) in RAM/HEAP 
+BSS    : 33160 )         - zeroed variables      (global, static) in RAM/HEAP 
+
+With only OOM debugging turned on. 
+IROM   : 454472          - code in flash         (default or ICACHE_FLASH_ATTR) 
+IRAM   : 30016   / 32768 - code in IRAM          (ICACHE_RAM_ATTR, ISRs...) 
+DATA   : 1612  )         - initialized variables (global, static) in RAM/HEAP 
+RODATA : 19464 ) / 81920 - constants             (global, static) in RAM/HEAP 
+BSS    : 33168 )         - zeroed variables      (global, static) in RAM/HEAP 
+
+Nb No change if compile RemoteDebug out using define switch
+Move webserver url registrations to F() - 1K!
+Executable segment sizes:
+IROM   : 455624          - code in flash         (default or ICACHE_FLASH_ATTR) 
+IRAM   : 30016   / 32768 - code in IRAM          (ICACHE_RAM_ATTR, ISRs...) 
+DATA   : 1612  )         - initialized variables (global, static) in RAM/HEAP 
+RODATA : 18392 ) / 81920 - constants             (global, static) in RAM/HEAP 
+BSS    : 33168 )         - zeroed variables      (global, static) in RAM/HEAP 
+
+Changed lwip from lwip 2 high bandwidth to lwip 2 low memory
+Disabled RemoteDebug properly using #defines 
+Tested using local device against remote observatory devices and functions fine 
+compared to previously needing v1.4 high bandwidth with IDE 2.4
+6K  RODATA difference !
+Executable segment sizes:
+IROM   : 449576          - code in flash         (default or ICACHE_FLASH_ATTR) 
+IRAM   : 30032   / 32768 - code in IRAM          (ICACHE_RAM_ATTR, ISRs...) 
+DATA   : 1608  )         - initialized variables (global, static) in RAM/HEAP 
+RODATA : 12444 ) / 81920 - constants             (global, static) in RAM/HEAP 
+BSS    : 33008 )         - zeroed variables      (global, static) in RAM/HEAP 
+
+With lwip 2low memory and remote debugging enabled 
+Executable segment sizes:
+IROM   : 474420          - code in flash         (default or ICACHE_FLASH_ATTR) 
+IRAM   : 30064   / 32768 - code in IRAM          (ICACHE_RAM_ATTR, ISRs...) 
+DATA   : 1612  )         - initialized variables (global, static) in RAM/HEAP 
+RODATA : 19112 ) / 81920 - constants             (global, static) in RAM/HEAP 
+BSS    : 33232 )         - zeroed variables      (global, static) in RAM/HEAP
+
+Remote debug turned back on but Lwip v2 high bandwidth turned back on . 
+Its the remote debug wot is killing this. 
+Executable segment sizes:
+IROM   : 474436          - code in flash         (default or ICACHE_FLASH_ATTR) 
+IRAM   : 30064   / 32768 - code in IRAM          (ICACHE_RAM_ATTR, ISRs...) 
+DATA   : 1612  )         - initialized variables (global, static) in RAM/HEAP 
+RODATA : 19112 ) / 81920 - constants             (global, static) in RAM/HEAP 
+BSS    : 33232 )         - zeroed variables      (global, static) in RAM/HEAP 
+

@@ -259,8 +259,6 @@
                 "ESP8266",
                 "ARDUINO_ARCH_ESP8266",
                 "ARDUINO_ESP8266_ESP12",
-                "DEBUG_ESP_PORT=Serial",
-                "DEBUG_ESP_HTTP_SERVER",
                 "F_CPU=160000000L",
                 "__ets__",
                 "ICACHE_FLASH",
