@@ -49,7 +49,7 @@ public:
 
   uint8_t checkLCD()
   {
-    byte inData;
+    byte inData = 0;
     bool readComplete = false;
 
     DEBUGS1(F("CheckLCD:: Using address "));

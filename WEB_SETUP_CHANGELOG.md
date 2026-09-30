@@ -86,7 +86,7 @@ Device type/number, identity, versions and capabilities are read-only metadata.
 Compile-time pins, credentials, motor tuning constants and firmware capabilities
 are not exposed as editable settings. Live azimuth, altitude, movement and client
 connection state remain available through `/status` and Alpaca; they are not
-configuration controls. Motion controls remain in the Alpaca API. Legacy custom
+configuration controls. Manual movement controls are described below. Legacy custom
 movement URLs such as `/Goto` are only registered in legacy mode.
 
 ## Build selection
@@ -163,3 +163,127 @@ change and restore the UDP port while running discovery on each port; verify bus
 responses during operation; check reboot/firmware-update links; measure free heap
 and largest allocation while repeatedly loading both pages with normal polling.
 Build sizes do not establish peak runtime heap use.
+
+## Manual movement controls
+
+The modern dome page now includes a manual movement section at
+`/setup/v1/dome/1/setup`, under the same `DOME_MODERN_SETUP` switch:
+
+| Control | Request to POST /setup/v1/dome/1/control | Existing queue utility |
+|---|---|---|
+| Slew to target | action=slew&value=180 | addDomeCmd, CMD_DOME_SLEW |
+| Jog east +5 degrees | action=east | normaliseInt, addDomeCmd |
+| Jog west -5 degrees | action=west | normaliseInt, addDomeCmd |
+| Open shutter | action=open | addShutterCmd, CMD_SHUTTER_OPEN |
+| Close shutter | action=close | addShutterCmd, CMD_SHUTTER_CLOSE |
+| Move to shutter altitude | action=altitude&value=45 | addShutterCmd, CMD_SHUTTERVAR_SET, name altitude |
+
+Absolute azimuth accepts integer 0–360, with 360 normalized to 0. Jog size is
+`domeUiJogDegrees` (5) in `ASCOM_DomeControl.h`. Jogs use the active target or last
+queued movement target, round fractional active targets to whole degrees, and wrap
+at north. Queued moves do not change an active slew's target; `onDomeIdle()` applies
+them in order. Jogs wait if configuration/abort commands precede them in the queue.
+
+Altitude is interpreted as **move directly to an angle**, using the existing
+`shutterAltitude()` path, rather than saving separate opening/closing limits. The
+current limits are 0–110 degrees, inclusive; the maximum is not wrapped to zero.
+`targetAltitude` updates after the remote shutter accepts the command. This local
+manual control does not change the driver's advertised `canSetAltitude` capability.
+Open/close retain the remote shutter's existing endpoint behavior and wait behind
+any active shutter movement. The user was asked to clarify whether persistent
+opening/closing limits were intended; those are not implemented here.
+
+Accepted requests redirect with HTTP 303 to a GET page, preventing refresh from
+reissuing a movement. The page shows current/active dome position, controller states
+and a refresh link. Invalid requests return 400, non-POST methods 405, unavailable
+controllers/disabled builds/allocation failures 503, and full queues or halted/
+aborting controllers 409. Manual submissions are rejected when the relevant queue
+already has eight pending entries (Alpaca queue behavior is unchanged).
+Local commands use client/transaction IDs 0 and do not modify Alpaca ownership.
+They use the existing local UI access model, so can be issued while an Alpaca client
+is connected. They are not written to EEPROM.
+
+The existing `_ENABLE_DOME` and `_ENABLE_SHUTTER` switches were commented out when
+this change was made. They are left unchanged: the page reports disabled motion
+and handlers reject requests until the corresponding loop is enabled. Also ensure
+the normal bearing acquisition is enabled/configured when using actual dome motion.
+
+Supporting fixes: extend `shutterCmdNames` to match enum indices 0/4/5/6 (previously
+valid open/close/altitude commands indexed beyond the array during logging); check
+queue and command/string allocations in the existing enqueue helpers.
+
+Host regression tests exercise the actual control handler with fake HTTP and queue
+objects in `tests/test-dome-controls.cpp`. Build from a Visual Studio Native Tools
+prompt, using `/DTEST_DISABLED` for the disabled-control variant:
+
+```bat
+cl /nologo /EHsc /std:c++14 /W4 /Fo:build\test-dome-controls.obj /Fe:build\test-dome-controls.exe tests\test-dome-controls.cpp
+build\test-dome-controls.exe
+```
+
+Cases cover validation, non-POST rejection, absolute slews, both wrap directions,
+accumulating jogs, preserving an in-progress target, shutter open/close, 0/45/110
+degree altitudes, full queues, missing motor, allocation failures and disabled
+control loops. Hardware motion/browser checks require a flashed controller and
+were not performed; no firmware was uploaded.
+
+Validation completed: enabled and disabled native control-handler tests PASS;
+final `pio run -e esp12e` PASS (`build/manual-control-build.log`); formatting checks
+PASS. The final firmware retains the project's existing disabled movement-loop
+defines.
+
+## Bearing synchronisation control
+
+The modern dome setup page now provides **Synchronise current bearing** under
+`DOME_MODERN_SETUP`. Enter the independently measured physical azimuth in degrees
+(0-360, including fractional degrees). This does not move the dome.
+
+New functions:
+- `calculateDomeBearingSync()` computes the shortest signed offset from the raw
+  sensor bearing to the supplied bearing, normalising 360 to zero.
+- `readDomeSyncBearing()` fetches and validates a fresh remote sensor reading;
+  failed requests never fall back to the cached remote value. Local sensor builds
+  use their current raw bearing variable.
+- `handleDomeUiSync()` validates the request, requires idle status and empty command
+  queues, updates `bearing`, `azimuthSyncOffset`, `currentAzimuth` and the idle
+  `targetAzimuth`, then saves calibration using the existing EEPROM function.
+  A save failure restores the previous runtime values.
+
+The raw sensor value is retained in `bearing`; the offset is applied to it during
+subsequent normal azimuth updates. No motion command or client ownership change
+is made. The endpoint accepts POST only and redirects after success:
+
+```sh
+curl -i -X POST http://DOME/setup/v1/dome/1/sync --data "bearing=123.5"
+```
+
+Invalid input returns 400, busy state 409, sensor failure 503 and persistence
+failure 500. The management page links to the dome setup page where the control
+is located. The legacy UI remains selected when `DOME_MODERN_SETUP=0`.
+
+Native regression tests in `tests/test-bearing-sync.cpp` pass for wraparound in
+both directions, fractional readings, endpoints, unchanged calibration and invalid
+inputs. Hardware/browser verification requires a flashed device; no firmware was
+uploaded and no hardware movement was performed.
+
+Final validation: esp12e PlatformIO build PASS (build/bearing-sync-build.log); native bearing calculation tests PASS; clang-format verification PASS.
+
+## Mobile and tablet layout
+
+Implemented the high/medium priority review items for the modern management and
+configuration/control pages:
+- Navigation links and buttons have at least 44px touch height.
+- Reduced phone padding and removed duplicate card/form borders; long values wrap.
+- Jog and shutter button pairs use flexible rows that wrap on narrow screens.
+- Numeric and decimal keyboard hints are provided; signed offsets use a text
+  keyboard to keep minus available, retaining server-side numeric validation.
+- Hostname inputs disable automatic capitalisation and spellchecking.
+- Invalid configuration submissions retain the entered value for correction.
+- Feedback is moved beside the relevant setting/control and focused with a small
+  inline script. Without JavaScript, it remains visible at the top via #feedback.
+- Movement redirects retain the relevant dome/shutter context. No command or
+  persistence semantics were changed.
+
+Browser/device rendering and mobile keyboard checks remain to be performed on
+Android Chrome and iOS/iPadOS Safari at 320/375/390/768/1024px, in both orientations
+and with enlarged text. No firmware was uploaded or physical commands issued.

@@ -1,9 +1,13 @@
 #ifndef _ESP8266_ASCOMDOME_H_
 #define _ESP8266_ASCOMDOME_H_
 
+//Minimum safe heap sizes to support remote rest queries
+constexpr uint32_t MIN_SAFE_HEAP = 4000;
+constexpr uint32_t MIN_SAFE_BLOCK = 800;
+
 //Set to 0 (or override with build_flags) to use the original setup pages.
 #ifndef DOME_MODERN_SETUP
-#define DOME_MODERN_SETUP 0
+#define DOME_MODERN_SETUP 1
 #endif
 
 //State what the target hardware is - determines use of pins for I2C for instance.
@@ -26,12 +30,11 @@
 //#define DEBUG_ESP_HTTP_CLIENT
 //#define DEBUG_ESP_HTTP_SERVER
 #define _DEBUG
-#define _DEBUG_ESP              //Enables basic debugging statements for ESP
+#define DEBUG_ESP_MH            //Enables DEBUGS1 / DEBUGSL1 serial diagnostics
 #define HTTP_CLIENT_REUSE false //Re-use the existing connection or not for subsequent comms within a session
 //Use for client testing
 //#define _DISABLE_MQTT                     //Disable the MQTT handling segments.
 //#define _DEBUG_MQTT                       //enable low-level MQTT connection debugging statements.
-#include "DebugSerial.h"
 
 //Flag to specify whether code checks for connected client ID on motion command requests or not
 //added to support reboots of dome controller due to un-diagnosed power brownouts which Voyager doesn't get to see and therefore loses control of the dome.
@@ -41,21 +44,25 @@
 
 //remote debugging
 //Manage the remote debug interface, it takes 6K of memory with all the strings even when not in use but loaded
-//#define _DISABLE_REMOTE_DEBUG             //disables all debugX calls.
-//#define DEBUG_DISABLED                    //put all debug to serial
+#define _DISABLE_REMOTE_DEBUG             //Use serial logging without the remote server.
+#if defined _DISABLE_REMOTE_DEBUG && !defined DEBUG_DISABLED
+#define DEBUG_DISABLED                    //Disable RemoteDebug; DebugSerial supplies the fallback.
+#endif
 #define DEBUG_DISABLE_AUTO_FUNC true //Turn on or off the auto function labelling feature .
 #define WEBSOCKET_DISABLED true      //No impact to memory requirement
 //#define MAX_TIME_INACTIVE 0             //to turn off the de-activation of a telnet session
+
 #include <RemoteDebug.h> //https://github.com/JoaoLopesF/RemoteDebug
+#include "DebugSerial.h"
 
 //Used to test for memory leaks.
-//#define _TEST_RAM_ //turn on RAM check settings
-//#define _MEMLEAK_CHECK
-//#define _MEMLEAK_CHECK_DEBUG
+#define _TEST_RAM_ //turn on RAM check settings
+#define _MEMLEAK_CHECK
+#define _MEMLEAK_CHECK_DEBUG
 
-//#define _ENABLE_BEARING                      //Turn off loop segment for bearing update if not set.
+#define _ENABLE_BEARING                    //Turn off loop segment for bearing update if not set.
 //#define _ENABLE_SHUTTER                    // Turn off loop segment for shutter handling if not set.
-//#define _ENABLE_DOME                       //Turn off segment for dome handling if not set.
+#define _ENABLE_DOME                       //Turn off segment for dome handling if not set.
 
 //Select a method of getting positional feedback on dome rotation.
 //#define USE_REMOTE_COMPASS_FOR_DOME_ROTATION
@@ -124,9 +131,9 @@ time_t now; //use as 'gmtime(&now);'
 //Program constants
 #define BUILDSTRING __FILE__ + __DATE__
 #if !defined _DISABLE_REMOTE_DEBUG
-const char *BuildVersionName PROGMEM = " LWIPv2 Higher Bandwidth, RDebug enabled \n";
+const char BuildVersionName[] PROGMEM = " LWIPv2 Higher Bandwidth, RDebug enabled \n";
 #else
-const char *BuildVersionName PROGMEM = " LWIPv2 Higher Bandwidth, RDebug disabled \n";
+const char BuildVersionName[] PROGMEM = " LWIPv2 Higher Bandwidth, RDebug disabled \n";
 #endif
 
 #define MAX_NAME_LENGTH 40
@@ -151,7 +158,8 @@ enum shutterCmd
   CMD_SHUTTER_CLOSE = 5,
   CMD_SHUTTERVAR_SET
 };
-const char *shutterCmdNames[] = {"SHUTTER_ABORT", "SHUTTER_OPEN", "SHUTTER_CLOSE", "SHUTTERVAR_SET"};
+//Indices match shutterCmd (open=4, close=5, altitude=6).
+const char *shutterCmdNames[] = {"SHUTTER_ABORT", "UNUSED", "UNUSED", "UNUSED", "SHUTTER_OPEN", "SHUTTER_CLOSE", "SHUTTERVAR_SET"};
 //enum motorSpeed: uint8_t     { MOTOR_SPEED_OFF=0, MOTOR_SPEED_SLOW_SLEW=120, MOTOR_SPEED_FAST_SLEW=180 };
 //enum motorDirection: uint8_t { MOTOR_DIRN_CW=0, MOTOR_DIRN_CCW=1 };
 enum I2CConst
@@ -321,12 +329,14 @@ unsigned int clientId;
 int connectionCtr = 0; //variable to count number of times something has connected compared to disconnected.
 extern const unsigned int NOT_CONNECTED;
 unsigned int connected = NOT_CONNECTED;
-static const char *DriverName PROGMEM = "Skybadger.ESPDome";
-static const char *DriverVersion PROGMEM = "1.2";
-static const char *DriverInfo PROGMEM = "Skybadger.ESPDome RESTful native device. ";
-static const char *Description PROGMEM = "Skybadger ESP2866-based wireless ASCOM Dome controller";
+// Shared ASCOM handlers must read this driver's metadata from flash.
+#define ASCOM_METADATA_STRING(value) FPSTR(value)
+static const char DriverName[] PROGMEM = "Skybadger.ESPDome";
+static const char DriverVersion[] PROGMEM = "1.2";
+static const char DriverInfo[] PROGMEM = "Skybadger.ESPDome RESTful native device. ";
+static const char Description[] PROGMEM = "Skybadger ESP2866-based wireless ASCOM Dome controller";
 static const int32 InterfaceVersion PROGMEM = 1;
-static const char *DriverType PROGMEM = "dome"; //Must be a valid ASCOM type to be recognised by UDP discovery - lower case required
+static const char DriverType[] PROGMEM = "dome"; //Must be a valid ASCOM type to be recognised by UDP discovery - lower case required
 
 //ALPACA support additions
 //UDP Port can be edited in setup page
@@ -335,7 +345,7 @@ int udpPort = ALPACA_DISCOVERY_PORT;
 WiFiUDP Udp;
 //espdom00 GUID - "0011-0000-0000-0000"; prototype
 //espdom01 GUID - "0011-0000-0000-0001"; working
-static const char *GUID PROGMEM = "0011-0000-0000-0001";
+static const char GUID[] PROGMEM = "0011-0000-0000-0001";
 
 //Use when there are multple instances for this device - not very likely for a dome.
 const int defaultInstanceNumber = 1;
@@ -343,7 +353,7 @@ int instanceNumber = defaultInstanceNumber;
 
 //setup later since we are allowing this to be dynamic via EEprom.
 //pre-req for setup default function;
-static const char *defaultAscomName PROGMEM = "Skybadger Dome 01";
+static const char defaultAscomName[] PROGMEM = "Skybadger Dome 01";
 char *ascomName = nullptr;
 
 //Mgmt Api Constants

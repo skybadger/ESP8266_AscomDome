@@ -132,6 +132,10 @@ void handleAtParkGet(void)
 
 void handleAzimuthGet(void)
 {
+  /*
+  Need to be very careful about null memory  - ie runnig out of memory from allocations. 
+
+  */
   String message;
   uint32_t clientID = 0;
   uint32_t transID = 0;
@@ -203,21 +207,26 @@ void handleCanSetAltitudeGet(void)
   server.send(200, F("application/json"), message);
   return;
 }
-
+/* Check whether this is an acceptable approach - want to not return no resuolt at all otherwise. */
 void handleCanSetAzimuthGet(void)
 {
   String message;
+  int result; 
   uint32_t clientID = 0;
   uint32_t transID = 0;
-  if (!validateClientTransactionIds(clientID, transID, F("CanSetAzimuth")))
-    return;
   JsonDocument doc;
   JsonObject root = doc.to<JsonObject>();
+  
+  if (!validateClientTransactionIds(clientID, transID, F("CanSetAzimuth")))
+    return 
+
   jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("CanSetAzimuth"), Success, "");
   root["Value"] = canSetAzimuth;
+  result = HTTP_CODE_OK; 
+  
   serializeJson(root, message);
   debugI("CanSetAzimuthGet: %s", message.c_str());
-  server.send(200, F("application/json"), message);
+  server.send(result, F("application/json"), message);
   return;
 }
 
@@ -341,7 +350,7 @@ void handleSlewingGet(void)
   jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("Slewing"), Success, "");
   root["Value"] = (domeStatus == DOME_SLEWING || shutterStatus == SHUTTER_OPENING || shutterStatus == SHUTTER_CLOSING || shutterStatus == SHUTTER_ABORTING);
   serializeJson(root, message);
-  debugD("SlewingGet: %s", message.c_str());
+  debugI("SlewingGet: %s", message.c_str());
   server.send(200, F("application/json"), message);
   return;
 }
@@ -403,9 +412,7 @@ void handleShutterStatusGet(void)
   jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("ShutterStatus"), Success, "");
 
   root["Value"] = (shutterStatus <= SHUTTER_ERROR) ? static_cast<int>(shutterStatus) : static_cast<int>(SHUTTER_ERROR);
-  //root.set<int>("Value", )
-  //0 = Open, 1 = Closed, 2 = Opening, 3 = Closing, 4 = Shutter status error
-  //JsonArray& offsets = root.createNestedArray("Value");
+
   serializeJson(root, message);
   debugI("ShutterStatusGet: %s", message.c_str());
   server.send(200, F("application/json"), message);
@@ -436,9 +443,16 @@ void handleCloseShutterPut(void)
   else if (shutterStatus == SHUTTER_OPENING || shutterStatus == SHUTTER_OPEN)
   {
     //Set command to close shutter.
-    addShutterCmd(clientID, transID, "", CMD_SHUTTER_CLOSE, 0);
-    debugD("CloseShutterPut: Added async command to close");
-    jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("CloseShutter"), Success, "");
+    if ( addShutterCmd(clientID, transID, "", CMD_SHUTTER_CLOSE, 0) != nullptr ) 
+    {
+      debugD("CloseShutterPut: Added async command to close");
+      jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("CloseShutter"), Success, "");
+    }
+    else 
+    {
+      debugD("CloseShutterPut: Failed to add async command to close");
+      jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("CloseShutter"), invalidValue, "out of memory");
+    }
   }
   else
   {
@@ -473,8 +487,10 @@ void handleFindHomePut(void)
 #endif
   {
     //Set command to move to home.
-    addDomeCmd(clientID, transID, "", CMD_DOME_SLEW, homePosition);
-    jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("FindHome"), Success, "");
+    if ( addDomeCmd(clientID, transID, "", CMD_DOME_SLEW, homePosition) != nullptr) 
+      jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("FindHome"), Success, "");
+    else 
+      jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("FindHome"), invalidValue, "out of memory");
   }
   serializeJson(root, message);
   debugI("FindHomePut: %s", message.c_str());
@@ -514,9 +530,16 @@ void handleOpenShutterPut(void)
   else if (shutterStatus == SHUTTER_CLOSING || shutterStatus == SHUTTER_CLOSED)
   {
     //Set command to open shutter.
-    addShutterCmd(clientID, transID, "", CMD_SHUTTER_OPEN, 0);
-    debugD("OpenShutterPut: Added async command to open");
-    jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("OpenShutter"), Success, "");
+    if ( addShutterCmd(clientID, transID, "", CMD_SHUTTER_OPEN, 0) != nullptr ) 
+    {
+      debugD("OpenShutterPut: Added async command to open");
+      jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("OpenShutter"), Success, "");
+    }
+    else 
+    {
+      debugD("OpenShutterPut: Failed to add async command to open");
+      jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("OpenShutter"), invalidValue, "out of memory");
+    }
   }
   else
   {
@@ -551,8 +574,10 @@ void handleSetParkPut(void)
   {
     //Set new park location.
     parkPosition = currentAzimuth;
-    addDomeCmd(clientID, transID, F("parkPosition"), CMD_DOMEVAR_SET, parkPosition);
-    jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("SetPark"), Success, "");
+    if ( addDomeCmd(clientID, transID, F("parkPosition"), CMD_DOMEVAR_SET, parkPosition) != nullptr) 
+      jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("SetPark"), Success, "");
+    else
+      jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("SetPark"), invalidValue, "out of memory");    
   }
 
   serializeJson(root, message);
@@ -580,8 +605,11 @@ void handleParkPut(void)
   else
 #endif
   {
-    addDomeCmd(clientID, transID, "", CMD_DOME_SLEW, parkPosition);
-    jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("Park"), Success, "");
+    if ( addDomeCmd(clientID, transID, "", CMD_DOME_SLEW, parkPosition) != nullptr )
+      jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("Park"), Success, "");
+    else
+      jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("Park"), invalidValue, "out of memory");
+    
   }
 
   serializeJson(root, message);
@@ -628,8 +656,10 @@ void handleSlewToAltitudePut(void)
     else
     { //Set new shutter altitude.
       normaliseFloat(location, SHUTTER_MAX_ALTITUDE);
-      addShutterCmd(clientID, transID, "altitude", CMD_SHUTTERVAR_SET, location);
-      jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("SlewToAltitude"), Success, "");
+      if(  addShutterCmd(clientID, transID, "altitude", CMD_SHUTTERVAR_SET, location) != nullptr ) 
+        jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("SlewToAltitude"), Success, "");
+     else 
+        jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("SlewToAltitude"), invalidValue, "out of memory");
     }
   }
   else
@@ -686,8 +716,10 @@ void handleSlewToAzimuthPut(void)
       //Set new slew location.
       normaliseFloat(location, 360.0F);
       debugD("SlewToAzimuthPut: %f", location);
-      addDomeCmd(clientID, transID, F("SlewToAzimuthPut"), CMD_DOME_SLEW, location);
-      jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("SlewToAzimuth"), Success, "");
+      if ( addDomeCmd(clientID, transID, F("SlewToAzimuthPut"), CMD_DOME_SLEW, location) != nullptr)
+        jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("SlewToAzimuth"), Success, "");
+      else 
+        jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("SlewToAzimuth"), valueNotSet, "low memory");
     }
   }
   else

@@ -315,7 +315,7 @@ void setupDefaults()
   if (ascomName != nullptr)
     free(ascomName);
   ascomName = (char *)calloc(MAX_NAME_LENGTH, sizeof(char));
-  strcpy(ascomName, String(defaultAscomName).c_str());
+  strcpy_P(ascomName, defaultAscomName);
   DEBUGS1(F("ascomName :"));
   DEBUGSL1(ascomName);
 

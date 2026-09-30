@@ -171,7 +171,7 @@ void setup()
 #if !defined _DISABLE_REMOTE_DEBUG
   //Debugging over telnet setup
   // Initialize the server (telnet or web socket) of RemoteDebug
-  Debug.begin(WiFi.hostname().c_str(), Debug.VERBOSE);
+  Debug.begin(WiFi.hostname().c_str(), Debug.ERROR);
   Debug.setSerialEnabled(true); //until set false
   // Options
   Debug.setResetCmdEnabled(true); // Enable the reset command
@@ -217,7 +217,7 @@ void setup()
   ////////////////////////////////////////////////////////////////////////////////////////
   outbuf = scanI2CBus();
   debugD("I2CScan: %s", outbuf.c_str());
-  Serial.printf("I2CScan: %s\n", outbuf.c_str());
+  Serial.printf_P(PSTR("I2CScan: %s\n"), outbuf.c_str());
   ////////////////////////////////////////////////////////////////////////////////////////
 
   //Open a connection to MQTT
@@ -763,7 +763,7 @@ void publishFnStatus(void)
   serializeJson(root, output);
 
   outTopic = String(outFnTopic);       //PROGMEM
-  outTopic.concat(String(DriverType)); //PROGMEM
+  outTopic.concat(String(FPSTR(DriverType))); //PROGMEM
   outTopic.concat("/");
   outTopic.concat(myHostname);
 
@@ -859,17 +859,17 @@ void setupWifi(void)
   String host[] = {sensorHostname, shutterHostname};
   for (int i = 0; i < (sizeof(host) / sizeof(host[0])); i++)
   {
-    Serial.printf("Wifi setup rest resolution test - %s\n", host[i].c_str());
+    Serial.printf_P(PSTR("Wifi setup rest resolution test - %s\n"), host[i].c_str());
 
     IPAddress resolvedIP;
 
     if (WiFi.hostByName(host[i].c_str(), resolvedIP))
     {
-      Serial.printf("DNS: %s -> %s\n", host[i].c_str(), resolvedIP.toString().c_str());
+      Serial.printf_P(PSTR("DNS: %s -> %s\n"), host[i].c_str(), resolvedIP.toString().c_str());
     }
     else
     {
-      Serial.printf("DNS lookup failed for %s\n", host[i].c_str());
+      Serial.printf_P(PSTR("DNS lookup failed for %s\n"), host[i].c_str());
     }
   }
 

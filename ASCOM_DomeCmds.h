@@ -76,11 +76,20 @@ int normaliseInt(int &input, int radix)
  */
 cmdItem_t *addDomeCmd(uint32_t clientId, uint32_t transId, String cmdName, enum domeCmd newCmd, int value)
 {
+  if (domeCmdList == nullptr)
+    return nullptr;
   //Create new command
   cmdItem_t *pCmd = (cmdItem_t *)calloc(sizeof(cmdItem_t), 1);
+  if (pCmd == nullptr)
+    return nullptr;
 
   //Create copy buffer for the command name
   char *cptr = (char *)calloc(sizeof(char), cmdName.length() + 1);
+  if (cptr == nullptr)
+  {
+    free(pCmd);
+    return nullptr;
+  }
   strncpy(cptr, cmdName.c_str(), cmdName.length());
   cptr[cmdName.length()] = '\0';
 
@@ -101,11 +110,20 @@ cmdItem_t *addDomeCmd(uint32_t clientId, uint32_t transId, String cmdName, enum 
  */
 cmdItem_t *addShutterCmd(uint32_t clientId, uint32_t transId, String cmdName, enum shutterCmd newCmd, int value)
 {
+  if (shutterCmdList == nullptr)
+    return nullptr;
   //Create new command
   cmdItem_t *pCmd = (cmdItem_t *)calloc(sizeof(cmdItem_t), 1);
+  if (pCmd == nullptr)
+    return nullptr;
 
   //Create copy buffer for the command name
   char *cptr = (char *)calloc(sizeof(char), cmdName.length() + 1);
+  if (cptr == nullptr)
+  {
+    free(pCmd);
+    return nullptr;
+  }
   strncpy(cptr, cmdName.c_str(), cmdName.length());
   cptr[cmdName.length()] = '\0';
 
@@ -582,8 +600,8 @@ int shutterSlew(enum shutterCmd setting)
 int shutterAltitude(int newAngle)
 {
   String outbuf = "";
-  String path = "/shutter";
-  String args = "shutter=";
+  String path = F("/shutter");
+  String args = F("shutter=");
   char charbuff[10];
   args.concat(String(itoa(newAngle, charbuff, 10)));
 
@@ -591,6 +609,7 @@ int shutterAltitude(int newAngle)
   int response = restQuery(shutterHostname, path, args, outbuf, HTTPMethod::HTTP_PUT);
   if (response == HTTP_CODE_OK)
   {
+    targetAltitude = newAngle;
     debugD("Issued new altitude %i to shutter, currently at %i", newAngle, altitude);
     if (newAngle > altitude && newAngle <= SHUTTER_MAX_ALTITUDE)
       shutterStatus = SHUTTER_OPENING;
@@ -693,16 +712,26 @@ int restQuery(String host, String uri, String args, String &response, enum HTTPM
 
   debugD("restQuery request - uri:%s, path:%s, args:%s, method:%i", host.c_str(), uri.c_str(), args.c_str(), (enum HTTPMethod)method);
 
-  IPAddress resolvedIP;
+  if (ESP.getFreeHeap() < MIN_SAFE_HEAP || ESP.getMaxFreeBlockSize() < MIN_SAFE_BLOCK)
+  {
+    debugE("Skipping REST request: low heap=%u maxBlock=%u",
+          ESP.getFreeHeap(),
+          ESP.getMaxFreeBlockSize());
 
+    return HTTP_CODE_SERVICE_UNAVAILABLE;
+  }
+
+  /*
+  IPAddress resolvedIP;
   if (WiFi.hostByName(host.c_str(), resolvedIP))
   {
-    debugI("DNS: %s -> %s", host.c_str(), resolvedIP.toString().c_str());
+    debugV("DNS: %s -> %s", host.c_str(), resolvedIP.toString().c_str());
   }
   else
   {
     debugE("DNS lookup failed for %s", host.c_str());
   }
+  */
 
   //host and args are separate, need to join them and add a protocol and args for a GET parameterised request.
   host.trim();
@@ -788,10 +817,13 @@ int restQuery(String host, String uri, String args, String &response, enum HTTPM
   {
     debugE("restQuery ... httpCient.begin failed, \n");
     response = "";
-    httpCode = -1;
+    httpCode = HTTP_CODE_SERVICE_UNAVAILABLE;
   }
 
+  //Do these to tidy up memory and reduce heap fragmentation 
   httpClient.end();
+  wclient.stop();
+
   return httpCode;
 }
 
@@ -812,16 +844,18 @@ float getBearing(String host)
   int response = 0;
   String outbuf = "";
   String path = "";
-  JsonDocument doc;
 
-  debugV("GetBearing setup - host uri: %s \n", host.c_str());
+  debugD("GetBearing setup - host uri: %s \n", host.c_str());
+  
   response = restQuery(host, "/encoder/bearing", "", outbuf, HTTP_GET);
 
-  DeserializationError error = deserializeJson(doc, outbuf);
-  JsonObject root = doc.as<JsonObject>();
   //Sometimes we get a good HTTP code but still no body...
   if (response == HTTP_CODE_OK)
   {
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, outbuf);
+    JsonObject root = doc.as<JsonObject>();
+
     if (!error && root["bearing"].is<float>())
     {
       localBearing = (float)root["bearing"];
@@ -853,14 +887,14 @@ float getBearing(String host)
     }
     else //can't retrieve the bearing
     {
-      debugV("Response code: %i, parse error: %s, json data: %s", response, error.c_str(), outbuf.c_str());
+      debugV("Parsing failure (%s) or bad data: json data: %s", error.c_str(), outbuf.c_str());
       debugW("No reading, using last: %f ", lastBearing);
       localBearing = lastBearing;
     }
   } //HTTP_CODE_OK
   else //Havent got a good response code
   {
-    debugV("Response code: %i, parse error: %s, json data: %s", response, error.c_str(), outbuf.c_str());
+    debugW("Failed to get bearing (%i),  json data: %s", response, outbuf.c_str());
     debugW("No reading, using last: %f ", lastBearing);
     localBearing = lastBearing;
   }
@@ -904,12 +938,12 @@ int getShutterStatus(String host, enum shutterState &outputState)
   String outbuf;
   long int duration = millis();
   enum shutterState value = SHUTTER_ERROR;
-  JsonDocument doc;
-
+  
   int response = restQuery(host, "/status", "", outbuf, HTTP_GET);
 
   if (response == HTTP_CODE_OK)
   {
+    JsonDocument doc;
     DeserializationError error = deserializeJson(doc, outbuf);
     JsonObject root = doc.as<JsonObject>();
     if (!error && root["status"].is<int>())
