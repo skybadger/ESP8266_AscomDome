@@ -1,3 +1,4 @@
+#include "DomeHeapTrace.h"
 #ifndef _i2cMotor_h_
 #define _i2cMotor_h_
 
@@ -52,7 +53,7 @@ public:
   void init(void)
   {
     //Write string to device
-    uint8_t *outData = new byte[5];
+    uint8_t outData[5];
     outData[0] = (uint8_t)0;   //register address to start writes to
     outData[1] = (uint8_t)0;   //motor mode - mode 0 is 0 (full reverse)  128 (stop)   255 (full forward).
     outData[2] = (uint8_t)128; //motor 1 is controlled by this speed register
@@ -60,7 +61,7 @@ public:
     outData[4] = (uint8_t)255; //slowest acceleration
 
     tw.beginTransmission(_address); // transmit to device
-    tw.write(outData, 5);           // sends array contents
+    tw.write( outData, 5);           // sends array contents
     tw.endTransmission();           // stop transmitting
   }
 
@@ -69,16 +70,17 @@ public:
   bool check(void)
   {
     //Write string to device
-    byte *outData = new byte[1];
-    byte inData;
-    bool readComplete = false;
+    byte outData = 0;
+    byte inData = 0;
 
-    outData[0] = 7;                 //Version register address
+    outData = 7;                 //Version register address
     tw.beginTransmission(_address); // transmit to device
-    tw.write(outData, 1);           // sends array contents
+    tw.write( &outData, 1);           // sends array contents
     tw.endTransmission(false);      // restart transmitting
 
     tw.requestFrom(_address, (uint8_t)1); // request 1 bytes from slave device
+    
+    bool readComplete = false;
     while (tw.available() && !readComplete)
     {                     // slave may send less than requested
       inData = tw.read(); // receive a byte as character
@@ -91,8 +93,9 @@ public:
   //Motor speed control device is a Devasys i2c/serial/pwm 5A h-Bridge device from http://robot-electronics.co.uk
   bool getSpeedDirection(void)
   {
+    DOME_HEAP_SCOPE("getSpeedDirection");
     //Write string to device
-    byte *inData = new byte[3];
+    byte inData[3];
     byte *ptr = inData;
     bool readComplete = false;
 
@@ -101,7 +104,8 @@ public:
     tw.write((uint8_t)1);                 // sends address of register we want to read
     tw.endTransmission(false);            // restart transmitting
     tw.requestFrom(_address, (uint8_t)3); // request 1 bytes from slave device
-    while (tw.available())
+    int readCount = 0; 
+    while (tw.available() && readCount++ < 3 )
     {                       // slave may send less than requested
       *(ptr++) = tw.read(); // receive a byte as character
     }
@@ -119,8 +123,9 @@ public:
    */
   bool setSpeedDirection(int newSpeed, uint8_t newDirn)
   {
+    DOME_HEAP_SCOPE("setSpeedDirection");
     //Write string to device
-    byte *outData = new byte[3];
+    byte outData[3];
     uint8_t speed = 128;
 
     //Convert speed and direction into simple velocity

@@ -1,3 +1,4 @@
+#include "DomeHeapTrace.h"
 #if !defined _ASCOMDOME_EEPROM_HANDLER_H_
 #define _ASCOMDOME_EEPROM_HANDLER_H_
 //Header file for EEprom specific processing used by ASCOM DOME
@@ -190,6 +191,7 @@ void readFromEeprom()
 
 bool saveToEeprom(void)
 {
+  DOME_HEAP_SCOPE("saveToEeprom");
   int addr = 1;
   String tempS = "";
   int i = 0;

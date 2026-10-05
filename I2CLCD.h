@@ -1,3 +1,4 @@
+#include "DomeHeapTrace.h"
 #ifndef _I2CLCD_h_
 #define _I2CLCD_h_
 #pragma gcc warning "Wire interface must be already initialised and globally defined as 'Wire' "
@@ -77,7 +78,8 @@ public:
 
   int writeLCD(int row, int col, String letters)
   {
-    byte *outData = nullptr;
+    DOME_HEAP_SCOPE("writeLCD");
+    byte outData[4] = {};
     int length = 0;
     int errorCode = 0;
     byte *buf = nullptr;
@@ -93,7 +95,6 @@ public:
     //Serial.printf( "writeLCD %i letters: %s\n", length, buf );
 
     //Move to row/col
-    outData = new byte[4];
     outData[0] = (byte)0;                   //register
     outData[1] = (byte)3;                   //CMD
     outData[2] = (byte)(row);               //data
@@ -131,9 +132,8 @@ public:
 
   int setBacklight(bool state)
   {
-    byte *outData;
     int errorCode = 0;
-    outData = new byte[2];
+    byte outData[2];
     outData[0] = (byte)0;
 
     if (state)
@@ -158,41 +158,40 @@ public:
    */
   int setCursor(int row, int col, enum cursorMode mode)
   {
-    byte *outData;
     int errorCode = 0;
 
     //Move to row/col
-    outData = new byte[4];
-    outData[0] = (byte)0;
-    outData[1] = (byte)3;
-    outData[2] = (byte)row;
-    outData[3] = (byte)col;          //data
+    byte outData1[4] = {};
+    outData1[0] = (byte)0;
+    outData1[1] = (byte)3;
+    outData1[2] = (byte)row;
+    outData1[3] = (byte)col;          //data
     _tw.beginTransmission(_address); // transmit to device
-    _tw.write(outData, 4);           // cmd
+    _tw.write(outData1, 4);           // cmd
     _tw.endTransmission();           // stop transmitting
     //DEBUGS1(F("SetCursor row/col:: written data - response code: "));DEBUGSL1( errorCode );
 
     //Set cursor mode to solid, blink or underline
-    outData = new byte[2];
-    outData[1] = 0;
+    byte outData2[2] = {};
+    outData2[1] = 0;
     _cursorState = mode;
     switch (mode)
     {
     case CURSOR_BLINK:
-      outData[1] = 0x04;
+      outData2[1] = 0x04;
       break;
     case CURSOR_UNDERLINE:
-      outData[1] = 0x05;
+      outData2[1] = 0x05;
       break;
     case CURSOR_SOLID:
-      outData[1] = 0x06;
+      outData2[1] = 0x06;
       break;
     default:
-      outData[1] = 0x04;
+      outData2[1] = 0x04;
       break;
     }
     _tw.beginTransmission(_address);   // transmit to device
-    _tw.write(outData, 2);             // cmd
+    _tw.write(outData2, 2);             // cmd
     errorCode = _tw.endTransmission(); // stop transmitting
     //DEBUGS1(F("SetCursor type:: written data - response code: "));DEBUGSL1( errorCode );
     return errorCode;

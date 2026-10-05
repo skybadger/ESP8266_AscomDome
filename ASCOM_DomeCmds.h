@@ -1,3 +1,4 @@
+#include "DomeHeapTrace.h"
 /*
 File to be included into relevant device REST setup
 */
@@ -42,9 +43,14 @@ int shutterSlew(enum shutterCmd setting);
 static int domeLockDetectedCount = 0;
 //This is to ensure domeLocked handling isn't invoked due to a missing or repeat reading due to being unable to access remote devices.
 static int domeLockDetectedEntryCount = 5;
+static bool domeLockRecoveryInProgress = false;
+static bool domeLockFinalRecoveryMove = false;
+//Only queued recovery commands are retained here; clear their pointers on dequeue.
+static cmdItem_t *domeLockRecoveryCommands[3] = {};
 
 float normaliseFloat(float &input, float radix)
 {
+  DOME_HEAP_SCOPE("normaliseFloat");
   float temp = input;
   float output = 0.0F;
   output = fmod(input, radix);
@@ -59,6 +65,7 @@ float normaliseFloat(float &input, float radix)
 
 int normaliseInt(int &input, int radix)
 {
+  DOME_HEAP_SCOPE("normaliseInt");
   int temp = input;
   int output = 0;
   output = input % radix;
@@ -76,6 +83,7 @@ int normaliseInt(int &input, int radix)
  */
 cmdItem_t *addDomeCmd(uint32_t clientId, uint32_t transId, String cmdName, enum domeCmd newCmd, int value)
 {
+  DOME_HEAP_SCOPE("addDomeCmd");
   if (domeCmdList == nullptr)
     return nullptr;
   //Create new command
@@ -141,15 +149,18 @@ cmdItem_t *addShutterCmd(uint32_t clientId, uint32_t transId, String cmdName, en
 
 void freeCmd(cmdItem_t *ptr)
 {
+  DOME_HEAP_SCOPE("freeCmd");
   //Safely release cmd memory
   //Clean up any memory dependencies
-  if (ptr->cmdName != nullptr)
-    free(ptr->cmdName);
-
-  if (ptr != nullptr)
+  if (ptr != nullptr ) 
+  {
+    if ( ptr->cmdName != nullptr )
+      free(ptr->cmdName);
     free((cmdItem_t *)ptr);
-
-  debugV("Cmd freed");
+    debugV("Cmd freed");
+  }
+  else 
+    debugW("Attempt to free Null Cmd caught");
   return;
 }
 
@@ -157,12 +168,19 @@ void freeCmd(cmdItem_t *ptr)
    */
 void onDomeIdle(void)
 {
+  DOME_HEAP_SCOPE("onDomeIdle");
   cmdItem_t *pCmd = nullptr;
   enum domeCmd newCmd;
 
   if (domeCmdList->size() > 0)
   {
     pCmd = domeCmdList->shift();
+    domeLockFinalRecoveryMove = domeLockRecoveryInProgress && pCmd == domeLockRecoveryCommands[2];
+    for (auto &recoveryCmd : domeLockRecoveryCommands)
+    {
+      if (recoveryCmd == pCmd)
+        recoveryCmd = nullptr;
+    }
     debugI("Popped next command: %i, value: %i", (int)pCmd->cmd, (int)pCmd->value);
     newCmd = (enum domeCmd)pCmd->cmd;
     String cmd = "";
@@ -172,22 +190,22 @@ void onDomeIdle(void)
     case CMD_DOME_HOME:
       targetAzimuth = (float)homePosition;
       domeLockDetectedCount = false;
-      onDomeSlew();
       domeStatus = DOME_SLEWING;
+      onDomeSlew();
       break;
 
     case CMD_DOME_PARK:
       targetAzimuth = (float)parkPosition;
       domeLockDetectedCount = false;
-      onDomeSlew();
       domeStatus = DOME_SLEWING;
+      onDomeSlew();
       break;
 
     case CMD_DOME_SLEW:
       targetAzimuth = (float)pCmd->value;
       domeLockDetectedCount = false;
-      onDomeSlew();
       domeStatus = DOME_SLEWING;
+      onDomeSlew();
       break;
 
     case CMD_DOME_ABORT:
@@ -249,6 +267,7 @@ void onDomeIdle(void)
    */
 float getAzimuth(float value)
 {
+  DOME_HEAP_SCOPE("getAzimuth");
   value = (value + azimuthSyncOffset);
   normaliseFloat(value, 360.0F);
   return value;
@@ -261,6 +280,7 @@ float getAzimuth(float value)
    */
 void onDomeSlew(void)
 {
+  DOME_HEAP_SCOPE("onDomeSlew");
   static float startAzimuth = 0.0F;
   static float lastAzimuth = 0.0F;
   static const float minMovementLimit = 0.1F;
@@ -304,6 +324,12 @@ void onDomeSlew(void)
     startAzimuth = lastAzimuth; //the last place we successfully arrived at due to a slew.
     domeLockDetectedCount = false;
     slewing = false;
+    if (domeLockFinalRecoveryMove)
+    {
+      domeLockRecoveryInProgress = false;
+      domeLockFinalRecoveryMove = false;
+      debugI("DOMELOCK recovery complete");
+    }
     return;
   }
 
@@ -356,15 +382,16 @@ void onDomeSlew(void)
   //Finally - check whether we are currently stalled
   //Criterion - no motion since last check when we are supposed to be slewing.
   //However this might be the first call to onSlew after Idle so shouldnt check too soon.
-  //This will get called for every OnDomeSlew so we need to use the domeLockDetectedCount flag to see if its already handled.
-  //A regular abort will clear the flag
-  //The flag is also clear on entry
-  if (abs(localAzimuth - lastAzimuth) < minMovementLimit && domeStatus == DOME_SLEWING)
+  //Do not start another recovery while any move of the current sequence is pending.
+  if (!domeLockRecoveryInProgress && abs(localAzimuth - lastAzimuth) < minMovementLimit && domeStatus == DOME_SLEWING)
   {
     domeLockDetectedCount++;
   }
-  if (domeLockDetectedCount > domeLockDetectedEntryCount)
+  if (!domeLockRecoveryInProgress && domeLockDetectedCount > domeLockDetectedEntryCount)
   {
+    domeLockRecoveryInProgress = true;
+    domeLockFinalRecoveryMove = false;
+    domeLockDetectedCount = 0;
     int clientId = 100;
     int transId = 1000;
     int slewTarget = 0;
@@ -383,7 +410,7 @@ void onDomeSlew(void)
       slewTarget = normaliseInt(slewTarget, 360);
     }
     //slewTarget = normaliseInt( int( localAzimuth) - slowAzimuthRange -1, 360 );
-    addDomeCmd(clientId, transId, "", CMD_DOME_SLEW, slewTarget);
+    domeLockRecoveryCommands[0] = addDomeCmd(clientId, transId, "", CMD_DOME_SLEW, slewTarget);
     debugW("OnDomeSlew: DOMELOCK - Added slew to reverse from lock @ %i: direction : %i", (int)localAzimuth, (int)direction);
 
     //Add another slew to current +/ |2*(slowAzimuthRange ) + 1| - ie fast past the obstruction
@@ -397,12 +424,19 @@ void onDomeSlew(void)
       slewTarget = int(localAzimuth) + (2 * slowAzimuthRange + 1);
       slewTarget = normaliseInt(slewTarget, 360);
     }
-    addDomeCmd(clientId, transId, "", CMD_DOME_SLEW, slewTarget);
+    domeLockRecoveryCommands[1] = addDomeCmd(clientId, transId, "", CMD_DOME_SLEW, slewTarget);
     debugW("OnDomeSlew: DOMELOCK - Added slew to slew at speed past lock: direction : %i", (int)direction);
 
     //Finally - add slew to get to original desired target position.
-    addDomeCmd(clientId, transId, "", CMD_DOME_SLEW, orgTarget);
+    domeLockRecoveryCommands[2] = addDomeCmd(clientId, transId, "", CMD_DOME_SLEW, orgTarget);
     debugW("OnDomeSlew: DOMELOCK - Added slew to original target after lock: direction : %i", (int)direction);
+
+    if (!domeLockRecoveryCommands[0] || !domeLockRecoveryCommands[1] || !domeLockRecoveryCommands[2])
+    {
+      debugE("DOMELOCK recovery allocation failed - cancelling recovery");
+      onDomeAbort();
+      return;
+    }
 
     //Finally - abort this slew so we can process the ones just added - dont call onDomeAbort() as that resets the domeLock flag.
     //turn off motor
@@ -441,6 +475,26 @@ void updateCmdResponseList(int transID)
    */
 void onDomeAbort(void)
 {
+  DOME_HEAP_SCOPE("onDomeAbort");
+  //Cancel only this recovery's queued moves, preserving unrelated commands.
+  for (auto &recoveryCmd : domeLockRecoveryCommands)
+  {
+    if (recoveryCmd && domeCmdList)
+    {
+      for (int index = 0; index < domeCmdList->size(); ++index)
+      {
+        if (domeCmdList->get(index) == recoveryCmd)
+        {
+          freeCmd(domeCmdList->remove(index));
+          break;
+        }
+      }
+    }
+    recoveryCmd = nullptr;
+  }
+  domeLockRecoveryInProgress = false;
+  domeLockFinalRecoveryMove = false;
+  slewing = false;
   //turn off motor
   if (motorPresent)
     myMotor.setSpeedDirection(MOTOR_SPEED_OFF, MOTOR_DIRN_CW);
@@ -481,7 +535,7 @@ void onShutterIdle()
     {
       pCmd = shutterCmdList->shift();
       newCmd = (enum shutterCmd)pCmd->cmd;
-      debugI("OnShutterIdle - new command read: %s", shutterCmdNames[(int)newCmd]);
+      debugI("OnShutterIdle - new command read: %i", (int)newCmd);
 
       switch (newCmd)
       {
@@ -500,7 +554,13 @@ void onShutterIdle()
           freeCmd(pCmd);
           //clear down
           if (newCmd == CMD_SHUTTER_ABORT)
-            shutterCmdList->clear(); //TODO this is a memory leak - fortunately rare and under our control
+          {
+            while (shutterCmdList->size() > 0)
+            {
+              freeCmd(shutterCmdList->shift());
+            }
+          }
+            
         }
         break;
       case CMD_SHUTTERVAR_SET:
@@ -526,8 +586,13 @@ void onShutterIdle()
             freeCmd(pCmd); //Ignore and delete
           }
         }
+        else
+        {
+          freeCmd(pCmd);
+        }
         break;
       default:
+        freeCmd(pCmd);
         break;
       }
       debugI("State outcome for shutter: %s ", shutterStateNames[(int)shutterStatus]);
@@ -702,6 +767,7 @@ bool setupCompass(String targetHost)
    */
 int restQuery(String host, String uri, String args, String &response, enum HTTPMethod method)
 {
+  DOME_HEAP_SCOPE("restQuery");
   int httpCode = 0;
   long int startTime;
   long int endTime;
@@ -836,6 +902,7 @@ int restQuery(String host, String uri, String args, String &response, enum HTTPM
    */
 float getBearing(String host)
 {
+  DOME_HEAP_SCOPE("getBearing");
   long int duration = millis();
   static int bearingRepeatCount = 0;
   const int bearingRepeatLimit = 10;
@@ -935,6 +1002,7 @@ float getBearing()
    */
 int getShutterStatus(String host, enum shutterState &outputState)
 {
+  DOME_HEAP_SCOPE("getShutterStatus");
   String outbuf;
   long int duration = millis();
   enum shutterState value = SHUTTER_ERROR;

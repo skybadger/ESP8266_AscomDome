@@ -44,7 +44,7 @@ constexpr uint32_t MIN_SAFE_BLOCK = 800;
 
 //remote debugging
 //Manage the remote debug interface, it takes 6K of memory with all the strings even when not in use but loaded
-#define _DISABLE_REMOTE_DEBUG             //Use serial logging without the remote server.
+//#define _DISABLE_REMOTE_DEBUG             //Use serial logging without the remote server.
 #if defined _DISABLE_REMOTE_DEBUG && !defined DEBUG_DISABLED
 #define DEBUG_DISABLED                    //Disable RemoteDebug; DebugSerial supplies the fallback.
 #endif
@@ -55,12 +55,13 @@ constexpr uint32_t MIN_SAFE_BLOCK = 800;
 #include <RemoteDebug.h> //https://github.com/JoaoLopesF/RemoteDebug
 #include "DebugSerial.h"
 
-//Used to test for memory leaks.
-#define _TEST_RAM_ //turn on RAM check settings
-#define _MEMLEAK_CHECK
-#define _MEMLEAK_CHECK_DEBUG
 
-#define _ENABLE_BEARING                    //Turn off loop segment for bearing update if not set.
+// Diagnostic build: set -D DOME_HEAP_TRACE=0 to remove all tracing.
+#ifndef DOME_HEAP_TRACE
+#define DOME_HEAP_TRACE 1
+#endif
+
+//#define _ENABLE_BEARING                    //Turn off loop segment for bearing update if not set.
 //#define _ENABLE_SHUTTER                    // Turn off loop segment for shutter handling if not set.
 #define _ENABLE_DOME                       //Turn off segment for dome handling if not set.
 
@@ -281,8 +282,6 @@ Encoder myEnc(ENCODER_A_PIN, ENCODER_B_PIN);
 
 //Hardware device system functions - reset/restart etc
 EspClass device;
-uint32_t originalRam;
-uint32_t lastRam;
 long int nowTime, startTime, indexTime;
 unsigned long int debugId = 0; //Seed a debug log ID
 

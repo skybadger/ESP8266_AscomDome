@@ -129,16 +129,11 @@ void setup(void);
 void setupWifi(void);
 void publishFnStatus(void);
 void publishHealth(void);
-uint32_t reportRam(char *);
 
-void debugMem()
-{
-  debugI("Heap free:%u maxBlock:%u fragmentation:%u%% stack:%u",
-         ESP.getFreeHeap(),
-         ESP.getMaxFreeBlockSize(),
-         ESP.getHeapFragmentation(),
-         ESP.getFreeContStack());
-}
+#if DOME_HEAP_TRACE
+int domeHeapQueueSize() { return domeCmdList ? domeCmdList->size() : 0; }
+int shutterHeapQueueSize() { return shutterCmdList ? shutterCmdList->size() : 0; }
+#endif
 
 void setup()
 {
@@ -463,12 +458,6 @@ void setup()
   ets_timer_arm_new(&timeoutTimer, 2500, 0 /*one-shot*/, 1); //MQTT background reconnection timer.
 #endif
 
-#if defined _TEST_RAM_
-  originalRam = device.getFreeHeap();
-  lastRam = originalRam;
-  debugV("Starting RAM: %i ", originalRam);
-#endif
-
   Serial.println(FPSTR(BuildVersionName));
 
   //Starts the discovery responder server
@@ -539,6 +528,7 @@ void manageConnectionState(void)
 
 void updateStatusPollingPeriod(void)
 {
+  DOME_HEAP_SCOPE("updateStatusPollingPeriod");
   const bool domeActive = domeStatus == DOME_SLEWING || domeStatus == DOME_ABORT;
   const bool shutterActive = shutterStatus == SHUTTER_OPENING || shutterStatus == SHUTTER_CLOSING || shutterStatus == SHUTTER_ABORTING;
   const bool commandsPending = (domeCmdList != nullptr && domeCmdList->size() > 0) || (shutterCmdList != nullptr && shutterCmdList->size() > 0);
@@ -553,49 +543,24 @@ void updateStatusPollingPeriod(void)
   }
 }
 
-inline uint32_t checkRam(const char *location)
-{
-  //Check heap for memory bugs
-  uint32_t ram = 0;
-  ram = ESP.getFreeHeap();
-  if (lastRam != (ram - originalRam))
-  {
-    lastRam = ram - originalRam;
-#if defined _DISABLE_REMOTE_DEBUG
-    Serial.printf_P(PSTR("%s RAM: %d \n"), location, ram);
-#else
-    debugV("%s RAM: %u change: %d\n", location, ram, lastRam);
-#endif
-  }
-  return ram;
-}
-
 void loop()
 {
+  const bool traceCoarseLoop = coarseTimerFlag;
+  (void)traceCoarseLoop;
+  DOME_HEAP_SCOPE_IF("loop.coarseTick", traceCoarseLoop);
   String outbuf;
   String LCDOutput = "";
-
-#if defined _MEMLEAK_CHECK_DEBUG
-  //Check ram state on entry
-  checkRam("LoopEntry");
-#endif
 
   //Operate and Clear down flags
   if (fineTimerFlag)
   {
 #if defined _ENABLE_BEARING
-
-#if defined _TEST_RAM_
-    checkRam("FineTimerEntry");
-#endif
+    DOME_HEAP_SCOPE("loop.bearing");
 
     bearing = getBearing(sensorHostname);
     currentAzimuth = getAzimuth(bearing);
     debugD("Bearing %03.2f, offset: %f, adjusted: %f\n", bearing, azimuthSyncOffset, currentAzimuth);
 
-#if defined _TEST_RAM_
-    checkRam("FineTimerExit");
-#endif
 #endif
     fineTimerFlag = false;
   }
@@ -604,78 +569,71 @@ void loop()
   {
     //Handle state changes
 #if defined _ENABLE_DOME
-
-#if defined _TEST_RAM_
-    checkRam("DomeEntry");
-#endif
-
-    //For dome
-    switch (domeStatus)
     {
-    case DOME_IDLE:
-      onDomeIdle();
-      break;
-    case DOME_SLEWING:
-      onDomeSlew();
-      break;
-    case DOME_ABORT:
-      onDomeAbort();
-      break;
-    case DOME_ABORTED:
-    case DOME_HALTED:
-      break;
-    default:
-      debugE("Unexpected Dome status detected: %s\n", domeStateNames[(int)domeStatus]);
-      domeStatus = DOME_ABORT; //error condition
-      break;
+      DOME_HEAP_SCOPE("loop.domeDispatch");
+
+      //For dome
+      switch (domeStatus)
+      {
+        case DOME_IDLE:
+        onDomeIdle();
+        break;
+        case DOME_SLEWING:
+        onDomeSlew();
+        break;
+        case DOME_ABORT:
+        onDomeAbort();
+        break;
+        case DOME_ABORTED:
+        case DOME_HALTED:
+        break;
+        default:
+        debugE("Unexpected Dome status detected: %s\n", domeStateNames[(int)domeStatus]);
+        domeStatus = DOME_ABORT; //error condition
+        break;
+      }
+
     }
-
-#if defined _TEST_RAM_
-    checkRam("DomeExit");
-#endif
-
 #endif //dome
 
 #if defined _ENABLE_SHUTTER
-
-#if defined _TEST_RAM_
-    checkRam("ShutterEntry");
-#endif
-    //For shutter
-    //Update our knowledge of shutter current status
-    if (getShutterStatus(shutterHostname, shutterStatus) == HTTP_CODE_OK)
     {
-      debugD("Dome: %s Shutter: %s\n", domeStateNames[(int)domeStatus], shutterStateNames[(int)shutterStatus]);
-    }
+      DOME_HEAP_SCOPE("loop.shutterDispatch");
 
-    switch (shutterStatus)
-    {
-    //These are the idle states for the shutter
-    case SHUTTER_ERROR:
-    case SHUTTER_CLOSED:
-    case SHUTTER_OPEN:
-      onShutterIdle();
-      break;
-    //The shutter is currently doing things so wait until complete or error.
-    case SHUTTER_OPENING:
-    case SHUTTER_CLOSING:
-    case SHUTTER_ABORTING:
-    case SHUTTER_ABORTED:
-    case SHUTTER_HALTED:
-      break;
-    default: //Anything else.
-      debugE("Shutter status unexpected: %s", shutterStateNames[(int)shutterStatus]);
-      shutterStatus = SHUTTER_ERROR;
-      break;
+      //For shutter
+      //Update our knowledge of shutter current status
+      if (getShutterStatus(shutterHostname, shutterStatus) == HTTP_CODE_OK)
+      {
+        debugD("Dome: %s Shutter: %s\n", domeStateNames[(int)domeStatus], shutterStateNames[(int)shutterStatus]);
+      }
+
+      switch (shutterStatus)
+      {
+        //These are the idle states for the shutter
+        case SHUTTER_ERROR:
+        case SHUTTER_CLOSED:
+        case SHUTTER_OPEN:
+        onShutterIdle();
+        break;
+        //The shutter is currently doing things so wait until complete or error.
+        case SHUTTER_OPENING:
+        case SHUTTER_CLOSING:
+        case SHUTTER_ABORTING:
+        case SHUTTER_ABORTED:
+        case SHUTTER_HALTED:
+        break;
+        default: //Anything else.
+        debugE("Shutter status unexpected: %s", shutterStateNames[(int)shutterStatus]);
+        shutterStatus = SHUTTER_ERROR;
+        break;
+      }
     }
-#if defined _TEST_RAM_
-    checkRam("ShutterExit");
-#endif
 #endif //shutter
 
     //Clock tick onLCD
     if (lcdPresent)
     {
+      DOME_HEAP_SCOPE("loop.clockLCD");
       int index = 0;
       int lastIndex = 0;
       String output = "";
@@ -695,37 +653,47 @@ void loop()
   }
 
 #if !defined _DISABLE_MQTT
-  if (!client.connected())
   {
-    reconnectNB();
-    //reconnect();
-  }
-  //Service MQTT keep-alives
-  client.loop();
-  if (callbackFlag) //found as a consequence of being connected
-  {
-    //publish results
-    publishHealth();
-    publishFnStatus();
-    callbackFlag = false;
+    DOME_HEAP_SCOPE_IF("loop.mqtt", traceCoarseLoop);
+    if (!client.connected())
+    {
+      reconnectNB();
+      //reconnect();
+    }
+    //Service MQTT keep-alives
+    client.loop();
+    if (callbackFlag) //found as a consequence of being connected
+    {
+      //publish results
+      publishHealth();
+      publishFnStatus();
+      callbackFlag = false;
+    }
   }
 #endif
 
   //If there are any web client connections - handle them.
-  server.handleClient();
-  manageConnectionState();
+  {
+    DOME_HEAP_SCOPE_IF("server.handleClient", traceCoarseLoop);
+    server.handleClient();
+  }
+  {
+    DOME_HEAP_SCOPE_IF("manageConnectionState", traceCoarseLoop);
+    manageConnectionState();
+  }
 
   //Check for Alpaca Discovery packets
-  handleManagement();
+  {
+    DOME_HEAP_SCOPE_IF("handleManagement", traceCoarseLoop);
+    handleManagement();
+  }
 
 #if !defined _DISABLE_REMOTE_DEBUG
   //Handle remote telnet debug session
-  Debug.handle();
-#endif
-
-  //Final memory check
-#if defined MEM_CHECK_DEBUG
-  checkRam("LoopExit");
+  {
+    DOME_HEAP_SCOPE_IF("Debug.handle", traceCoarseLoop);
+    Debug.handle();
+  }
 #endif
 
   delay(20); //If nothing else happens, just slow the loop a touch.
