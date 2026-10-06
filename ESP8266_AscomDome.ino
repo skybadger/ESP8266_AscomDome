@@ -129,6 +129,7 @@ void setup(void);
 void setupWifi(void);
 void publishFnStatus(void);
 void publishHealth(void);
+void callback(char *topic, byte *payload, unsigned int length );
 
 #if DOME_HEAP_TRACE
 int domeHeapQueueSize() { return domeCmdList ? domeCmdList->size() : 0; }
@@ -243,12 +244,12 @@ void setup()
     motorSpeed = MOTOR_SPEED_OFF;
     motorDirection = MOTOR_DIRN_CW;
     myMotor.getSpeedDirection();
-    Serial.printf_P(PSTR("motor initialised - speed: %u, direction: %u\n"), myMotor.getSpeed(), myMotor.getDirection());
+    //Serial.printf_P(PSTR("motor initialised - speed: %u, direction: %u\n"), myMotor.getSpeed(), myMotor.getDirection());
     debugD("motor initialised - speed: %u, direction: %u\n", myMotor.getSpeed(), myMotor.getDirection());
   }
   else
   {
-    Serial.println(F("No motor found on i2c bus\n"));
+    //Serial.println(F("No motor found on i2c bus\n"));
     debugE("No motor found on i2c bus\n");
   }
 
@@ -260,12 +261,12 @@ void setup()
   if (framPresent)
   {
     myFRAM.begin();
-    Serial.printf_P(PSTR("FRAM found on i2c bus at 0x%02X\n"), FRAMControllerAddr);
+    //Serial.printf_P(PSTR("FRAM found on i2c bus at 0x%02X\n"), FRAMControllerAddr);
     debugD("FRAM found on i2c bus at 0x%02X\n", FRAMControllerAddr);
   }
   else
   {
-    Serial.printf_P(PSTR("No FRAM found on i2c bus at 0x%02X - status: %u\n"), FRAMControllerAddr, framStatus);
+    //Serial.printf_P(PSTR("No FRAM found on i2c bus at 0x%02X - status: %u\n"), FRAMControllerAddr, framStatus);
     debugE("No FRAM found on i2c bus at 0x%02X - status: %u\n", FRAMControllerAddr, framStatus);
   }
 
@@ -283,7 +284,7 @@ void setup()
   }
   else
   {
-    Serial.printf_P(PSTR("No LCD found on i2c bus.\n"));
+    //Serial.printf_P(PSTR("No LCD found on i2c bus.\n"));
     debugI("No LCD display found on i2c bus\n");
   }
 

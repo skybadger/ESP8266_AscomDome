@@ -40,7 +40,7 @@ constexpr uint32_t MIN_SAFE_BLOCK = 800;
 //added to support reboots of dome controller due to un-diagnosed power brownouts which Voyager doesn't get to see and therefore loses control of the dome.
 //Doing this means the dome will come up and still accept calls from anyone... as long as it reads the encoder and the encoder stays running, we maintain our position knowledge
 //If using a local direct attached device, have to assume positional knowledge will be lost too.
-//#define ACCEPT_CONNECTED_CLIENT_ONLY
+#define ACCEPT_CONNECTED_CLIENT_ONLY
 
 //remote debugging
 //Manage the remote debug interface, it takes 6K of memory with all the strings even when not in use but loaded
@@ -55,14 +55,13 @@ constexpr uint32_t MIN_SAFE_BLOCK = 800;
 #include <RemoteDebug.h> //https://github.com/JoaoLopesF/RemoteDebug
 #include "DebugSerial.h"
 
-
 // Diagnostic build: set -D DOME_HEAP_TRACE=0 to remove all tracing.
 #ifndef DOME_HEAP_TRACE
-#define DOME_HEAP_TRACE 1
+#define DOME_HEAP_TRACE 0
 #endif
 
-//#define _ENABLE_BEARING                    //Turn off loop segment for bearing update if not set.
-//#define _ENABLE_SHUTTER                    // Turn off loop segment for shutter handling if not set.
+#define _ENABLE_BEARING                    //Turn off loop segment for bearing update if not set.
+#define _ENABLE_SHUTTER                    // Turn off loop segment for shutter handling if not set.
 #define _ENABLE_DOME                       //Turn off segment for dome handling if not set.
 
 //Select a method of getting positional feedback on dome rotation.
