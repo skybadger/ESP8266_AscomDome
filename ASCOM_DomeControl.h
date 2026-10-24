@@ -28,10 +28,10 @@ void sendDomeUiQueued()
   server.send(303, "text/plain", "Movement command queued.");
 }
 
-//Queue commands only; the normal control loop owns active movement and targets.
+//Movement is queued; manual abort stops immediately regardless of client ownership.
 /**
  * @brief Validate the POST action and numeric limits, enforce queue capacity and enabled hardware, then queue movement or perform immediate abort.
- * @details Validate the POST action and numeric limits, enforce queue capacity and enabled hardware, then queue movement or perform immediate abort.
+ * @details Validate the POST action and numeric limits, enforce queue capacity and enabled hardware, then queue movement or perform immediate abort. Ignore additional East or West requests while a WebJog slew remains queued.
  * @par Arguments
  * None.
  * @return (void) Observable effects are described above.
@@ -49,13 +49,25 @@ void handleDomeUiControl()
     return;
   }
   const String action = server.arg("action");
+  const bool abort = action == "abort";
   const bool domeMove = action == "slew" || action == "east" || action == "west";
   const bool shutterMove = action == "open" || action == "close" || action == "altitude";
   const bool needsValue = action == "slew" || action == "altitude";
-  if (!server.hasArg("action") || (!domeMove && !shutterMove) ||
+  if (!server.hasArg("action") || (!abort && !domeMove && !shutterMove) ||
       server.args() != (needsValue ? 2 : 1) || (needsValue && !server.hasArg("value")))
   {
     sendSetupPage(false, 400, F("Invalid movement request. Supply an action and, where required, a value."));
+    return;
+  }
+  if (abort)
+  {
+    if (abortAllMovement() != 200)
+    {
+      sendSetupPage(false, 503, F("Dome stopped and both command queues cleared. Shutter stop was not confirmed; check the shutter controller and retry Abort."));
+      return;
+    }
+    server.sendHeader("Location", "/setup/v1/dome/1/setup?aborted=1#feedback");
+    server.send(303, "text/plain", "Dome stopped, shutter abort acknowledged, and command queues cleared.");
     return;
   }
   uint32_t value = 0;
@@ -76,6 +88,19 @@ void handleDomeUiControl()
     sendSetupPage(false, 503, F("Dome movement is disabled in this firmware build."));
     return;
 #else
+    if (action != "slew")
+    {
+      for (int index = 0; index < domeCmdList->size(); ++index)
+      {
+        const cmdItem_t *pending = domeCmdList->get(index);
+        if (pending && pending->cmd == CMD_DOME_SLEW && String(pending->cmdName) == F("WebJog"))
+        {
+          //The existing jog remains queued; refreshing must not repeat this POST.
+          sendDomeUiQueued();
+          return;
+        }
+      }
+    }
     //    if (!domeCmdList )
     //    {
     //      sendSetupPage(false, 503, F("Dome commands are unavailable due to queue not available"));
@@ -95,7 +120,7 @@ void handleDomeUiControl()
     }
     //Handle as a normal slew otherwise
     normaliseInt(target, 360);
-    if (!addDomeCmd(0, 0, F("WebSlew"), CMD_DOME_SLEW, target))
+    if (!addDomeCmd(0, 0, action == "slew" ? F("WebSlew") : F("WebJog"), CMD_DOME_SLEW, target))
     {
       sendSetupPage(false, 503, F("Unable to allocate a queued dome command."));
       return;

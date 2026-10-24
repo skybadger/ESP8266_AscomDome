@@ -46,6 +46,8 @@ void freeCmd(cmdItem_t *cmd);
 void onDomeSlew();
 /// @see onDomeAbort for the documented definition.
 void onDomeAbort();
+/// @see abortAllMovement for the documented definition.
+int abortAllMovement(); //Function to support UI call with int return.
 /// @see onDomeIdle for the documented definition.
 void onDomeIdle();
 
@@ -593,6 +595,29 @@ void updateCmdResponseList(int transID)
   return;
 }
 
+//Manual stop bypasses client ownership and queue/idle checks. Stop the local
+//motor before attempting the remote request, which can time out.
+/**
+ * @brief Stop the dome locally, clear both pending command queues and request remote shutter abort.
+ * @details Stop the dome locally, clear both pending command queues and request remote shutter abort; report failure when the shutter does not acknowledge.
+ * @par Arguments
+ * None.
+ * @return (int) 200 when shutter abort is acknowledged; otherwise the remote failure status.
+ */
+int abortAllMovement()
+{
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
+  onDomeAbort();
+
+  //Send directly: a queued shutter abort would wait for movement to finish.
+  if (!shutterHostname || !shutterHostname[0])
+    return 503;
+  return shutterSlew(CMD_SHUTTER_ABORT);
+}
+
 /*
    * Handler for domeAbort command
    * if an abort is called, this function clears down the async command stack
@@ -615,22 +640,15 @@ void onDomeAbort(void)
                         debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
                       });
   DOME_HEAP_SCOPE("onDomeAbort");
-  //Cancel only this recovery's queued moves, preserving unrelated commands.
-  for (auto &recoveryCmd : domeLockRecoveryCommands)
-  {
-    if (recoveryCmd && domeCmdList)
-    {
-      for (int index = 0; index < domeCmdList->size(); ++index)
-      {
-        if (domeCmdList->get(index) == recoveryCmd)
-        {
-          freeCmd(domeCmdList->remove(index));
-          break;
-        }
-      }
-    }
-    recoveryCmd = nullptr;
-  }
+
+  if (domeCmdList)
+    while (domeCmdList->size() > 0)
+      freeCmd(domeCmdList->shift());
+  if (shutterCmdList)
+    while (shutterCmdList->size() > 0)
+      freeCmd(shutterCmdList->shift());
+
+  targetAzimuth = currentAzimuth;
   domeLockRecoveryInProgress = false;
   domeLockFinalRecoveryMove = false;
   slewing = false;

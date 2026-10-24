@@ -310,6 +310,9 @@ void sendDomeControlForms()
                      F("&deg; &middot; Active target: ") + String(targetAzimuth, 1) + F("&deg; &middot; ") +
                      setupEscape(domeStateNames[static_cast<int>(domeStatus)]) +
                      F("</p><p><a href='/setup/v1/dome/1/setup'>Refresh status</a></p>"));
+  server.sendContent(F("<form method='post' action='/setup/v1/dome/1/control#feedback'>"
+                       "<button class='abort' name='action' value='abort' type='submit'>Abort dome and shutter</button>"
+                       "<p class='help'>Stops dome and shutter movement and clears pending commands. Available regardless of the connected client.</p></form>"));
 #if !defined _ENABLE_DOME
   server.sendContent(F("<p class='notice'>Dome movement is disabled in this firmware build.</p>"));
 #endif
@@ -368,6 +371,7 @@ void sendSetupPage(bool management, int status = 200, const String &message = ""
                        "form,.card{background:white;border:1px solid #d2dce4;border-radius:8px;padding:18px;margin:14px 0}"
                        "label{display:block;font-weight:600;margin-bottom:8px}input,select,button{font:inherit;padding:10px;border:1px solid #8b9faa;border-radius:4px}"
                        "input,select{width:min(100%,460px)}button{background:#176685;color:white;cursor:pointer;margin:8px 0}"
+                       "button.abort{background:#a51d2d;border-color:#a51d2d;font-weight:700}"
                        "p{line-height:1.5}.help{color:#465f6d;font-size:.9rem}.notice{border-left:5px solid #176685;padding:16px;background:#e3f2f8}"
                        "a{color:#115878}:focus-visible{outline:3px solid #db8b13;outline-offset:3px}"
                        "@media(max-width:550px){header{padding:16px}main{padding:12px}form,.card{padding:12px}input,select,button{width:100%}.button-row button{width:auto}}"
@@ -821,8 +825,9 @@ void registerModernSetupRoutes()
  */
             []()
             {
-              sendSetupPage(false, 200, server.arg("synced") == "1" ? F("Bearing synchronised and calibration saved. The dome has not been moved.") : server.arg("queued") == "1" ? F("Movement command queued. Refresh this page to see updated status.")
-                                                                                                                                                                                  : F(""));
+              sendSetupPage(false, 200, server.arg("aborted") == "1" ? F("Dome stopped, shutter abort acknowledged, and pending commands cleared. Refresh to check status.") : server.arg("synced") == "1" ? F("Bearing synchronised and calibration saved. The dome has not been moved.")
+                                                                                                                                                                           : server.arg("queued") == "1"   ? F("Movement command queued. Refresh this page to see updated status.")
+                                                                                                                                                                                                           : F(""));
             });
   server.on("/setup/config", HTTP_ANY, /** @brief Dispatch the registered HTTP route.
  * @details Invoke the associated setup handler using its management or dome mode.
