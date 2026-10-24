@@ -125,19 +125,55 @@
 #include "ASCOM_DomeSetup.h"
 #include "ASCOM_DomeEeprom.h"
 
+/// @see setup for the documented definition.
 void setup(void);
+/// @see setupWifi for the documented definition.
 void setupWifi(void);
+/// @see publishFnStatus for the documented definition.
 void publishFnStatus(void);
+/// @see publishHealth for the documented definition.
 void publishHealth(void);
-void callback(char *topic, byte *payload, unsigned int length );
+/// @see callback for the documented definition.
+void callback(char *topic, byte *payload, unsigned int length);
 
 #if DOME_HEAP_TRACE
-int domeHeapQueueSize() { return domeCmdList ? domeCmdList->size() : 0; }
-int shutterHeapQueueSize() { return shutterCmdList ? shutterCmdList->size() : 0; }
+/**
+ * @brief Return the current dome queue size, using zero when the queue has not been initialized.
+ * @details Return the current dome queue size, using zero when the queue has not been initialized.
+ * @par Arguments
+ * None.
+ * @return (int) Number of pending dome commands, or zero before initialization.
+ */
+int domeHeapQueueSize()
+{
+  return domeCmdList ? domeCmdList->size() : 0;
+}
+/**
+ * @brief Return the current shutter queue size, using zero when the queue has not been initialized.
+ * @details Return the current shutter queue size, using zero when the queue has not been initialized.
+ * @par Arguments
+ * None.
+ * @return (int) Number of pending shutter commands, or zero before initialization.
+ */
+int shutterHeapQueueSize()
+{
+  return shutterCmdList ? shutterCmdList->size() : 0;
+}
 #endif
 
+/**
+ * @brief Initialize diagnostics, network services, timers, persisted settings and available dome hardware before servicing requests.
+ * @details Initialize diagnostics, network services, timers, persisted settings and available dome hardware before servicing requests.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void setup()
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   // put your setup code here, to run once:
   String outbuf;
   String path;
@@ -468,12 +504,24 @@ void setup()
   debugI("setup complete");
 }
 
+/**
+ * @brief Set the fine timer flag for deferred work in loop.
+ * @details Set the fine timer flag for deferred work in loop; do not perform logging or hardware I/O in the timer callback.
+ * @param[in] pArg (void *) Unused timer adapter context pointer.
+ * @return (void) Observable effects are described above.
+ */
 void onFineTimer(void *pArg)
 {
   //Read command list and apply.
   fineTimerFlag = true;
 }
 
+/**
+ * @brief Set the coarse timer flag for deferred work in loop.
+ * @details Set the coarse timer flag for deferred work in loop; do not perform logging or hardware I/O in the timer callback.
+ * @param[in] pArg (void *) Unused timer adapter context pointer.
+ * @return (void) Observable effects are described above.
+ */
 void onCoarseTimer(void *pArg)
 {
   //Read command list and apply.
@@ -481,18 +529,41 @@ void onCoarseTimer(void *pArg)
 }
 
 //Used to complete timeout actions in MQTT background connection checks.
+/**
+ * @brief Set the timeout flag for deferred network handling in loop.
+ * @details Set the timeout flag for deferred network handling in loop.
+ * @param[in] pArg (void *) Unused timer adapter context pointer.
+ * @return (void) Observable effects are described above.
+ */
 void onTimeoutTimer(void *pArg)
 {
   timeoutFlag = true;
 }
 
+/**
+ * @brief Set the watchdog flag for deferred health processing in loop.
+ * @details Set the watchdog flag for deferred health processing in loop.
+ * @param[in] pArg (void *) Unused timer adapter context pointer.
+ * @return (void) Observable effects are described above.
+ */
 void onWatchdogTimer(void *pArg)
 {
   watchdogTimerFlag = true;
 }
 
+/**
+ * @brief Advance pending connection transitions after their delay and queue configured park or shutter-close actions on disconnect.
+ * @details Advance pending connection transitions after their delay and queue configured park or shutter-close actions on disconnect.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void manageConnectionState(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   switch (connectionStatus)
   {
   case CONNECTION_CONNECTING:
@@ -527,8 +598,19 @@ void manageConnectionState(void)
   }
 }
 
+/**
+ * @brief Select active or idle polling cadence from dome and shutter movement and rearm the coarse timer when it changes.
+ * @details Select active or idle polling cadence from dome and shutter movement and rearm the coarse timer when it changes.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void updateStatusPollingPeriod(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   DOME_HEAP_SCOPE("updateStatusPollingPeriod");
   const bool domeActive = domeStatus == DOME_SLEWING || domeStatus == DOME_ABORT;
   const bool shutterActive = shutterStatus == SHUTTER_OPENING || shutterStatus == SHUTTER_CLOSING || shutterStatus == SHUTTER_ABORTING;
@@ -544,8 +626,19 @@ void updateStatusPollingPeriod(void)
   }
 }
 
+/**
+ * @brief Service flagged bearing, motor, shutter, display and health work.
+ * @details Service flagged bearing, motor, shutter, display and health work; handle HTTP, Alpaca management, MQTT and debug connections cooperatively.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void loop()
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   const bool traceCoarseLoop = coarseTimerFlag;
   (void)traceCoarseLoop;
   DOME_HEAP_SCOPE_IF("loop.coarseTick", traceCoarseLoop);
@@ -576,24 +669,23 @@ void loop()
       //For dome
       switch (domeStatus)
       {
-        case DOME_IDLE:
+      case DOME_IDLE:
         onDomeIdle();
         break;
-        case DOME_SLEWING:
+      case DOME_SLEWING:
         onDomeSlew();
         break;
-        case DOME_ABORT:
+      case DOME_ABORT:
         onDomeAbort();
         break;
-        case DOME_ABORTED:
-        case DOME_HALTED:
+      case DOME_ABORTED:
+      case DOME_HALTED:
         break;
-        default:
+      default:
         debugE("Unexpected Dome status detected: %s\n", domeStateNames[(int)domeStatus]);
         domeStatus = DOME_ABORT; //error condition
         break;
       }
-
     }
 #endif //dome
 
@@ -610,20 +702,20 @@ void loop()
 
       switch (shutterStatus)
       {
-        //These are the idle states for the shutter
-        case SHUTTER_ERROR:
-        case SHUTTER_CLOSED:
-        case SHUTTER_OPEN:
+      //These are the idle states for the shutter
+      case SHUTTER_ERROR:
+      case SHUTTER_CLOSED:
+      case SHUTTER_OPEN:
         onShutterIdle();
         break;
-        //The shutter is currently doing things so wait until complete or error.
-        case SHUTTER_OPENING:
-        case SHUTTER_CLOSING:
-        case SHUTTER_ABORTING:
-        case SHUTTER_ABORTED:
-        case SHUTTER_HALTED:
+      //The shutter is currently doing things so wait until complete or error.
+      case SHUTTER_OPENING:
+      case SHUTTER_CLOSING:
+      case SHUTTER_ABORTING:
+      case SHUTTER_ABORTED:
+      case SHUTTER_HALTED:
         break;
-        default: //Anything else.
+      default: //Anything else.
         debugE("Shutter status unexpected: %s", shutterStateNames[(int)shutterStatus]);
         shutterStatus = SHUTTER_ERROR;
         break;
@@ -705,14 +797,33 @@ void loop()
    Publish under ~/skybadger/sensors/<sensor type>/<host>
    Note that messages have an maximum length limit of 18 bytes - set in the MQTT header file.
 */
+/**
+ * @brief Handle an incoming MQTT message using the topic and length-bounded payload supplied by the MQTT client.
+ * @details Handle an incoming MQTT message using the topic and length-bounded payload supplied by the MQTT client.
+ * @param[in] topic (char *) Borrowed MQTT topic string.
+ * @param[in] payload (byte *) Borrowed MQTT payload; use length rather than assuming termination.
+ * @param[in] length (unsigned int) Number of input bytes.
+ * @return (void) Observable effects are described above.
+ */
 void callback(char *topic, byte *payload, unsigned int length)
 {
   //set callback flag
   callbackFlag = true;
 }
 
+/**
+ * @brief Build the functional status payload and publish it on the configured MQTT status topic.
+ * @details Build the functional status payload and publish it on the configured MQTT status topic.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void publishFnStatus(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String outTopic;
   String output;
   String timestamp;
@@ -731,7 +842,7 @@ void publishFnStatus(void)
   root["domeStatus"] = domeStateNames[(int)domeStatus];
   serializeJson(root, output);
 
-  outTopic = String(outFnTopic);       //PROGMEM
+  outTopic = String(outFnTopic);              //PROGMEM
   outTopic.concat(String(FPSTR(DriverType))); //PROGMEM
   outTopic.concat("/");
   outTopic.concat(myHostname);
@@ -750,8 +861,19 @@ void publishFnStatus(void)
 /*
   @brief Publish health status to MQTT based on callback process.
 */
+/**
+ * @brief Build device health and uptime data and publish it on the configured MQTT health topic.
+ * @details Build device health and uptime data and publish it on the configured MQTT health topic.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void publishHealth()
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String outTopic;
   String output;
   String timestamp;
@@ -794,8 +916,19 @@ void publishHealth()
   }
 }
 
+/**
+ * @brief Configure the station connection, wait for network readiness and initialize network-dependent services.
+ * @details Configure the station connection, wait for network readiness and initialize network-dependent services.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void setupWifi(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   int zz = 0;
 
   WiFi.mode(WIFI_STA);

@@ -1,8 +1,16 @@
+#include "../DomeFunctionTrace.h"
 #include "../DomeBearingSync.h"
 #include <assert.h>
 #include <limits>
 #include <stdio.h>
 
+/**
+ * @brief Exercise the firmware behavior with deterministic inputs and assert expected results.
+ * @details Exercise the firmware behavior with deterministic inputs and assert expected results; return zero when all checks pass.
+ * @par Arguments
+ * None.
+ * @return (int) Zero when all assertions pass; assertion failure terminates the test.
+ */
 int main()
 {
   struct Case

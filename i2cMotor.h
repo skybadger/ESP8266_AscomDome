@@ -1,3 +1,4 @@
+#include "DomeFunctionTrace.h"
 #include "DomeHeapTrace.h"
 #ifndef _i2cMotor_h_
 #define _i2cMotor_h_
@@ -30,28 +31,67 @@ private:
   TwoWire &tw = Wire;
 
 public:
-  i2cMotor(uint8_t address) : _address(address)
+  /**
+   * @brief Bind the motor controller address while retaining the shared Wire adapter.
+   * @details Bind the motor controller address while retaining the shared Wire adapter.
+   * @param[in] address (uint8_t) Seven-bit I2C device address.
+   * @return No value (constructor).
+   */
+  i2cMotor(uint8_t address)
+      : _address(address)
   {
     //
   }
 
+  /**
+   * @brief Return the cached motor speed without a bus transaction.
+   * @details Return the cached motor speed without a bus transaction.
+   * @par Arguments
+   * None.
+   * @return (int) Cached controller speed byte.
+   */
   int getSpeed(void)
   {
     return _speed;
   }
 
+  /**
+   * @brief Return the configured seven-bit motor controller address.
+   * @details Return the configured seven-bit motor controller address.
+   * @par Arguments
+   * None.
+   * @return (int) Configured seven-bit I2C address.
+   */
   int getAddress(void)
   {
     return _address;
   }
 
+  /**
+   * @brief Return the cached motor direction without a bus transaction.
+   * @details Return the cached motor direction without a bus transaction.
+   * @par Arguments
+   * None.
+   * @return (uint8_t) Cached motor direction enum value.
+   */
   uint8_t getDirection(void)
   {
     return _direction;
   }
 
+  /**
+   * @brief Write the motor mode, neutral outputs and acceleration registers over I2C.
+   * @details Write the motor mode, neutral outputs and acceleration registers over I2C.
+   * @par Arguments
+   * None.
+   * @return (void) Observable effects are described above.
+   */
   void init(void)
   {
+    DOME_FUNCTION_TRACE([&]()
+                        {
+                          debugV("motor address=%u speed=%u direction=%u", (unsigned)_address, (unsigned)_speed, (unsigned)_direction);
+                        });
     //Write string to device
     uint8_t outData[5];
     outData[0] = (uint8_t)0;   //register address to start writes to
@@ -61,25 +101,36 @@ public:
     outData[4] = (uint8_t)255; //slowest acceleration
 
     tw.beginTransmission(_address); // transmit to device
-    tw.write( outData, 5);           // sends array contents
+    tw.write(outData, 5);           // sends array contents
     tw.endTransmission();           // stop transmitting
   }
 
   //Check motor speed control is present by reading register 7 for its version string.
   //Motor speed control device is a Devasys i2c/serial/pwm 5A h-Bridge device from http://robot-electronics.co.uk
+  /**
+   * @brief Read the motor controller version register to detect a responding device.
+   * @details Read the motor controller version register to detect a responding device.
+   * @par Arguments
+   * None.
+   * @return (bool) True on a successful check or operation; false otherwise.
+   */
   bool check(void)
   {
+    DOME_FUNCTION_TRACE([&]()
+                        {
+                          debugV("motor address=%u speed=%u direction=%u", (unsigned)_address, (unsigned)_speed, (unsigned)_direction);
+                        });
     //Write string to device
     byte outData = 0;
     byte inData = 0;
 
-    outData = 7;                 //Version register address
+    outData = 7;                    //Version register address
     tw.beginTransmission(_address); // transmit to device
-    tw.write( &outData, 1);           // sends array contents
+    tw.write(&outData, 1);          // sends array contents
     tw.endTransmission(false);      // restart transmitting
 
     tw.requestFrom(_address, (uint8_t)1); // request 1 bytes from slave device
-    
+
     bool readComplete = false;
     while (tw.available() && !readComplete)
     {                     // slave may send less than requested
@@ -91,8 +142,19 @@ public:
 
   //Check motor speed control is present by reading register 7 for its version string.
   //Motor speed control device is a Devasys i2c/serial/pwm 5A h-Bridge device from http://robot-electronics.co.uk
+  /**
+   * @brief Read three motor register bytes and update cached speed and direction.
+   * @details Read three motor register bytes and update cached speed and direction; the current implementation leaves its completion flag false.
+   * @par Arguments
+   * None.
+   * @return (bool) False: the current implementation never sets its completion flag, even after reading registers.
+   */
   bool getSpeedDirection(void)
   {
+    DOME_FUNCTION_TRACE([&]()
+                        {
+                          debugV("motor address=%u speed=%u direction=%u", (unsigned)_address, (unsigned)_speed, (unsigned)_direction);
+                        });
     DOME_HEAP_SCOPE("getSpeedDirection");
     //Write string to device
     byte inData[3];
@@ -104,8 +166,8 @@ public:
     tw.write((uint8_t)1);                 // sends address of register we want to read
     tw.endTransmission(false);            // restart transmitting
     tw.requestFrom(_address, (uint8_t)3); // request 1 bytes from slave device
-    int readCount = 0; 
-    while (tw.available() && readCount++ < 3 )
+    int readCount = 0;
+    while (tw.available() && readCount++ < 3)
     {                       // slave may send less than requested
       *(ptr++) = tw.read(); // receive a byte as character
     }
@@ -121,8 +183,21 @@ public:
    * Valid input values of speed are from 1 to 255;
    * Valid input values of direction are False - reverse, True - forwards
    */
+  /**
+   * @brief Convert speed and direction to controller velocity, write both motor registers and update the cached values.
+   * @details Convert speed and direction to controller velocity, write both motor registers and update the cached values; report the I2C completion status.
+   * @param[in] newSpeed (int) Requested motor speed.
+   * @param[in] newDirn (uint8_t) Requested motor direction.
+   * @return (bool) True on a successful check or operation; false otherwise.
+   */
   bool setSpeedDirection(int newSpeed, uint8_t newDirn)
   {
+    DOME_FUNCTION_TRACE([&]()
+                        {
+                          debugV("newSpeed=%g", (double)newSpeed);
+                          debugV("newDirn=%g", (double)newDirn);
+                          debugV("motor address=%u speed=%u direction=%u", (unsigned)_address, (unsigned)_speed, (unsigned)_direction);
+                        });
     DOME_HEAP_SCOPE("setSpeedDirection");
     //Write string to device
     byte outData[3];

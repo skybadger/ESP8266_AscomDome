@@ -1,3 +1,4 @@
+#include "DomeFunctionTrace.h"
 #include "DomeHeapTrace.h"
 #ifndef _I2CLCD_h_
 #define _I2CLCD_h_
@@ -40,16 +41,44 @@ private:
   TwoWire &_tw = Wire;
 
 public:
-  I2CLCD(uint8_t address) : _address(address)
+  /**
+   * @brief Bind the LCD address, display geometry and Wire adapter without performing a bus transaction.
+   * @details Bind the LCD address, display geometry and Wire adapter without performing a bus transaction.
+   * @param[in] address (uint8_t) Seven-bit I2C device address.
+   * @return No value (constructor).
+   */
+  I2CLCD(uint8_t address)
+      : _address(address)
   {
   }
 
-  I2CLCD(uint8_t address, uint8_t rowSize = 4, uint8_t colSize = 16, TwoWire &tw = Wire) : _address(address), _rowSize(rowSize), _colSize(colSize), _tw(tw)
+  /**
+   * @brief Bind the LCD address, display geometry and Wire adapter without performing a bus transaction.
+   * @details Bind the LCD address, display geometry and Wire adapter without performing a bus transaction.
+   * @param[in] address (uint8_t) Seven-bit I2C device address.
+   * @param[in] rowSize (uint8_t) Number of display rows.
+   * @param[in] colSize (uint8_t) Number of display columns.
+   * @param[in,out] tw (TwoWire &) Borrowed initialized Wire bus adapter.
+   * @return No value (constructor).
+   */
+  I2CLCD(uint8_t address, uint8_t rowSize = 4, uint8_t colSize = 16, TwoWire &tw = Wire)
+      : _address(address), _rowSize(rowSize), _colSize(colSize), _tw(tw)
   {
   }
 
+  /**
+   * @brief Read the LCD version register over I2C, returning zero if no version byte is received.
+   * @details Read the LCD version register over I2C, returning zero if no version byte is received.
+   * @par Arguments
+   * None.
+   * @return (uint8_t) LCD version byte, or zero when no byte was received.
+   */
   uint8_t checkLCD()
   {
+    DOME_FUNCTION_TRACE([&]()
+                        {
+                          debugV("LCD address=%u cursor=%u", (unsigned)_address, (unsigned)_cursorState);
+                        });
     byte inData = 0;
     bool readComplete = false;
 
@@ -76,8 +105,23 @@ public:
     return (uint8_t)inData; //should be non-zero version number, otherwise not present.
   }
 
+  /**
+   * @brief Allocate a temporary character buffer, position the cursor, write the text over I2C and release the buffer on completion.
+   * @details Allocate a temporary character buffer, position the cursor, write the text over I2C and release the buffer on completion.
+   * @param[in] row (int) One-based display row.
+   * @param[in] col (int) One-based display column.
+   * @param[in] letters (String) Text to write to the LCD.
+   * @return (int) I2C completion status; 4 if temporary buffer allocation failed.
+   */
   int writeLCD(int row, int col, String letters)
   {
+    DOME_FUNCTION_TRACE([&]()
+                        {
+                          debugV("row=%g", (double)row);
+                          debugV("col=%g", (double)col);
+                          debugV("letters=%s", letters.c_str());
+                          debugV("LCD address=%u cursor=%u", (unsigned)_address, (unsigned)_cursorState);
+                        });
     DOME_HEAP_SCOPE("writeLCD");
     byte outData[4] = {};
     int length = 0;
@@ -118,8 +162,19 @@ public:
     return errorCode;
   }
 
+  /**
+   * @brief Send the LCD clear command over I2C and return the bus completion status.
+   * @details Send the LCD clear command over I2C and return the bus completion status.
+   * @par Arguments
+   * None.
+   * @return (int) I2C completion status; zero indicates success.
+   */
   int clearScreen()
   {
+    DOME_FUNCTION_TRACE([&]()
+                        {
+                          debugV("LCD address=%u cursor=%u", (unsigned)_address, (unsigned)_cursorState);
+                        });
     int errorCode = 0;
     //DEBUGS1("ClearScreen:: Using address ");DEBUGSL1( _address );
     _tw.beginTransmission(_address);   // transmit to device
@@ -130,8 +185,19 @@ public:
     return errorCode;
   }
 
+  /**
+   * @brief Send the LCD backlight on or off command over I2C and return the bus completion status.
+   * @details Send the LCD backlight on or off command over I2C and return the bus completion status.
+   * @param[in] state (bool) Requested backlight state.
+   * @return (int) I2C completion status; zero indicates success.
+   */
   int setBacklight(bool state)
   {
+    DOME_FUNCTION_TRACE([&]()
+                        {
+                          debugV("state=%g", (double)state);
+                          debugV("LCD address=%u cursor=%u", (unsigned)_address, (unsigned)_cursorState);
+                        });
     int errorCode = 0;
     byte outData[2];
     outData[0] = (byte)0;
@@ -156,8 +222,23 @@ public:
    * cursor: 5 - underlined
    * cursor: 6 - block
    */
+  /**
+   * @brief Set the one-based row and column, update the cached cursor mode and send the corresponding LCD mode command.
+   * @details Set the one-based row and column, update the cached cursor mode and send the corresponding LCD mode command.
+   * @param[in] row (int) One-based display row.
+   * @param[in] col (int) One-based display column.
+   * @param[in] mode (enum cursorMode) Requested cursor appearance.
+   * @return (int) Final I2C completion status; zero indicates success.
+   */
   int setCursor(int row, int col, enum cursorMode mode)
   {
+    DOME_FUNCTION_TRACE([&]()
+                        {
+                          debugV("row=%g", (double)row);
+                          debugV("col=%g", (double)col);
+                          debugV("mode=%g", (double)mode);
+                          debugV("LCD address=%u cursor=%u", (unsigned)_address, (unsigned)_cursorState);
+                        });
     int errorCode = 0;
 
     //Move to row/col
@@ -165,9 +246,9 @@ public:
     outData1[0] = (byte)0;
     outData1[1] = (byte)3;
     outData1[2] = (byte)row;
-    outData1[3] = (byte)col;          //data
+    outData1[3] = (byte)col;         //data
     _tw.beginTransmission(_address); // transmit to device
-    _tw.write(outData1, 4);           // cmd
+    _tw.write(outData1, 4);          // cmd
     _tw.endTransmission();           // stop transmitting
     //DEBUGS1(F("SetCursor row/col:: written data - response code: "));DEBUGSL1( errorCode );
 
@@ -191,7 +272,7 @@ public:
       break;
     }
     _tw.beginTransmission(_address);   // transmit to device
-    _tw.write(outData2, 2);             // cmd
+    _tw.write(outData2, 2);            // cmd
     errorCode = _tw.endTransmission(); // stop transmitting
     //DEBUGS1(F("SetCursor type:: written data - response code: "));DEBUGSL1( errorCode );
     return errorCode;

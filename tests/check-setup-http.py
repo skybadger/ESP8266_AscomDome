@@ -12,6 +12,17 @@ from urllib.request import Request, build_opener, ProxyHandler
 
 
 def main():
+    """Run the setup HTTP checks.
+
+    Operation:
+        Parse command-line options and assert page, configuration and optional reversible write behavior.
+
+    Args:
+        None.
+
+    Returns:
+        None: Raises AssertionError on a setup regression.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("base_url")
     parser.add_argument("--write-test", action="store_true")
@@ -20,6 +31,20 @@ def main():
     opener = build_opener(ProxyHandler({}))
 
     def request(path, method="GET", data=None, expected=200):
+        """Send one setup HTTP request.
+
+        Operation:
+            Encode form data, read the response and assert its HTTP status.
+
+        Args:
+            path (str): Request path relative to the device.
+            method (str): HTTP verb or Alpaca method name.
+            data (dict[str, object] | None): Form fields; None sends no body.
+            expected (int): Expected HTTP response status.
+
+        Returns:
+            str: Decoded response body.
+        """
         payload = None if data is None else urlencode(data).encode()
         req = Request(base + path, data=payload, method=method)
         try:

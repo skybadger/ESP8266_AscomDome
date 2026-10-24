@@ -1,15 +1,23 @@
+#include "DomeFunctionTrace.h"
 #include "DomeHeapTrace.h"
 #if !defined _ASCOMDOME_EEPROM_HANDLER_H_
 #define _ASCOMDOME_EEPROM_HANDLER_H_
 //Header file for EEprom specific processing used by ASCOM DOME
 
 //Prototypes
+/// @see readFromEeprom for the documented definition.
 void readFromEeprom(void);
+/// @see saveToEeprom for the documented definition.
 bool saveToEeprom(void);
+/// @see setupDefaults for the documented definition.
 void setupDefaults(void);
+/// @see readFloatFromEeprom for the documented definition.
 float readFloatFromEeprom(uint8_t addr);
+/// @see writeFloatToEeprom for the documented definition.
 void writeFloatToEeprom(uint8_t addr, float value);
+/// @see readIntFromEeprom for the documented definition.
 int readIntFromEeprom(uint8_t addr);
+/// @see writeIntToEeprom for the documented definition.
 void writeIntToEeprom(uint8_t addr, int value);
 
 //Keep the original offsets; reserve an extension after the legacy data.
@@ -20,8 +28,21 @@ static_assert(1 + 5 * sizeof(uint32_t) + 5 * MAX_NAME_LENGTH <= setupExtensionOf
               "Legacy EEPROM data overlaps setup extension");
 static_assert(setupExtensionOffset + setupExtensionLength <= 512, "Setup extension exceeds EEPROM buffer");
 
+/**
+ * @brief Fold the extension bytes into a checksum used to detect invalid persisted setup data.
+ * @details Fold the extension bytes into a checksum used to detect invalid persisted setup data.
+ * @param[in] bytes (const uint8_t *) Borrowed input bytes to checksum.
+ * @param[in] length (size_t) Number of input bytes.
+ * @return (uint16_t) CRC-16 value for the supplied bytes.
+ */
 uint16_t setupExtensionChecksum(const uint8_t *bytes, size_t length)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("bytes storage=%p", (const void *)bytes);
+                        debugV("length=%g", (double)length);
+                        debugV("config azimuth=%g home=%d park=%d", (double)currentAzimuth, (int)homePosition, (int)parkPosition);
+                      });
   uint16_t crc = 0xffff;
   while (length--)
   {
@@ -32,8 +53,19 @@ uint16_t setupExtensionChecksum(const uint8_t *bytes, size_t length)
   return crc;
 }
 
+/**
+ * @brief Read the versioned EEPROM extension, validate its marker and checksum, and restore supported setup fields.
+ * @details Read the versioned EEPROM extension, validate its marker and checksum, and restore supported setup fields.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void readSetupExtension()
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("config azimuth=%g home=%d park=%d", (double)currentAzimuth, (int)homePosition, (int)parkPosition);
+                      });
   uint8_t bytes[setupExtensionLength];
   for (int i = 0; i < setupExtensionLength; ++i)
     bytes[i] = EEPROM.read(setupExtensionOffset + i);
@@ -49,8 +81,19 @@ void readSetupExtension()
   memcpy(deviceLocation, bytes + 6, MAX_NAME_LENGTH);
 }
 
+/**
+ * @brief Serialize the extended setup fields and checksum to the reserved EEPROM region.
+ * @details Serialize the extended setup fields and checksum to the reserved EEPROM region.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void writeSetupExtension()
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("config azimuth=%g home=%d park=%d", (double)currentAzimuth, (int)homePosition, (int)parkPosition);
+                      });
   uint8_t bytes[setupExtensionLength] = {};
   bytes[0] = 'D';
   bytes[1] = 'S';
@@ -72,8 +115,19 @@ void writeSetupExtension()
 extern ...
 */
 
+/**
+ * @brief Load the legacy EEPROM layout and supported extension, using defaults where persisted data is invalid.
+ * @details Load the legacy EEPROM layout and supported extension, using defaults where persisted data is invalid.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void readFromEeprom()
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("config azimuth=%g home=%d park=%d", (double)currentAzimuth, (int)homePosition, (int)parkPosition);
+                      });
   int addr = 0;
 
   if (((char)EEPROM.read(0)) != '*')
@@ -189,8 +243,19 @@ void readFromEeprom()
   DEBUGSL1(F("Read settings from EEPROM complete"));
 }
 
+/**
+ * @brief Write current configuration and its extension to EEPROM and commit the emulated flash storage.
+ * @details Write current configuration and its extension to EEPROM and commit the emulated flash storage.
+ * @par Arguments
+ * None.
+ * @return (bool) True when EEPROM.commit succeeds; false when the flash commit fails.
+ */
 bool saveToEeprom(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("config azimuth=%g home=%d park=%d", (double)currentAzimuth, (int)homePosition, (int)parkPosition);
+                      });
   DOME_HEAP_SCOPE("saveToEeprom");
   int addr = 1;
   String tempS = "";
@@ -254,8 +319,19 @@ bool saveToEeprom(void)
 }
 
 //Function to setup ASCOM Dome default settings, use prior to reading the EEPROM settings which then override them.
+/**
+ * @brief Populate the dome configuration with default names, positions, network settings and movement options.
+ * @details Populate the dome configuration with default names, positions, network settings and movement options.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void setupDefaults()
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("config azimuth=%g home=%d park=%d", (double)currentAzimuth, (int)homePosition, (int)parkPosition);
+                      });
   DEBUGSL1(F("setupDefaults entered"));
 
   azimuthSyncOffset = 0.0F; //+ve values means the dome is further round N through E than returned from the raw reading.
@@ -349,8 +425,19 @@ void setupDefaults()
   DEBUGSL1(F("SetupDefaults complete"));
 }
 
+/**
+ * @brief Read the bytes of a float from the requested EEPROM address.
+ * @details Read the bytes of a float from the requested EEPROM address.
+ * @param[in] addr (uint8_t) Starting EEPROM byte address.
+ * @return (float) Float reconstructed from the stored bytes.
+ */
 float readFloatFromEeprom(uint8_t addr)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("addr=%g", (double)addr);
+                        debugV("config azimuth=%g home=%d park=%d", (double)currentAzimuth, (int)homePosition, (int)parkPosition);
+                      });
   unsigned int i = 0;
   float value = 0.0F;
   uint8_t *ptr = (uint8_t *)malloc(sizeof(float));
@@ -364,8 +451,21 @@ float readFloatFromEeprom(uint8_t addr)
   return value;
 }
 
+/**
+ * @brief Write the bytes of a float to the requested EEPROM address.
+ * @details Write the bytes of a float to the requested EEPROM address; the caller controls committing storage.
+ * @param[in] addr (uint8_t) Starting EEPROM byte address.
+ * @param[in] value (float) Operation value or field text.
+ * @return (void) Observable effects are described above.
+ */
 void writeFloatToEeprom(uint8_t addr, float value)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("addr=%g", (double)addr);
+                        debugV("value=%g", (double)value);
+                        debugV("config azimuth=%g home=%d park=%d", (double)currentAzimuth, (int)homePosition, (int)parkPosition);
+                      });
   unsigned int i = 0;
   uint8_t *ptr = (uint8_t *)malloc(sizeof(float));
 
@@ -377,8 +477,19 @@ void writeFloatToEeprom(uint8_t addr, float value)
   free(ptr);
 }
 
+/**
+ * @brief Read the stored integer bytes at the requested EEPROM address.
+ * @details Read the stored integer bytes at the requested EEPROM address.
+ * @param[in] addr (uint8_t) Starting EEPROM byte address.
+ * @return (int) Integer reconstructed from the stored bytes.
+ */
 int readIntFromEeprom(uint8_t addr)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("addr=%g", (double)addr);
+                        debugV("config azimuth=%g home=%d park=%d", (double)currentAzimuth, (int)homePosition, (int)parkPosition);
+                      });
   unsigned int i = 0;
   int value = 0.0F;
   uint8_t *ptr = (uint8_t *)malloc(sizeof(int));
@@ -392,8 +503,21 @@ int readIntFromEeprom(uint8_t addr)
   return value;
 }
 
+/**
+ * @brief Write the integer bytes at the requested EEPROM address.
+ * @details Write the integer bytes at the requested EEPROM address; the caller controls committing storage.
+ * @param[in] addr (uint8_t) Starting EEPROM byte address.
+ * @param[in] value (int) Operation value or field text.
+ * @return (void) Observable effects are described above.
+ */
 void writeIntToEeprom(uint8_t addr, int value)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("addr=%g", (double)addr);
+                        debugV("value=%g", (double)value);
+                        debugV("config azimuth=%g home=%d park=%d", (double)currentAzimuth, (int)homePosition, (int)parkPosition);
+                      });
   unsigned int i = 0;
   uint8_t *ptr = (uint8_t *)malloc(sizeof(int));
 

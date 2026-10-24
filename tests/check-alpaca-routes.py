@@ -36,6 +36,17 @@ PUTS = {
 
 
 def audit():
+    """Audit local Alpaca route registrations.
+
+    Operation:
+        Read the sketch and assert method, path and handler coverage.
+
+    Args:
+        None.
+
+    Returns:
+        None: Raises AssertionError for missing or duplicate routes.
+    """
     source = (ROOT / "ESP8266_AscomDome.ino").read_text()
     routes = re.findall(r'server\.on\(F\("(/api/v1/dome/1/[^\"]+)"\),\s*HTTP_(GET|PUT),\s*(\w+)\)', source)
     expected = {(f"/api/v1/dome/1/{name}", verb, handler)
@@ -51,9 +62,33 @@ def audit():
 
 
 def live(base):
+    """Exercise Alpaca endpoints on a running device.
+
+    Operation:
+        Issue HTTP requests and assert response types and error handling.
+
+    Args:
+        base (str): Base URL of the target device.
+
+    Returns:
+        None: Raises AssertionError on a protocol regression.
+    """
     opener = build_opener(ProxyHandler({}))
 
     def get(method, fields, expected=200):
+        """Read one Alpaca method.
+
+        Operation:
+            Build query arguments, decode JSON and assert the expected HTTP status.
+
+        Args:
+            method (str): HTTP verb or Alpaca method name.
+            fields (dict[str, object]): HTTP query arguments.
+            expected (int): Expected HTTP response status.
+
+        Returns:
+            dict: Decoded Alpaca response.
+        """
         url = base.rstrip("/") + "/api/v1/dome/1/" + method + "?" + urlencode(fields)
         try:
             response = opener.open(url, timeout=15)

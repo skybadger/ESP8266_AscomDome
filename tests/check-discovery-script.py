@@ -12,19 +12,75 @@ SCRIPT = Path(__file__).resolve().parents[1] / "test-discovery.ps1"
 
 
 def check(fail_property=False):
+    """Verify discovery and cleanup against local mock services.
+
+    Operation:
+        Run the PowerShell script with UDP and HTTP doubles; assert transaction ordering and disconnection, including injected property errors.
+
+    Args:
+        fail_property (bool): Whether to inject a property error to verify cleanup.
+
+    Returns:
+        None: Raises AssertionError on a discovery regression.
+    """
     state = {"connected": False, "puts": [], "paths": [], "ids": [], "packets": 0}
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
+            """Suppress mock HTTP access logging.
+
+            Operation:
+                Ignore the server logging adapter arguments.
+
+            Args:
+                self (Handler): Current mock HTTP request handler instance.
+                args (tuple[object, ...]): Ignored HTTP logging arguments.
+
+            Returns:
+                None: Produces no log output.
+            """
             pass
 
         def do_GET(self):
+            """Serve a mock GET request.
+
+            Operation:
+                Delegate to the shared mock response builder.
+
+            Args:
+                self (Handler): Current mock HTTP request handler instance.
+
+            Returns:
+                None: Writes the HTTP response.
+            """
             self.respond()
 
         def do_PUT(self):
+            """Serve a mock PUT request.
+
+            Operation:
+                Delegate to the shared mock response builder.
+
+            Args:
+                self (Handler): Current mock HTTP request handler instance.
+
+            Returns:
+                None: Writes the HTTP response.
+            """
             self.respond()
 
         def respond(self):
+            """Build a deterministic mock Alpaca response.
+
+            Operation:
+                Record paths and transaction identifiers, update connected state and optionally inject an Alpaca property error.
+
+            Args:
+                self (Handler): Current mock HTTP request handler instance.
+
+            Returns:
+                None: Writes response headers and body.
+            """
             url = urlsplit(self.path)
             path = url.path
             state["paths"].append(path)
@@ -58,6 +114,17 @@ def check(fail_property=False):
     stop = threading.Event()
 
     def discover():
+        """Serve mock UDP Alpaca discovery.
+
+        Operation:
+            Assert discovery packet content and reply with the mock HTTP port until shutdown is requested.
+
+        Args:
+            None.
+
+        Returns:
+            None: Updates packet counts and sends UDP replies.
+        """
         while not stop.is_set():
             try:
                 packet, address = udp.recvfrom(1024)

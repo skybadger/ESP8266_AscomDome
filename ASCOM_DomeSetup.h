@@ -1,3 +1,4 @@
+#include "DomeFunctionTrace.h"
 /*
 File of ASCOM setup handler functions specific to REST dome interface and not standard to ASCOM
 Assumes Use of ARDUINO ESP8266WebServer for entry handlers
@@ -13,19 +14,38 @@ extern int homePosition;
 extern int parkPosition;
 
 //Functions
+/// @see setupFormBuilder for the documented definition.
 String &setupFormBuilder(String &htmlForm, String &errMsg);
+/// @see handleSetup for the documented definition.
 void handleSetup(void);
 void handleRestart(void);
+/// @see handlerNotFound for the documented definition.
 void handlerNotFound(void);
 void handlerNotImplemented(void);
+/// @see handleHostnamePut for the documented definition.
 void handleHostnamePut(void);
+/// @see handleDomeGoto for the documented definition.
 void handleDomeGoto(void);
+/// @see handleSyncOffsetPut for the documented definition.
 void handleSyncOffsetPut(void);
+/// @see handleHomePositionPut for the documented definition.
 void handleHomePositionPut(void);
+/// @see handleParkPositionPut for the documented definition.
 void handleParkPositionPut(void);
 
+/**
+ * @brief Build an HTTP not-found response describing the unregistered request and its arguments.
+ * @details Build an HTTP not-found response describing the unregistered request and its arguments.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handlerNotFound()
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   int responseCode = 400;
   uint32_t clientID = (uint32_t)server.arg("ClientID").toInt();
@@ -38,8 +58,19 @@ void handlerNotFound()
   server.send(responseCode, F("application/json"), message);
 }
 
+/**
+ * @brief Append dome, shutter, connection and movement status to the supplied JSON object.
+ * @details Append dome, shutter, connection and movement status to the supplied JSON object.
+ * @param[in] root (JsonObject) JSON object receiving status fields.
+ * @return (void) Observable effects are described above.
+ */
 void appendDomeStatusFields(JsonObject root)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("root storage=%p", (const void *)&root);
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String timestamp;
   getTimeAsString(timestamp);
 
@@ -58,8 +89,19 @@ void appendDomeStatusFields(JsonObject root)
   root["MotorDirection"] = motorDirection;
 }
 
+/**
+ * @brief Build and send the current dome status as a JSON HTTP response.
+ * @details Build and send the current dome status as a JSON HTTP response.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handlerStatus()
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   int responseCode = 400;
   JsonDocument doc;
@@ -74,8 +116,19 @@ void handlerStatus()
   server.send(responseCode = 200, F("application/json"), message);
 }
 
+/**
+ * @brief Respond to the restart request, persist configuration and restart the controller.
+ * @details Respond to the restart request, persist configuration and restart the controller.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handlerRestart() //PUT or GET
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   //Trying to do a redirect to the rebooted host so we pick up from where we left off.
   server.sendHeader(WiFi.hostname().c_str(), String(F("/status")), true);
   server.send(302, F("text/html"), F("<!Doctype html><html>Redirecting for restart</html>"));
@@ -87,8 +140,19 @@ void handlerRestart() //PUT or GET
 /*
  * String& setupFormBuilder( String& htmlForm )
  */
+/**
+ * @brief Render the legacy setup form with the current dome settings.
+ * @details Render the legacy setup form with the current dome settings.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleSetup(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String output = "";
   String err = "";
   output = setupFormBuilder(output, err);
@@ -97,8 +161,19 @@ void handleSetup(void)
 }
 
 //server.on("/Dome/*/Hostname", HTTP_PUT, handleHostnamePut );
+/**
+ * @brief Validate the hostname put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @details Validate the hostname put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleHostnamePut(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String form;
   String errMsg;
   String newName;
@@ -141,8 +216,19 @@ void handleHostnamePut(void)
 }
 
 //  server.on("/Dome/*/shutterhostname", HTTP_PUT, handleShutterNamePut );
+/**
+ * @brief Validate the shutter name put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @details Validate the shutter name put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleShutterNamePut(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String form;
   String errMsg;
   String newName;
@@ -178,8 +264,19 @@ void handleShutterNamePut(void)
 
 #if defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION || defined USE_REMOTE_ENCODER_FOR_DOME_ROTATION
 //server.on("/Dome/*/sensorname", HTTP_PUT, handleSensorNamePut );
+/**
+ * @brief Validate the sensor name put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @details Validate the sensor name put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleSensorNamePut(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String form;
   String errMsg;
   String newName;
@@ -216,8 +313,19 @@ void handleSensorNamePut(void)
 }
 #endif
 
+/**
+ * @brief Validate the dome goto request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @details Validate the dome goto request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleDomeGoto(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String form;
   String errMsg;
   String argsToSearchFor[] = {"bearing"};
@@ -250,8 +358,19 @@ void handleDomeGoto(void)
  * Set sync offset from setup web page - managed outside of ascom
  * REST api provides no way of doing this at time of writing.
  */
+/**
+ * @brief Validate the sync offset put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @details Validate the sync offset put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleSyncOffsetPut(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   const String nameStub = "syncOffset";
   String form;
   String name;
@@ -288,8 +407,19 @@ void handleSyncOffsetPut(void)
   server.send(200, F("text/html"), form);
 }
 
+/**
+ * @brief Validate the home position put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @details Validate the home position put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleHomePositionPut(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String argsToSearchFor[] = {"homePosition"};
   String errMsg;
   String form;
@@ -316,8 +446,19 @@ void handleHomePositionPut(void)
   return;
 }
 
+/**
+ * @brief Validate the park position put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @details Validate the park position put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleParkPositionPut(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String argsToSearchFor[] = {"parkPosition"};
   String name;
   String errMsg;
@@ -344,8 +485,19 @@ void handleParkPositionPut(void)
   return;
 }
 
+/**
+ * @brief Validate the park action put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @details Validate the park action put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleParkActionPut(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String form;
   String errMsg;
   String value;
@@ -369,8 +521,21 @@ void handleParkActionPut(void)
  Bear in mind HTML standard doesn't support use of PUT in forms and changes it to GET so arguments get sent in plain sight as
  part of the URL.
  */
+/**
+ * @brief Append the legacy setup controls and optional error message to the caller-owned HTML string.
+ * @details Append the legacy setup controls and optional error message to the caller-owned HTML string.
+ * @param[in,out] htmlForm (String &) Caller-owned HTML form buffer to append to.
+ * @param[in,out] errMsg (String &) Feedback text included in the form.
+ * @return (String &) Reference to the caller-owned HTML buffer; no ownership transfer.
+ */
 String &setupFormBuilder(String &htmlForm, String &errMsg)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("htmlForm=%s", htmlForm.c_str());
+                        debugV("errMsg=%s", errMsg.c_str());
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   htmlForm = F("<!DOCTYPE HTML><html><head></head><meta></meta><body><div id=\"ErrorMsg\" >\n");
   if (errMsg != NULL && errMsg.length() > 0)
   {

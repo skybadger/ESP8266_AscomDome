@@ -1,3 +1,4 @@
+#include "DomeFunctionTrace.h"
 #ifndef ASCOM_DOME_SETUP_MODERN_H
 #define ASCOM_DOME_SETUP_MODERN_H
 
@@ -7,6 +8,7 @@
 #include <stdlib.h>
 #include "DomeBearingSync.h"
 
+/// @see sendSetupPage for the documented definition.
 void sendSetupPage(bool management, int status, const String &message);
 #include "ASCOM_DomeControl.h"
 
@@ -86,8 +88,19 @@ static const SetupField setupFields[] = {
     {setup_parkondisconnectKey, setup_parkondisconnectLabel, setup_parkondisconnectHelp, SETUP_BOOL, false, 0, 1},
     {setup_closeondisconnectKey, setup_closeondisconnectLabel, setup_closeondisconnectHelp, SETUP_BOOL, false, 0, 1}};
 
+/**
+ * @brief Escape HTML-sensitive characters before inserting configuration text into generated markup.
+ * @details Escape HTML-sensitive characters before inserting configuration text into generated markup.
+ * @param[in] input (const String &) Value to normalize or escape.
+ * @return (String) HTML-escaped copy of input.
+ */
 String setupEscape(const String &input)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("input=%s", input.c_str());
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String result;
   result.reserve(input.length() + 16);
   for (size_t i = 0; i < input.length(); ++i)
@@ -116,8 +129,19 @@ String setupEscape(const String &input)
   return result;
 }
 
+/**
+ * @brief Resolve a setup key to its fixed-size configuration text buffer.
+ * @details Resolve a setup key to its fixed-size configuration text buffer; return null for an unsupported key.
+ * @param[in] key (const String &) Configuration field key.
+ * @return (char *) Borrowed configuration buffer, or null for an unsupported key; never free this pointer.
+ */
 char *setupTextStorage(const String &key)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("key=%s", key.c_str());
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   if (key == "hostname")
     return myHostname;
   if (key == "location")
@@ -135,8 +159,19 @@ char *setupTextStorage(const String &key)
   return nullptr;
 }
 
+/**
+ * @brief Read the current text representation of a setup field from the corresponding configuration value.
+ * @details Read the current text representation of a setup field from the corresponding configuration value.
+ * @param[in] field (const SetupField &) Field metadata defining storage and validation.
+ * @return (String) Current field value formatted as text.
+ */
 String setupValue(const SetupField &field)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("field storage=%p", (const void *)&field);
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   const String key(FPSTR(field.key));
   if (field.kind <= SETUP_PEER)
   {
@@ -157,8 +192,21 @@ String setupValue(const SetupField &field)
 }
 
 //Validate the complete input before modifying any variable or EEPROM byte.
+/**
+ * @brief Validate a field value against its text length, numeric limits and field-specific syntax before assignment.
+ * @details Validate a field value against its text length, numeric limits and field-specific syntax before assignment.
+ * @param[in] field (const SetupField &) Field metadata defining storage and validation.
+ * @param[in] value (const String &) Operation value or field text.
+ * @return (bool) True when the field value meets its configured constraints; false otherwise.
+ */
 bool setupValid(const SetupField &field, const String &value)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("field storage=%p", (const void *)&field);
+                        debugV("value=%s", value.c_str());
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   if (field.kind <= SETUP_PEER)
   {
     if (value.length() >= MAX_NAME_LENGTH || (!value.length() && String(FPSTR(field.key)) != "location"))
@@ -203,8 +251,21 @@ bool setupValid(const SetupField &field, const String &value)
          (field.kind != SETUP_INT || floor(number) == number);
 }
 
+/**
+ * @brief Assign an already validated field value to its corresponding configuration storage.
+ * @details Assign an already validated field value to its corresponding configuration storage.
+ * @param[in] field (const SetupField &) Field metadata defining storage and validation.
+ * @param[in] value (const String &) Operation value or field text.
+ * @return (void) Observable effects are described above.
+ */
 void setupAssign(const SetupField &field, const String &value)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("field storage=%p", (const void *)&field);
+                        debugV("value=%s", value.c_str());
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   const String key(FPSTR(field.key));
   if (field.kind <= SETUP_PEER)
   {
@@ -226,8 +287,19 @@ void setupAssign(const SetupField &field, const String &value)
     closeShutterOnDisconnect = value == "true";
 }
 
+/**
+ * @brief Stream the manual dome and shutter forms with limits and feedback controls to the HTTP client.
+ * @details Stream the manual dome and shutter forms with limits and feedback controls to the HTTP client.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void sendDomeControlForms()
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   server.sendContent(String(F("<section class='card' id='bearing-sync'><h2>Synchronise current bearing</h2>"
                               "<p>Enter the dome's known physical bearing. This updates its calibration without moving the dome.</p>"
                               "<form method='post' action='/setup/v1/dome/1/sync#feedback'><label for='sync-bearing'>Known current bearing (&deg;)</label>"
@@ -263,8 +335,23 @@ void sendDomeControlForms()
                                                    "<p class='help'>Commands are queued in order. Opening or closing waits for any current shutter movement to complete.</p></section>"));
 }
 
+/**
+ * @brief Stream the management or dome setup page, current values and optional feedback using the requested HTTP status.
+ * @details Stream the management or dome setup page, current values and optional feedback using the requested HTTP status.
+ * @param[in] management (bool) True for management configuration; false for dome configuration.
+ * @param[in] status (int) HTTP response status.
+ * @param[in] message (const String &) Feedback text to render.
+ * @return (void) Observable effects are described above.
+ */
 void sendSetupPage(bool management, int status = 200, const String &message = "")
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("management=%g", (double)management);
+                        debugV("status=%g", (double)status);
+                        debugV("message=%s", message.c_str());
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   server.sendHeader(F("Cache-Control"), F("no-store"));
   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
   server.send(status, F("text/html; charset=utf-8"), "");
@@ -404,6 +491,13 @@ void sendSetupPage(bool management, int status = 200, const String &message = ""
   server.sendContent("");
 }
 
+/**
+ * @brief Check whether dome or shutter activity prevents changing setup values safely.
+ * @details Check whether dome or shutter activity prevents changing setup values safely.
+ * @par Arguments
+ * None.
+ * @return (bool) True while movement or queued work makes setup changes unsafe.
+ */
 bool setupBusy()
 {
   return domeStatus == DOME_SLEWING || domeStatus == DOME_ABORT ||
@@ -412,8 +506,19 @@ bool setupBusy()
 }
 
 //Unlike getBearing(), this must never substitute a cached reading after failure.
+/**
+ * @brief Read the raw configured bearing source and reject a missing or invalid value before synchronization.
+ * @details Read the raw configured bearing source and reject a missing or invalid value before synchronization.
+ * @param[in,out] raw (float &) Raw bearing in degrees.
+ * @return (bool) True for a valid raw bearing written to raw; false when feedback cannot be obtained or validated.
+ */
 bool readDomeSyncBearing(float &raw)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("raw=%g", (double)raw);
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
 #if defined USE_REMOTE_ENCODER_FOR_DOME_ROTATION || defined USE_REMOTE_COMPASS_FOR_DOME_ROTATION
   if (!sensorHostname || !sensorHostname[0])
     return false;
@@ -431,8 +536,19 @@ bool readDomeSyncBearing(float &raw)
   return isfinite(raw) && raw >= 0.0F && raw <= 360.0F;
 }
 
+/**
+ * @brief Validate the synchronization POST and known bearing, reject busy hardware and persist a valid bearing correction.
+ * @details Validate the synchronization POST and known bearing, reject busy hardware and persist a valid bearing correction.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleDomeUiSync()
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   if (server.method() != HTTP_POST)
   {
     server.sendHeader("Allow", "POST");
@@ -480,8 +596,19 @@ void handleDomeUiSync()
   server.send(303, "text/plain", "Bearing synchronised and offset saved. No movement commanded.");
 }
 
+/**
+ * @brief Serve configuration reads or validate and persist one submitted field.
+ * @details Serve configuration reads or validate and persist one submitted field; reject unsupported methods, keys, values and busy-state changes.
+ * @param[in] management (bool) True for management configuration; false for dome configuration.
+ * @return (void) Observable effects are described above.
+ */
 void handleSetupConfig(bool management)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("management=%g", (double)management);
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   if (server.method() == HTTP_GET)
   {
     JsonDocument doc;
@@ -599,8 +726,19 @@ void handleSetupConfig(bool management)
   sendSetupPage(management, 400, F("Unknown setting for this page."));
 }
 
+/**
+ * @brief Serialize the configured dome identity in the Alpaca management device-list response.
+ * @details Serialize the configured dome identity in the Alpaca management device-list response.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleModernConfiguredDevices()
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   JsonDocument doc;
   JsonObject root = doc.to<JsonObject>();
   jsonResponseBuilder(root, server.arg("ClientID").toInt(), server.arg("ClientTransactionID").toInt(),
@@ -615,8 +753,19 @@ void handleModernConfiguredDevices()
   server.send(200, F("application/json"), body);
 }
 
+/**
+ * @brief Validate Alpaca identifiers and send the configured dome name as an Alpaca response.
+ * @details Validate Alpaca identifiers and send the configured dome name as an Alpaca response.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleModernName()
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String body;
   JsonDocument doc;
   JsonObject root = doc.to<JsonObject>();
@@ -629,33 +778,84 @@ void handleModernName()
   sendCommonResponse(body);
 }
 
+/**
+ * @brief Register modern management and dome pages, configuration endpoints and manual control callbacks on the web server.
+ * @details Register modern management and dome pages, configuration endpoints and manual control callbacks on the web server.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void registerModernSetupRoutes()
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   server.on("/setup/v1/dome/1/sync", HTTP_ANY, handleDomeUiSync);
   server.on("/setup/v1/dome/1/control", HTTP_ANY, handleDomeUiControl);
-  server.on("/", HTTP_GET, []()
+  server.on("/", HTTP_GET, /** @brief Dispatch the registered HTTP route.
+ * @details Invoke the associated setup handler using its management or dome mode.
+ * @par Arguments
+ * None.
+ * @return (void) Sends the handler HTTP response.
+ */
+            []()
             {
               sendSetupPage(true);
             });
-  server.on("/setup", HTTP_GET, []()
+  server.on("/setup", HTTP_GET, /** @brief Dispatch the registered HTTP route.
+ * @details Invoke the associated setup handler using its management or dome mode.
+ * @par Arguments
+ * None.
+ * @return (void) Sends the handler HTTP response.
+ */
+            []()
             {
               sendSetupPage(true);
             });
-  server.on("/setup/v1/dome/1/setup", HTTP_GET, []()
+  server.on("/setup/v1/dome/1/setup", HTTP_GET, /** @brief Dispatch the registered HTTP route.
+ * @details Invoke the associated setup handler using its management or dome mode.
+ * @par Arguments
+ * None.
+ * @return (void) Sends the handler HTTP response.
+ */
+            []()
             {
               sendSetupPage(false, 200, server.arg("synced") == "1" ? F("Bearing synchronised and calibration saved. The dome has not been moved.") : server.arg("queued") == "1" ? F("Movement command queued. Refresh this page to see updated status.")
                                                                                                                                                                                   : F(""));
             });
-  server.on("/setup/config", HTTP_ANY, []()
+  server.on("/setup/config", HTTP_ANY, /** @brief Dispatch the registered HTTP route.
+ * @details Invoke the associated setup handler using its management or dome mode.
+ * @par Arguments
+ * None.
+ * @return (void) Sends the handler HTTP response.
+ */
+            []()
             {
               handleSetupConfig(true);
             });
-  server.on("/setup/v1/dome/1/config", HTTP_ANY, []()
+  server.on("/setup/v1/dome/1/config", HTTP_ANY, /** @brief Dispatch the registered HTTP route.
+ * @details Invoke the associated setup handler using its management or dome mode.
+ * @par Arguments
+ * None.
+ * @return (void) Sends the handler HTTP response.
+ */
+            []()
             {
               handleSetupConfig(false);
             });
-  server.on("/setup/restart", HTTP_POST, []()
+  server.on("/setup/restart", HTTP_POST, /** @brief Dispatch the registered HTTP route.
+ * @details Invoke the associated setup handler using its management or dome mode.
+ * @par Arguments
+ * None.
+ * @return (void) Sends the handler HTTP response.
+ */
+            []()
             {
+              DOME_FUNCTION_TRACE([&]()
+                                  {
+                                    debugV("restart state dome=%d shutter=%d", (int)domeStatus, (int)shutterStatus);
+                                  });
               if (setupBusy())
               {
                 sendSetupPage(true, 409, F("Wait for movement and queued commands to finish before restarting."));

@@ -1,3 +1,4 @@
+#include "DomeFunctionTrace.h"
 #ifndef ASCOM_DOME_CONTROL_H
 #define ASCOM_DOME_CONTROL_H
 
@@ -7,8 +8,19 @@
 const int domeUiJogDegrees = 5;
 const int domeUiQueueLimit = 8;
 
+/**
+ * @brief Send a 303 redirect to the relevant setup section so refreshing the browser does not repeat the movement POST.
+ * @details Send a 303 redirect to the relevant setup section so refreshing the browser does not repeat the movement POST.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void sendDomeUiQueued()
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   //A browser refresh must not repeat a movement POST.
   const String action = server.arg("action");
   const bool shutter = action == "open" || action == "close" || action == "altitude";
@@ -17,8 +29,19 @@ void sendDomeUiQueued()
 }
 
 //Queue commands only; the normal control loop owns active movement and targets.
+/**
+ * @brief Validate the POST action and numeric limits, enforce queue capacity and enabled hardware, then queue movement or perform immediate abort.
+ * @details Validate the POST action and numeric limits, enforce queue capacity and enabled hardware, then queue movement or perform immediate abort.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleDomeUiControl()
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   if (server.method() != HTTP_POST)
   {
     server.sendHeader("Allow", "POST");
@@ -53,11 +76,11 @@ void handleDomeUiControl()
     sendSetupPage(false, 503, F("Dome movement is disabled in this firmware build."));
     return;
 #else
-//    if (!domeCmdList ) 
-//    {
-//      sendSetupPage(false, 503, F("Dome commands are unavailable due to queue not available"));
-//      return;
-//    }
+    //    if (!domeCmdList )
+    //    {
+    //      sendSetupPage(false, 503, F("Dome commands are unavailable due to queue not available"));
+    //      return;
+    //    }
     if (domeCmdList->size() >= domeUiQueueLimit)
     {
       sendSetupPage(false, 409, F("Dome commands are unavailable due to pending actions (queue full)."));
@@ -70,7 +93,7 @@ void handleDomeUiControl()
       normaliseInt(target, 360);
       target += action == "east" ? domeUiJogDegrees : -domeUiJogDegrees;
     }
-    //Handle as a normal slew otherwise 
+    //Handle as a normal slew otherwise
     normaliseInt(target, 360);
     if (!addDomeCmd(0, 0, F("WebSlew"), CMD_DOME_SLEW, target))
     {
@@ -86,7 +109,7 @@ void handleDomeUiControl()
   return;
 #else
   //Shutter moves
-  if ( !shutterCmdList || !shutterHostname || !shutterHostname[0] )
+  if (!shutterCmdList || !shutterHostname || !shutterHostname[0])
   {
     sendSetupPage(false, 503, F("Shutter command queue or controller address is unavailable."));
     return;

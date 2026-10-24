@@ -1,3 +1,4 @@
+#include "../DomeFunctionTrace.h"
 //Host-side HTTP/queue doubles exercise the actual UI control handler without hardware.
 #include <assert.h>
 #include <stdint.h>
@@ -17,12 +18,33 @@
 class String : public std::string
 {
 public:
+  /**
+   * @brief Implement the string test adapter using in-memory state or assertions instead of physical hardware.
+   * @details Implement the string test adapter using in-memory state or assertions instead of physical hardware.
+   * @par Arguments
+   * None.
+   * @return No value (constructor).
+   */
   String() = default;
   using std::string::string;
-  String(const std::string &value) : std::string(value)
+  /**
+   * @brief Implement the string test adapter using in-memory state or assertions instead of physical hardware.
+   * @details Implement the string test adapter using in-memory state or assertions instead of physical hardware.
+   * @param[in] value (const std::string &) Operation value or field text.
+   * @return No value (constructor).
+   */
+  String(const std::string &value)
+      : std::string(value)
   {
   }
-  String(int value) : std::string(std::to_string(value))
+  /**
+   * @brief Implement the string test adapter using in-memory state or assertions instead of physical hardware.
+   * @details Implement the string test adapter using in-memory state or assertions instead of physical hardware.
+   * @param[in] value (int) Operation value or field text.
+   * @return No value (constructor).
+   */
+  String(int value)
+      : std::string(std::to_string(value))
   {
   }
 };
@@ -74,10 +96,23 @@ struct cmdItem_t
 struct Queue
 {
   std::vector<cmdItem_t> items;
+  /**
+   * @brief Implement the size test adapter using in-memory state or assertions instead of physical hardware.
+   * @details Implement the size test adapter using in-memory state or assertions instead of physical hardware.
+   * @par Arguments
+   * None.
+   * @return (int) Number of items in the simulated command queue.
+   */
   int size()
   {
     return static_cast<int>(items.size());
   }
+  /**
+   * @brief Implement the get test adapter using in-memory state or assertions instead of physical hardware.
+   * @details Implement the get test adapter using in-memory state or assertions instead of physical hardware.
+   * @param[in] index (int) Zero-based queue index.
+   * @return (cmdItem_t *) Borrowed pointer to the indexed queue item; invalidated by queue mutation; never free it.
+   */
   cmdItem_t *get(int index)
   {
     return &items.at(index);
@@ -95,39 +130,113 @@ struct Server
 {
   int verb = HTTP_POST;
   std::map<String, String> fields;
+  /**
+   * @brief Implement the method test adapter using in-memory state or assertions instead of physical hardware.
+   * @details Implement the method test adapter using in-memory state or assertions instead of physical hardware.
+   * @par Arguments
+   * None.
+   * @return (int) Cached or computed value described above.
+   */
   int method()
   {
     return verb;
   }
+  /**
+   * @brief Implement the args test adapter using in-memory state or assertions instead of physical hardware.
+   * @details Implement the args test adapter using in-memory state or assertions instead of physical hardware.
+   * @par Arguments
+   * None.
+   * @return (int) Cached or computed value described above.
+   */
   int args()
   {
     return static_cast<int>(fields.size());
   }
+  /**
+   * @brief Implement the has arg test adapter using in-memory state or assertions instead of physical hardware.
+   * @details Implement the has arg test adapter using in-memory state or assertions instead of physical hardware.
+   * @param[in] key (const char *) Configuration field key.
+   * @return (bool) True on a successful check or operation; false otherwise.
+   */
   bool hasArg(const char *key)
   {
     return fields.count(key) != 0;
   }
+  /**
+   * @brief Implement the arg test adapter using in-memory state or assertions instead of physical hardware.
+   * @details Implement the arg test adapter using in-memory state or assertions instead of physical hardware.
+   * @param[in] key (const char *) Configuration field key.
+   * @return (String) Generated field or markup text.
+   */
   String arg(const char *key)
   {
     return hasArg(key) ? fields.at(key) : String();
   }
+  /**
+   * @brief Implement the send header test adapter using in-memory state or assertions instead of physical hardware.
+   * @details Implement the send header test adapter using in-memory state or assertions instead of physical hardware.
+   * @par Unnamed argument
+   * (const char *) Reserved adapter argument; intentionally unused.
+   * @par Unnamed argument
+   * (const char *) Reserved adapter argument; intentionally unused.
+   * @return (void) Observable effects are described above.
+   */
   void sendHeader(const char *, const char *)
   {
   }
+  /**
+   * @brief Implement the send test adapter using in-memory state or assertions instead of physical hardware.
+   * @details Implement the send test adapter using in-memory state or assertions instead of physical hardware.
+   * @param[in] status (int) HTTP response status.
+   * @par Unnamed argument
+   * (const char *) Reserved adapter argument; intentionally unused.
+   * @par Unnamed argument
+   * (const char *) Reserved adapter argument; intentionally unused.
+   * @return (void) Observable effects are described above.
+   */
   void send(int status, const char *, const char *)
   {
     statusCode = status;
   }
 } server;
+/**
+ * @brief Implement the send setup page test adapter using in-memory state or assertions instead of physical hardware.
+ * @details Implement the send setup page test adapter using in-memory state or assertions instead of physical hardware.
+ * @par Unnamed argument
+ * (bool) Reserved adapter argument; intentionally unused.
+ * @param[in] status (int) HTTP response status.
+ * @par Unnamed argument
+ * (const String &) Reserved adapter argument; intentionally unused.
+ * @return (void) Observable effects are described above.
+ */
 void sendSetupPage(bool, int status, const String &)
 {
   statusCode = status;
 }
+/**
+ * @brief Implement the normalise int test adapter using in-memory state or assertions instead of physical hardware.
+ * @details Implement the normalise int test adapter using in-memory state or assertions instead of physical hardware.
+ * @param[in,out] value (int &) Operation value or field text.
+ * @param[in] radix (int) Positive modulus defining the wrap interval.
+ * @return (int) Normalized value, also stored in the referenced argument.
+ */
 int normaliseInt(int &value, int radix)
 {
   value = (value % radix + radix) % radix;
   return value;
 }
+/**
+ * @brief Implement the add dome cmd test adapter using in-memory state or assertions instead of physical hardware.
+ * @details Implement the add dome cmd test adapter using in-memory state or assertions instead of physical hardware.
+ * @par Unnamed argument
+ * (uint32_t) Reserved adapter argument; intentionally unused.
+ * @par Unnamed argument
+ * (uint32_t) Reserved adapter argument; intentionally unused.
+ * @param[in] name (String) Test command label.
+ * @param[in] command (domeCmd) Command operation used by the test adapter.
+ * @param[in] value (int) Operation value or field text.
+ * @return (cmdItem_t *) Queued command owned by the queue; null on allocation failure. Release through freeCmd after removing it.
+ */
 cmdItem_t *addDomeCmd(uint32_t, uint32_t, String name, domeCmd command, int value)
 {
   if (failAllocation)
@@ -135,6 +244,18 @@ cmdItem_t *addDomeCmd(uint32_t, uint32_t, String name, domeCmd command, int valu
   domeQueue.items.push_back({command, value, name});
   return &domeQueue.items.back();
 }
+/**
+ * @brief Implement the add shutter cmd test adapter using in-memory state or assertions instead of physical hardware.
+ * @details Implement the add shutter cmd test adapter using in-memory state or assertions instead of physical hardware.
+ * @par Unnamed argument
+ * (uint32_t) Reserved adapter argument; intentionally unused.
+ * @par Unnamed argument
+ * (uint32_t) Reserved adapter argument; intentionally unused.
+ * @param[in] name (String) Test command label.
+ * @param[in] command (shutterCmd) Command operation used by the test adapter.
+ * @param[in] value (int) Operation value or field text.
+ * @return (cmdItem_t *) Queued command owned by the queue; null on allocation failure. Release through freeCmd after removing it.
+ */
 cmdItem_t *addShutterCmd(uint32_t, uint32_t, String name, shutterCmd command, int value)
 {
   if (failAllocation)
@@ -144,6 +265,13 @@ cmdItem_t *addShutterCmd(uint32_t, uint32_t, String name, shutterCmd command, in
 }
 #include "../ASCOM_DomeControl.h"
 
+/**
+ * @brief Implement the request test adapter using in-memory state or assertions instead of physical hardware.
+ * @details Implement the request test adapter using in-memory state or assertions instead of physical hardware.
+ * @param[in] action (const char *) Simulated HTTP movement action.
+ * @param[in] value (const char *) Operation value or field text.
+ * @return (void) Observable effects are described above.
+ */
 void request(const char *action, const char *value = nullptr)
 {
   server.fields = {{"action", action}};
@@ -153,6 +281,13 @@ void request(const char *action, const char *value = nullptr)
   handleDomeUiControl();
 }
 
+/**
+ * @brief Exercise the firmware behavior with deterministic inputs and assert expected results.
+ * @details Exercise the firmware behavior with deterministic inputs and assert expected results; return zero when all checks pass.
+ * @par Arguments
+ * None.
+ * @return (int) Zero when all assertions pass; assertion failure terminates the test.
+ */
 int main()
 {
   server.verb = HTTP_GET;

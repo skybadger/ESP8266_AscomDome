@@ -46,7 +46,7 @@ constexpr uint32_t MIN_SAFE_BLOCK = 800;
 //Manage the remote debug interface, it takes 6K of memory with all the strings even when not in use but loaded
 //#define _DISABLE_REMOTE_DEBUG             //Use serial logging without the remote server.
 #if defined _DISABLE_REMOTE_DEBUG && !defined DEBUG_DISABLED
-#define DEBUG_DISABLED                    //Disable RemoteDebug; DebugSerial supplies the fallback.
+#define DEBUG_DISABLED //Disable RemoteDebug; DebugSerial supplies the fallback.
 #endif
 #define DEBUG_DISABLE_AUTO_FUNC true //Turn on or off the auto function labelling feature .
 #define WEBSOCKET_DISABLED true      //No impact to memory requirement
@@ -60,9 +60,9 @@ constexpr uint32_t MIN_SAFE_BLOCK = 800;
 #define DOME_HEAP_TRACE 0
 #endif
 
-#define _ENABLE_BEARING                    //Turn off loop segment for bearing update if not set.
-#define _ENABLE_SHUTTER                    // Turn off loop segment for shutter handling if not set.
-#define _ENABLE_DOME                       //Turn off segment for dome handling if not set.
+#define _ENABLE_BEARING //Turn off loop segment for bearing update if not set.
+#define _ENABLE_SHUTTER // Turn off loop segment for shutter handling if not set.
+#define _ENABLE_DOME    //Turn off segment for dome handling if not set.
 
 //Select a method of getting positional feedback on dome rotation.
 //#define USE_REMOTE_COMPASS_FOR_DOME_ROTATION
@@ -104,6 +104,7 @@ int bootCount = 0;
 #ifndef _DISABLE_REMOTE_DEBUG
 RemoteDebug Debug;
 #endif
+#include "DomeFunctionTrace.h"
 
 //Ntp dependencies - available from v2.4
 #include <time.h>
@@ -123,9 +124,9 @@ extern "C"
 */
 #define TZ 0      // (utc+) TZ in hours
 #define DST_MN 00 // use 60mn for summer time in some countries
-#define TZ_MN ((TZ) * 60)
-#define TZ_SEC ((TZ) * 3600)
-#define DST_SEC ((DST_MN) * 60)
+#define TZ_MN ((TZ)*60)
+#define TZ_SEC ((TZ)*3600)
+#define DST_SEC ((DST_MN)*60)
 time_t now; //use as 'gmtime(&now);'
 
 //Program constants
@@ -242,6 +243,7 @@ enum shutterState targetShutterStatus = SHUTTER_CLOSED;
 enum connectionState connectionStatus = CONNECTION_DISCONNECTED;
 uint32_t pendingConnectionClientID = 0;
 uint32_t connectionStateChangedAt = 0;
+/// @see publishFnStatus for the documented definition.
 extern void publishFnStatus(void);
 
 //Timer flags
@@ -296,12 +298,19 @@ const uint32_t IDLE_STATUS_PERIOD_MS = 2500;
 uint32_t statusPollingPeriodMs = ACTIVE_STATUS_PERIOD_MS;
 const uint32_t restQueryTimeout = 5000;
 
+/// @see onCoarseTimer for the documented definition.
 void onCoarseTimer(void *ptr);
+/// @see onFineTimer for the documented definition.
 void onFineTimer(void *ptr);
+/// @see onTimeoutTimer for the documented definition.
 void onTimeoutTimer(void *ptr);
+/// @see onWatchdogTimer for the documented definition.
 void onWatchdogTimer(void *ptr);
+/// @see manageConnectionState for the documented definition.
 void manageConnectionState(void);
+/// @see updateStatusPollingPeriod for the documented definition.
 void updateStatusPollingPeriod(void);
+/// @see appendDomeStatusFields for the documented definition.
 void appendDomeStatusFields(JsonObject root);
 
 //Private web handler methods
@@ -309,12 +318,16 @@ void appendDomeStatusFields(JsonObject root);
 
 //Internal functions
 #ifdef USE_LOCAL_ENCODER_FOR_DOME_ROTATION
+/// @see setupEncoder for the documented definition.
 void setupEncoder();
 #else // USE_REMOTE_ENCODER_FOR_DOME_ROTATION or REMOTE_COMPASS
+/// @see setupCompass for the documented definition.
 bool setupCompass(String url);
 #endif
 
+/// @see saveToEeprom for the documented definition.
 bool saveToEeprom();
+/// @see readFromEeprom for the documented definition.
 void readFromEeprom();
 void fineTimerHandler(void);     //sensor loop
 void coarseTimerHandler(void);   //command loop

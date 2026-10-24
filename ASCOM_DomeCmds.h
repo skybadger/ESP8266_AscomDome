@@ -1,3 +1,4 @@
+#include "DomeFunctionTrace.h"
 #include "DomeHeapTrace.h"
 /*
 File to be included into relevant device REST setup
@@ -11,31 +12,49 @@ File to be included into relevant device REST setup
 #include <LinkedList.h>
 
 //prototypes
+/// @see normaliseFloat for the documented definition.
 float normaliseFloat(float &input, float radix);
+/// @see normaliseInt for the documented definition.
 int normaliseInt(int &input, int radix);
 
 //interfaces to other inputs.
+/// @see restQuery for the documented definition.
 int restQuery(String uri, String path, String args, String &response, enum HTTPMethod method);
+/// @see getAzimuth for the documented definition.
 float getAzimuth(float);
+/// @see setupEncoder for the documented definition.
 void setupEncoder();
+/// @see setupCompass for the documented definition.
 bool setupCompass(String host);
+/// @see getBearing for the documented definition.
 float getBearing(String host);
+/// @see getShutterStatus for the documented definition.
 int getShutterStatus(String host, enum shutterState &);
 
 //Status Event processing
+/// @see addDomeCmd for the documented definition.
 cmdItem_t *addDomeCmd(uint32_t clientId, uint32_t transId, String cmdName, enum domeCmd, int value);
+/// @see addShutterCmd for the documented definition.
 cmdItem_t *addShutterCmd(uint32_t clientId, uint32_t transId, String cmdName, enum shutterCmd, int value);
+/// @see updateCmdResponseList for the documented definition.
 void updateCmdResponseList(int transID);
+/// @see freeCmd for the documented definition.
 void freeCmd(cmdItem_t *cmd);
 
 //dome state handlers
+/// @see onDomeSlew for the documented definition.
 void onDomeSlew();
+/// @see onDomeAbort for the documented definition.
 void onDomeAbort();
+/// @see onDomeIdle for the documented definition.
 void onDomeIdle();
 
 //Shutter state handlers
+/// @see onShutterIdle for the documented definition.
 void onShutterIdle();
+/// @see shutterAltitude for the documented definition.
 int shutterAltitude(int newAngle);
+/// @see shutterSlew for the documented definition.
 int shutterSlew(enum shutterCmd setting);
 //int shutterAbort( void ); //deprecated
 
@@ -48,8 +67,21 @@ static bool domeLockFinalRecoveryMove = false;
 //Only queued recovery commands are retained here; clear their pointers on dequeue.
 static cmdItem_t *domeLockRecoveryCommands[3] = {};
 
+/**
+ * @brief Reduce the referenced bearing modulo the radix and correct negative values into the positive range.
+ * @details Reduce the referenced bearing modulo the radix and correct negative values into the positive range.
+ * @param[in,out] input (float &) Value to normalize or escape.
+ * @param[in] radix (float) Positive modulus defining the wrap interval.
+ * @return (float) Normalized value, also stored in input.
+ */
 float normaliseFloat(float &input, float radix)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("input=%g", (double)input);
+                        debugV("radix=%g", (double)radix);
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   DOME_HEAP_SCOPE("normaliseFloat");
   float temp = input;
   float output = 0.0F;
@@ -63,8 +95,21 @@ float normaliseFloat(float &input, float radix)
   return output;
 }
 
+/**
+ * @brief Reduce the referenced integer modulo the radix and correct negative values into the positive range.
+ * @details Reduce the referenced integer modulo the radix and correct negative values into the positive range.
+ * @param[in,out] input (int &) Value to normalize or escape.
+ * @param[in] radix (int) Positive modulus defining the wrap interval.
+ * @return (int) Normalized value, also stored in the referenced argument.
+ */
 int normaliseInt(int &input, int radix)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("input=%g", (double)input);
+                        debugV("radix=%g", (double)radix);
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   DOME_HEAP_SCOPE("normaliseInt");
   int temp = input;
   int output = 0;
@@ -81,8 +126,27 @@ int normaliseInt(int &input, int radix)
 /*
  * @brief create a new dome command list entry
  */
+/**
+ * @brief Allocate a dome command and its name, attach client and transaction identifiers, and append it to the dome queue.
+ * @details Allocate a dome command and its name, attach client and transaction identifiers, and append it to the dome queue; release partial allocations on failure.
+ * @param[in] clientId (uint32_t) Client identifier owning the queued command.
+ * @param[in] transId (uint32_t) Client transaction identifier for the queued command.
+ * @param[in] cmdName (String) Command label copied into owned queue storage.
+ * @param[in] newCmd (enum domeCmd) Command operation to enqueue.
+ * @param[in] value (int) Operation value or field text.
+ * @return (cmdItem_t *) Queued command owned by the queue; null on allocation failure. Release through freeCmd after removing it.
+ */
 cmdItem_t *addDomeCmd(uint32_t clientId, uint32_t transId, String cmdName, enum domeCmd newCmd, int value)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("clientId=%g", (double)clientId);
+                        debugV("transId=%g", (double)transId);
+                        debugV("cmdName=%s", cmdName.c_str());
+                        debugV("newCmd=%g", (double)newCmd);
+                        debugV("value=%g", (double)value);
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   DOME_HEAP_SCOPE("addDomeCmd");
   if (domeCmdList == nullptr)
     return nullptr;
@@ -116,8 +180,27 @@ cmdItem_t *addDomeCmd(uint32_t clientId, uint32_t transId, String cmdName, enum 
 /*
  * @brief create a new shutter command list entry
  */
+/**
+ * @brief Allocate a shutter command and its name, attach client and transaction identifiers, and append it to the shutter queue.
+ * @details Allocate a shutter command and its name, attach client and transaction identifiers, and append it to the shutter queue; release partial allocations on failure.
+ * @param[in] clientId (uint32_t) Client identifier owning the queued command.
+ * @param[in] transId (uint32_t) Client transaction identifier for the queued command.
+ * @param[in] cmdName (String) Command label copied into owned queue storage.
+ * @param[in] newCmd (enum shutterCmd) Command operation to enqueue.
+ * @param[in] value (int) Operation value or field text.
+ * @return (cmdItem_t *) Queued command owned by the queue; null on allocation failure. Release through freeCmd after removing it.
+ */
 cmdItem_t *addShutterCmd(uint32_t clientId, uint32_t transId, String cmdName, enum shutterCmd newCmd, int value)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("clientId=%g", (double)clientId);
+                        debugV("transId=%g", (double)transId);
+                        debugV("cmdName=%s", cmdName.c_str());
+                        debugV("newCmd=%g", (double)newCmd);
+                        debugV("value=%g", (double)value);
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   if (shutterCmdList == nullptr)
     return nullptr;
   //Create new command
@@ -147,27 +230,49 @@ cmdItem_t *addShutterCmd(uint32_t clientId, uint32_t transId, String cmdName, en
   return pCmd;
 }
 
+/**
+ * @brief Release a command name and its command allocation.
+ * @details Release a command name and its command allocation; tolerate a null command pointer.
+ * @param[in] ptr (cmdItem_t *) Command allocation to release, or null.
+ * @return (void) Observable effects are described above.
+ */
 void freeCmd(cmdItem_t *ptr)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("ptr storage=%p", (const void *)ptr);
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   DOME_HEAP_SCOPE("freeCmd");
   //Safely release cmd memory
   //Clean up any memory dependencies
-  if (ptr != nullptr ) 
+  if (ptr != nullptr)
   {
-    if ( ptr->cmdName != nullptr )
+    if (ptr->cmdName != nullptr)
       free(ptr->cmdName);
     free((cmdItem_t *)ptr);
     debugV("Cmd freed");
   }
-  else 
+  else
     debugW("Attempt to free Null Cmd caught");
   return;
 }
 
 /* Handle the command list - we've already checked we are idle at this point.
    */
+/**
+ * @brief Dequeue the next dome command, apply configuration or movement targets, update the state machine and release the consumed command.
+ * @details Dequeue the next dome command, apply configuration or movement targets, update the state machine and release the consumed command.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void onDomeIdle(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   DOME_HEAP_SCOPE("onDomeIdle");
   cmdItem_t *pCmd = nullptr;
   enum domeCmd newCmd;
@@ -265,6 +370,12 @@ void onDomeIdle(void)
 /*
    *  Not to query rotating shutter but to include offsets in returned result.
    */
+/**
+ * @brief Convert a relative bearing to an absolute azimuth using the configured synchronization offset and normalize the result.
+ * @details Convert a relative bearing to an absolute azimuth using the configured synchronization offset and normalize the result.
+ * @param[in] value (float) Operation value or field text.
+ * @return (float) Normalized absolute azimuth in degrees.
+ */
 float getAzimuth(float value)
 {
   DOME_HEAP_SCOPE("getAzimuth");
@@ -278,8 +389,19 @@ float getAzimuth(float value)
    * Slow to crawl once near target azimuth
    * Calc minimum distance to select direction
    */
+/**
+ * @brief Select motor direction and speed from the remaining bearing error.
+ * @details Select motor direction and speed from the remaining bearing error; stop at the target and queue recovery movements when a lock is detected.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void onDomeSlew(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   DOME_HEAP_SCOPE("onDomeSlew");
   static float startAzimuth = 0.0F;
   static float lastAzimuth = 0.0F;
@@ -457,6 +579,12 @@ void onDomeSlew(void)
   return;
 }
 
+/**
+ * @brief Reserve the response-list update hook for a transaction.
+ * @details Reserve the response-list update hook for a transaction; the current implementation performs no update.
+ * @param[in] transID (int) Client transaction identifier.
+ * @return (void) Observable effects are described above.
+ */
 void updateCmdResponseList(int transID)
 {
   //TODO - Client presents transaction Id and we can check list for status enum and update list to show complete
@@ -473,8 +601,19 @@ void updateCmdResponseList(int transID)
    * @param void
    * @return void
    */
+/**
+ * @brief Stop the motor, clear lock recovery counters and return the dome state machine to idle.
+ * @details Stop the motor, clear lock recovery counters and return the dome state machine to idle.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void onDomeAbort(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   DOME_HEAP_SCOPE("onDomeAbort");
   //Cancel only this recovery's queued moves, preserving unrelated commands.
   for (auto &recoveryCmd : domeLockRecoveryCommands)
@@ -516,8 +655,19 @@ void onDomeAbort(void)
 }
 
 //Function to issue commands to shutter when idle. Otherwise wait until state is open or closed.
+/**
+ * @brief Consume pending shutter commands when motion permits, request the remote movement and update shutter state before releasing command storage.
+ * @details Consume pending shutter commands when motion permits, request the remote movement and update shutter state before releasing command storage.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void onShutterIdle()
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String response = "";
   String uri = "http://";
   //enum shutterCmd              { CMD_SHUTTER_ABORT=0, CMD_SHUTTER_OPEN=4, CMD_SHUTTER_CLOSE=5, CMD_SHUTTERVAR_SET };
@@ -560,7 +710,6 @@ void onShutterIdle()
               freeCmd(shutterCmdList->shift());
             }
           }
-            
         }
         break;
       case CMD_SHUTTERVAR_SET:
@@ -613,8 +762,19 @@ void onShutterIdle()
 /*
  * return HTTP_CODE_OK (200) for successful setting.
  */
+/**
+ * @brief Send an open, close or abort request to the remote shutter and update local shutter state only after HTTP acknowledgement.
+ * @details Send an open, close or abort request to the remote shutter and update local shutter state only after HTTP acknowledgement.
+ * @param[in] setting (enum shutterCmd) Requested remote shutter command.
+ * @return (int) HTTP 200 on acknowledgement; otherwise the HTTP or transport error.
+ */
 int shutterSlew(enum shutterCmd setting)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("setting=%g", (double)setting);
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String outbuf = "";
   String arg = "shutter=";
   int errorCode = 200;
@@ -662,8 +822,19 @@ int shutterSlew(enum shutterCmd setting)
 /*
  * Return HTTP_CODE_OK (200) for success or other HTTP query response code for failure
  */
+/**
+ * @brief Send the requested angle to the remote shutter and update target altitude and movement direction after HTTP acknowledgement.
+ * @details Send the requested angle to the remote shutter and update target altitude and movement direction after HTTP acknowledgement.
+ * @param[in] newAngle (int) Requested shutter altitude in degrees.
+ * @return (int) HTTP 200 on acknowledgement; otherwise the HTTP or transport error.
+ */
 int shutterAltitude(int newAngle)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("newAngle=%g", (double)newAngle);
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String outbuf = "";
   String path = F("/shutter");
   String args = F("shutter=");
@@ -728,6 +899,13 @@ int shutterAltitude(int newAngle)
     return response;
   }
 */
+/**
+ * @brief Reserve the local encoder initialization hook.
+ * @details Reserve the local encoder initialization hook; the current implementation returns without touching hardware.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void setupEncoder()
 {
   //TODO if we ever have a locally-attached encoder.
@@ -735,8 +913,19 @@ void setupEncoder()
 }
 
 //Detect compass service and initialise azimuth bearing of dome
+/**
+ * @brief Probe the remote bearing endpoint and check for a numeric bearing in a successful JSON response.
+ * @details Probe the remote bearing endpoint and check for a numeric bearing in a successful JSON response; do not change the current azimuth.
+ * @param[in] targetHost (String) Remote compass hostname.
+ * @return (bool) True when HTTP 200 contains valid JSON with a numeric bearing; false otherwise.
+ */
 bool setupCompass(String targetHost)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("targetHost=%s", targetHost.c_str());
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   bool status = false;
   String output = "";
   int response = 0;
@@ -765,8 +954,27 @@ bool setupCompass(String targetHost)
    * Query a url for a parsed json output
    * Check the DeserializationError returned by deserializeJson().
    */
+/**
+ * @brief Perform a bounded HTTP request with heap checks, capture the response body and close the HTTP client before returning.
+ * @details Perform a bounded HTTP request with heap checks, capture the response body and close the HTTP client before returning.
+ * @param[in] host (String) Remote controller hostname.
+ * @param[in] uri (String) Remote request path.
+ * @param[in] args (String) Encoded request arguments.
+ * @param[in,out] response (String &) Response body populated by the HTTP operation.
+ * @param[in] method (enum HTTPMethod) HTTP verb to send.
+ * @return (int) HTTP response status or a transport/resource failure code.
+ */
 int restQuery(String host, String uri, String args, String &response, enum HTTPMethod method)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("host=%s", host.c_str());
+                        debugV("uri=%s", uri.c_str());
+                        debugV("args=%s", args.c_str());
+                        debugV("response storage=%p", (const void *)&response);
+                        debugV("method=%g", (double)method);
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   DOME_HEAP_SCOPE("restQuery");
   int httpCode = 0;
   long int startTime;
@@ -781,8 +989,8 @@ int restQuery(String host, String uri, String args, String &response, enum HTTPM
   if (ESP.getFreeHeap() < MIN_SAFE_HEAP || ESP.getMaxFreeBlockSize() < MIN_SAFE_BLOCK)
   {
     debugE("Skipping REST request: low heap=%u maxBlock=%u",
-          ESP.getFreeHeap(),
-          ESP.getMaxFreeBlockSize());
+           ESP.getFreeHeap(),
+           ESP.getMaxFreeBlockSize());
 
     return HTTP_CODE_SERVICE_UNAVAILABLE;
   }
@@ -878,7 +1086,7 @@ int restQuery(String host, String uri, String args, String &response, enum HTTPM
       debugW("restQuery ... failed, error: %s\n", httpClient.errorToString(httpCode).c_str());
       response = "";
     }
-  } //end hclient.
+  }    //end hclient.
   else //hclient.begin() failed
   {
     debugE("restQuery ... httpCient.begin failed, \n");
@@ -886,7 +1094,7 @@ int restQuery(String host, String uri, String args, String &response, enum HTTPM
     httpCode = HTTP_CODE_SERVICE_UNAVAILABLE;
   }
 
-  //Do these to tidy up memory and reduce heap fragmentation 
+  //Do these to tidy up memory and reduce heap fragmentation
   httpClient.end();
   wclient.stop();
 
@@ -900,8 +1108,19 @@ int restQuery(String host, String uri, String args, String &response, enum HTTPM
    * setup correctly in the setup pages.
    * That means the 'host' string is no longer strictly just a hostname.
    */
+/**
+ * @brief Read bearing from the configured local or remote feedback source.
+ * @details Read bearing from the configured local or remote feedback source; retain the source-specific fallback when a read fails.
+ * @param[in] host (String) Remote controller hostname.
+ * @return (float) Bearing in degrees from the selected feedback path, with the last retained value used on remote read failure.
+ */
 float getBearing(String host)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("host=%s", host.c_str());
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   DOME_HEAP_SCOPE("getBearing");
   long int duration = millis();
   static int bearingRepeatCount = 0;
@@ -913,7 +1132,7 @@ float getBearing(String host)
   String path = "";
 
   debugD("GetBearing setup - host uri: %s \n", host.c_str());
-  
+
   response = restQuery(host, "/encoder/bearing", "", outbuf, HTTP_GET);
 
   //Sometimes we get a good HTTP code but still no body...
@@ -958,7 +1177,7 @@ float getBearing(String host)
       debugW("No reading, using last: %f ", lastBearing);
       localBearing = lastBearing;
     }
-  } //HTTP_CODE_OK
+  }    //HTTP_CODE_OK
   else //Havent got a good response code
   {
     debugW("Failed to get bearing (%i),  json data: %s", response, outbuf.c_str());
@@ -972,8 +1191,19 @@ float getBearing(String host)
 }
 #else  //if local interface in use
 //write something for the local case of local hardware encoder interface
+/**
+ * @brief Read bearing from the configured local or remote feedback source.
+ * @details Read bearing from the configured local or remote feedback source; retain the source-specific fallback when a read fails.
+ * @par Arguments
+ * None.
+ * @return (float) Bearing in degrees from the selected feedback path, with the last retained value used on remote read failure.
+ */
 float getBearing()
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   int localPosition = 0;
   localPosition = myEnc.read();
   if (localPosition != lastPosition)
@@ -1000,13 +1230,26 @@ float getBearing()
    * Rest call to retrieve shutter Status.
      updated to address request failure by not going straight to ERROR.
    */
+/**
+ * @brief Query and parse the remote shutter state, updating the output only as supported by the response.
+ * @details Query and parse the remote shutter state, updating the output only as supported by the response.
+ * @param[in] host (String) Remote controller hostname.
+ * @param[in,out] outputState (enum shutterState &) Remote shutter state output.
+ * @return (int) HTTP status from the remote state request.
+ */
 int getShutterStatus(String host, enum shutterState &outputState)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("host=%s", host.c_str());
+                        debugV("outputState storage=%p", (const void *)&outputState);
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   DOME_HEAP_SCOPE("getShutterStatus");
   String outbuf;
   long int duration = millis();
   enum shutterState value = SHUTTER_ERROR;
-  
+
   int response = restQuery(host, "/status", "", outbuf, HTTP_GET);
 
   if (response == HTTP_CODE_OK)

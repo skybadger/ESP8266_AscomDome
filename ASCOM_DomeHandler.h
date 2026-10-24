@@ -1,3 +1,4 @@
+#include "DomeFunctionTrace.h"
 /*
 File to be included into relevant device REST setup
 */
@@ -15,13 +16,35 @@ File to be included into relevant device REST setup
 bool hasArgIC(String &check, ESP8266WebServer &ref, bool caseSensitive);
 
 //Parse the string supplied by ESP8266WebServer, preserving all 32 unsigned bits.
+/**
+ * @brief Pass the complete HTTP argument string to the unsigned decimal parser without truncating its 32-bit range.
+ * @details Pass the complete HTTP argument string to the unsigned decimal parser without truncating its 32-bit range.
+ * @param[in] inval (const String &) HTTP argument text.
+ * @param[in,out] out (uint32_t &) Parsed unsigned value; cleared on invalid input.
+ * @return (bool) True for a complete unsigned decimal value; false on malformed input or overflow.
+ */
 bool checkUint32(const String &inval, uint32_t &out)
 {
   return parseAlpacaUint32(inval.c_str(), inval.length(), out);
 }
 
+/**
+ * @brief Resolve case-insensitive client and transaction arguments, parse both unsigned values and send an Alpaca validation error when either is invalid.
+ * @details Resolve case-insensitive client and transaction arguments, parse both unsigned values and send an Alpaca validation error when either is invalid.
+ * @param[in,out] clientID (uint32_t &) Parsed client identifier.
+ * @param[in,out] transID (uint32_t &) Client transaction identifier.
+ * @param[in] operation (const __FlashStringHelper *) Flash-resident Alpaca operation label.
+ * @return (bool) True when both identifiers parse; false after sending HTTP 400 for invalid identifiers.
+ */
 bool validateClientTransactionIds(uint32_t &clientID, uint32_t &transID, const __FlashStringHelper *operation)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("clientID=%g", (double)clientID);
+                        debugV("transID=%g", (double)transID);
+                        debugV("operation storage=%p", (const void *)operation);
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String clientKey = F("ClientID");
   String transactionKey = F("ClientTransactionID");
   const bool hasClient = hasArgIC(clientKey, server, false);
@@ -51,8 +74,19 @@ bool validateClientTransactionIds(uint32_t &clientID, uint32_t &transID, const _
   return false;
 }
 
+/**
+ * @brief Validate Alpaca client and transaction identifiers, serialize the altitude value and send the JSON response.
+ * @details Validate Alpaca client and transaction identifiers, serialize the altitude value and send the JSON response.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleAltitudeGet(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   //TEST
   uint32_t clientID = 0;
@@ -73,8 +107,19 @@ void handleAltitudeGet(void)
   return;
 }
 
+/**
+ * @brief Validate Alpaca client and transaction identifiers, serialize the at home value and send the JSON response.
+ * @details Validate Alpaca client and transaction identifiers, serialize the at home value and send the JSON response.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleAtHomeGet(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   uint32_t clientID = 0;
   uint32_t transID = 0;
@@ -102,8 +147,19 @@ void handleAtHomeGet(void)
   return;
 }
 
+/**
+ * @brief Validate Alpaca client and transaction identifiers, serialize the at park value and send the JSON response.
+ * @details Validate Alpaca client and transaction identifiers, serialize the at park value and send the JSON response.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleAtParkGet(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   uint32_t clientID = 0;
   uint32_t transID = 0;
@@ -130,8 +186,19 @@ void handleAtParkGet(void)
   return;
 }
 
+/**
+ * @brief Validate Alpaca client and transaction identifiers, serialize the azimuth value and send the JSON response.
+ * @details Validate Alpaca client and transaction identifiers, serialize the azimuth value and send the JSON response.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleAzimuthGet(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   /*
   Need to be very careful about null memory  - ie runnig out of memory from allocations. 
 
@@ -152,8 +219,19 @@ void handleAzimuthGet(void)
   return;
 }
 
+/**
+ * @brief Validate Alpaca client and transaction identifiers, serialize the can find home value and send the JSON response.
+ * @details Validate Alpaca client and transaction identifiers, serialize the can find home value and send the JSON response.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleCanFindHomeGet(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   uint32_t clientID = 0;
   uint32_t transID = 0;
@@ -170,8 +248,19 @@ void handleCanFindHomeGet(void)
   return;
 }
 
+/**
+ * @brief Validate Alpaca client and transaction identifiers, serialize the can park value and send the JSON response.
+ * @details Validate Alpaca client and transaction identifiers, serialize the can park value and send the JSON response.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleCanParkGet(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   uint32_t clientID = 0;
   uint32_t transID = 0;
@@ -190,8 +279,19 @@ void handleCanParkGet(void)
   return;
 }
 
+/**
+ * @brief Validate Alpaca client and transaction identifiers, serialize the can set altitude value and send the JSON response.
+ * @details Validate Alpaca client and transaction identifiers, serialize the can set altitude value and send the JSON response.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleCanSetAltitudeGet(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   uint32_t clientID = 0;
   uint32_t transID = 0;
@@ -208,30 +308,52 @@ void handleCanSetAltitudeGet(void)
   return;
 }
 /* Check whether this is an acceptable approach - want to not return no resuolt at all otherwise. */
+/**
+ * @brief Validate Alpaca client and transaction identifiers, serialize the can set azimuth value and send the JSON response.
+ * @details Validate Alpaca client and transaction identifiers, serialize the can set azimuth value and send the JSON response.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleCanSetAzimuthGet(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
-  int result; 
+  int result;
   uint32_t clientID = 0;
   uint32_t transID = 0;
   JsonDocument doc;
   JsonObject root = doc.to<JsonObject>();
-  
-  if (!validateClientTransactionIds(clientID, transID, F("CanSetAzimuth")))
-    return 
 
-  jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("CanSetAzimuth"), Success, "");
+  if (!validateClientTransactionIds(clientID, transID, F("CanSetAzimuth")))
+    return
+
+        jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("CanSetAzimuth"), Success, "");
   root["Value"] = canSetAzimuth;
-  result = HTTP_CODE_OK; 
-  
+  result = HTTP_CODE_OK;
+
   serializeJson(root, message);
   debugI("CanSetAzimuthGet: %s", message.c_str());
   server.send(result, F("application/json"), message);
   return;
 }
 
+/**
+ * @brief Validate Alpaca client and transaction identifiers, serialize the can set park value and send the JSON response.
+ * @details Validate Alpaca client and transaction identifiers, serialize the can set park value and send the JSON response.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleCanSetParkGet(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   uint32_t clientID = 0;
   uint32_t transID = 0;
@@ -247,8 +369,19 @@ void handleCanSetParkGet(void)
   return;
 }
 
+/**
+ * @brief Validate Alpaca client and transaction identifiers, serialize the can set shutter value and send the JSON response.
+ * @details Validate Alpaca client and transaction identifiers, serialize the can set shutter value and send the JSON response.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleCanSetShutterGet(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   uint32_t clientID = 0;
   uint32_t transID = 0;
@@ -265,8 +398,19 @@ void handleCanSetShutterGet(void)
   return;
 }
 
+/**
+ * @brief Validate Alpaca client and transaction identifiers, serialize the can slave value and send the JSON response.
+ * @details Validate Alpaca client and transaction identifiers, serialize the can slave value and send the JSON response.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleCanSlaveGet(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   uint32_t clientID = 0;
   uint32_t transID = 0;
@@ -282,8 +426,19 @@ void handleCanSlaveGet(void)
   return;
 }
 
+/**
+ * @brief Validate Alpaca client and transaction identifiers, serialize the can sync azimuth value and send the JSON response.
+ * @details Validate Alpaca client and transaction identifiers, serialize the can sync azimuth value and send the JSON response.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleCanSyncAzimuthGet(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   uint32_t clientID = 0;
   uint32_t transID = 0;
@@ -301,8 +456,19 @@ void handleCanSyncAzimuthGet(void)
 }
 
 //'Slaved' indicates a hardware link between the telescope and dome  - the ASCOM link is not the same.
+/**
+ * @brief Validate Alpaca client and transaction identifiers, serialize the slaved value and send the JSON response.
+ * @details Validate Alpaca client and transaction identifiers, serialize the slaved value and send the JSON response.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleSlavedGet(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   uint32_t clientID = 0;
   uint32_t transID = 0;
@@ -317,8 +483,19 @@ void handleSlavedGet(void)
   return;
 }
 
+/**
+ * @brief Validate the slaved put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @details Validate the slaved put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleSlavedPut(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   uint32_t clientID = 0;
   uint32_t transID = 0;
@@ -336,8 +513,19 @@ void handleSlavedPut(void)
   return;
 }
 
+/**
+ * @brief Validate Alpaca client and transaction identifiers, serialize the slewing value and send the JSON response.
+ * @details Validate Alpaca client and transaction identifiers, serialize the slewing value and send the JSON response.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleSlewingGet(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   JsonDocument doc;
   JsonObject root = doc.to<JsonObject>();
@@ -355,8 +543,19 @@ void handleSlewingGet(void)
   return;
 }
 
+/**
+ * @brief Validate the abort slew put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @details Validate the abort slew put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleAbortSlewPut(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   JsonDocument doc;
   JsonObject root = doc.to<JsonObject>();
@@ -397,8 +596,19 @@ void handleAbortSlewPut(void)
   return;
 }
 
+/**
+ * @brief Validate Alpaca client and transaction identifiers, serialize the shutter status value and send the JSON response.
+ * @details Validate Alpaca client and transaction identifiers, serialize the shutter status value and send the JSON response.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleShutterStatusGet(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   JsonDocument doc;
   JsonObject root = doc.to<JsonObject>();
@@ -419,8 +629,19 @@ void handleShutterStatusGet(void)
   return;
 }
 
+/**
+ * @brief Validate the close shutter put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @details Validate the close shutter put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleCloseShutterPut(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   JsonDocument doc;
   JsonObject root = doc.to<JsonObject>();
@@ -443,12 +664,12 @@ void handleCloseShutterPut(void)
   else if (shutterStatus == SHUTTER_OPENING || shutterStatus == SHUTTER_OPEN)
   {
     //Set command to close shutter.
-    if ( addShutterCmd(clientID, transID, "", CMD_SHUTTER_CLOSE, 0) != nullptr ) 
+    if (addShutterCmd(clientID, transID, "", CMD_SHUTTER_CLOSE, 0) != nullptr)
     {
       debugD("CloseShutterPut: Added async command to close");
       jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("CloseShutter"), Success, "");
     }
-    else 
+    else
     {
       debugD("CloseShutterPut: Failed to add async command to close");
       jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("CloseShutter"), invalidValue, "out of memory");
@@ -467,8 +688,19 @@ void handleCloseShutterPut(void)
 }
 
 //Kick off the find home operation ???
+/**
+ * @brief Validate the find home put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @details Validate the find home put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleFindHomePut(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   JsonDocument doc;
   JsonObject root = doc.to<JsonObject>();
@@ -487,9 +719,9 @@ void handleFindHomePut(void)
 #endif
   {
     //Set command to move to home.
-    if ( addDomeCmd(clientID, transID, "", CMD_DOME_SLEW, homePosition) != nullptr) 
+    if (addDomeCmd(clientID, transID, "", CMD_DOME_SLEW, homePosition) != nullptr)
       jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("FindHome"), Success, "");
-    else 
+    else
       jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("FindHome"), invalidValue, "out of memory");
   }
   serializeJson(root, message);
@@ -498,8 +730,19 @@ void handleFindHomePut(void)
   return;
 }
 
+/**
+ * @brief Validate the open shutter put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @details Validate the open shutter put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleOpenShutterPut(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   JsonDocument doc;
   JsonObject root = doc.to<JsonObject>();
@@ -530,12 +773,12 @@ void handleOpenShutterPut(void)
   else if (shutterStatus == SHUTTER_CLOSING || shutterStatus == SHUTTER_CLOSED)
   {
     //Set command to open shutter.
-    if ( addShutterCmd(clientID, transID, "", CMD_SHUTTER_OPEN, 0) != nullptr ) 
+    if (addShutterCmd(clientID, transID, "", CMD_SHUTTER_OPEN, 0) != nullptr)
     {
       debugD("OpenShutterPut: Added async command to open");
       jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("OpenShutter"), Success, "");
     }
-    else 
+    else
     {
       debugD("OpenShutterPut: Failed to add async command to open");
       jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("OpenShutter"), invalidValue, "out of memory");
@@ -555,8 +798,19 @@ void handleOpenShutterPut(void)
 /*
  * No argument provided - uses current azimuth and altitude.
  */
+/**
+ * @brief Validate the set park put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @details Validate the set park put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleSetParkPut(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   JsonDocument doc;
   JsonObject root = doc.to<JsonObject>();
@@ -574,10 +828,10 @@ void handleSetParkPut(void)
   {
     //Set new park location.
     parkPosition = currentAzimuth;
-    if ( addDomeCmd(clientID, transID, F("parkPosition"), CMD_DOMEVAR_SET, parkPosition) != nullptr) 
+    if (addDomeCmd(clientID, transID, F("parkPosition"), CMD_DOMEVAR_SET, parkPosition) != nullptr)
       jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("SetPark"), Success, "");
     else
-      jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("SetPark"), invalidValue, "out of memory");    
+      jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("SetPark"), invalidValue, "out of memory");
   }
 
   serializeJson(root, message);
@@ -587,8 +841,19 @@ void handleSetParkPut(void)
 }
 
 //ParkPut causes the dome to move to the already stored Park position
+/**
+ * @brief Validate the park put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @details Validate the park put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleParkPut(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   JsonDocument doc;
   JsonObject root = doc.to<JsonObject>();
@@ -605,11 +870,10 @@ void handleParkPut(void)
   else
 #endif
   {
-    if ( addDomeCmd(clientID, transID, "", CMD_DOME_SLEW, parkPosition) != nullptr )
+    if (addDomeCmd(clientID, transID, "", CMD_DOME_SLEW, parkPosition) != nullptr)
       jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("Park"), Success, "");
     else
       jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("Park"), invalidValue, "out of memory");
-    
   }
 
   serializeJson(root, message);
@@ -618,8 +882,19 @@ void handleParkPut(void)
   return;
 }
 
+/**
+ * @brief Validate the slew to altitude put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @details Validate the slew to altitude put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleSlewToAltitudePut(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   float location = 0.0F;
   JsonDocument doc;
@@ -656,9 +931,9 @@ void handleSlewToAltitudePut(void)
     else
     { //Set new shutter altitude.
       normaliseFloat(location, SHUTTER_MAX_ALTITUDE);
-      if(  addShutterCmd(clientID, transID, "altitude", CMD_SHUTTERVAR_SET, location) != nullptr ) 
+      if (addShutterCmd(clientID, transID, "altitude", CMD_SHUTTERVAR_SET, location) != nullptr)
         jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("SlewToAltitude"), Success, "");
-     else 
+      else
         jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("SlewToAltitude"), invalidValue, "out of memory");
     }
   }
@@ -674,8 +949,19 @@ void handleSlewToAltitudePut(void)
 /*
  * The handler receives target Azimuth in real degrees
  */
+/**
+ * @brief Validate the slew to azimuth put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @details Validate the slew to azimuth put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleSlewToAzimuthPut(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
 
   String argsToSearchFor[] = {"clientID", "clientTransactionID", "Azimuth"};
@@ -716,9 +1002,9 @@ void handleSlewToAzimuthPut(void)
       //Set new slew location.
       normaliseFloat(location, 360.0F);
       debugD("SlewToAzimuthPut: %f", location);
-      if ( addDomeCmd(clientID, transID, F("SlewToAzimuthPut"), CMD_DOME_SLEW, location) != nullptr)
+      if (addDomeCmd(clientID, transID, F("SlewToAzimuthPut"), CMD_DOME_SLEW, location) != nullptr)
         jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("SlewToAzimuth"), Success, "");
-      else 
+      else
         jsonResponseBuilder(root, clientID, transID, ++serverTransID, F("SlewToAzimuth"), valueNotSet, "low memory");
     }
   }
@@ -736,8 +1022,19 @@ void handleSlewToAzimuthPut(void)
 /*
  * The handler receives target Azimuth in decimal degrees.
  */
+/**
+ * @brief Validate the sync to azimuth put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @details Validate the sync to azimuth put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleSyncToAzimuthPut(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   float location = 0;
 
@@ -794,8 +1091,19 @@ void handleSyncToAzimuthPut(void)
   return;
 }
 
+/**
+ * @brief Validate the connect put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @details Validate the connect put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleConnectPut(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   uint32_t clientID = 0;
   uint32_t transID = 0;
@@ -817,8 +1125,19 @@ void handleConnectPut(void)
   server.send(200, F("application/json"), message);
 }
 
+/**
+ * @brief Validate the disconnect put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @details Validate the disconnect put request, apply supported configuration or queued movement and send the appropriate HTTP or Alpaca result.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleDisconnectPut(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   uint32_t clientID = 0;
   uint32_t transID = 0;
@@ -840,8 +1159,19 @@ void handleDisconnectPut(void)
   server.send(200, F("application/json"), message);
 }
 
+/**
+ * @brief Validate Alpaca client and transaction identifiers, serialize the connecting value and send the JSON response.
+ * @details Validate Alpaca client and transaction identifiers, serialize the connecting value and send the JSON response.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleConnectingGet(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   uint32_t clientID = 0;
   uint32_t transID = 0;
@@ -856,8 +1186,19 @@ void handleConnectingGet(void)
   server.send(200, F("application/json"), message);
 }
 
+/**
+ * @brief Validate Alpaca client and transaction identifiers, serialize the device state value and send the JSON response.
+ * @details Validate Alpaca client and transaction identifiers, serialize the device state value and send the JSON response.
+ * @par Arguments
+ * None.
+ * @return (void) Observable effects are described above.
+ */
 void handleDeviceStateGet(void)
 {
+  DOME_FUNCTION_TRACE([&]()
+                      {
+                        debugV("state dome=%d shutter=%d azimuth=%g target=%g", (int)domeStatus, (int)shutterStatus, (double)currentAzimuth, (double)targetAzimuth);
+                      });
   String message;
   uint32_t clientID = 0;
   uint32_t transID = 0;
